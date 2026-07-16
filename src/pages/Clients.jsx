@@ -21,71 +21,88 @@ function Clients() {
 
   return (
     <div>
-      <h1 style={{ color: "#D4AF37" }}>👥 Clientes</h1>
-
-      <button
-        onClick={async () => {
-          const name = prompt("Nombre");
-          if (!name) return;
-
-          const company = prompt("Empresa");
-          const phone = prompt("Teléfono");
-          const email = prompt("Email");
-
-          await supabase.from("clients").insert([
-            {
-              name,
-              company,
-              phone,
-              email,
-              status: "Nuevo",
-            },
-          ]);
-
-          loadClients();
-        }}
+      <div
         style={{
-          padding: "10px 20px",
-          marginBottom: "25px",
-          background: "#D4AF37",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-          fontWeight: "bold",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "30px",
         }}
       >
-        + Nuevo Cliente
-      </button>
+        <div>
+          <h1
+            style={{
+              color: "#D4AF37",
+              marginBottom: "8px",
+            }}
+          >
+            👥 Clientes
+          </h1>
 
-      <table
+          <p
+            style={{
+              color: "#999",
+              margin: 0,
+            }}
+          >
+            Administra todos los clientes de Forge Digital.
+          </p>
+        </div>
+
+        <button
+          style={{
+            background: "#D4AF37",
+            color: "#000",
+            border: "none",
+            padding: "12px 22px",
+            borderRadius: "10px",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+        >
+          + Nuevo Cliente
+        </button>
+      </div>
+
+      <hr
         style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          color: "white",
+          borderColor: "#222",
+          marginBottom: "30px",
         }}
-      >
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Empresa</th>
-            <th>Teléfono</th>
-            <th>Email</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+      />
 
-        <tbody>
+      {clients.length === 0 ? (
+        <p style={{ color: "#777" }}>
+          No hay clientes registrados.
+        </p>
+      ) : (
+        <div>
           {clients.map((client) => (
-            <tr key={client.id}>
-              <td>{client.name}</td>
-              <td>{client.company}</td>
-              <td>{client.phone}</td>
-              <td>{client.email}</td>
-              <td>{client.status}</td>
-            </tr>
+            <div
+              key={client.id}
+              style={{
+                background: "#171717",
+                padding: "20px",
+                borderRadius: "12px",
+                marginBottom: "15px",
+                border: "1px solid #2a2a2a",
+              }}
+            >
+              <h2 style={{ color: "#D4AF37" }}>
+                {client.name}
+              </h2>
+
+              <p>🏢 {client.company}</p>
+
+              <p>📞 {client.phone}</p>
+
+              <p>📧 {client.email}</p>
+
+              <p>Estado: {client.status}</p>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
     </div>
   );
 }

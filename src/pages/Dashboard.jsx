@@ -1,100 +1,63 @@
 function Dashboard() {
   return (
-    <div>
-      <h1
-        style={{
-          color: "#D4AF37",
-          fontSize: "48px",
-          marginBottom: "10px",
-        }}
-      >
-        Dashboard
-      </h1>
+    <div className="p-8">
+      <div className="mb-10">
+        <h1 className="text-5xl font-bold text-yellow-400">
+          Dashboard
+        </h1>
 
-      <p
-        style={{
-          color: "#AAA",
-          marginBottom: "40px",
-        }}
-      >
-        Bienvenido nuevamente, Wilfrido.
-      </p>
+        <p className="mt-2 text-gray-400 text-lg">
+          Bienvenido nuevamente, Wilfrido.
+        </p>
+      </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "20px",
-        }}
-      >
-        <Card
-          titulo="Clientes"
-          numero="0"
-          color="#4CAF50"
-          icono="👥"
+      <div className="grid grid-cols-4 gap-6">
+        <DashboardCard
+          title="Clientes"
+          value="0"
+          color="text-green-500"
+          icon="👥"
         />
 
-        <Card
-          titulo="Proyectos"
-          numero="0"
-          color="#2196F3"
-          icono="📁"
+        <DashboardCard
+          title="Proyectos"
+          value="0"
+          color="text-blue-500"
+          icon="📁"
         />
 
-        <Card
-          titulo="Ventas"
-          numero="$0"
-          color="#D4AF37"
-          icono="💰"
+        <DashboardCard
+          title="Ventas"
+          value="$0"
+          color="text-yellow-400"
+          icon="💰"
         />
 
-        <Card
-          titulo="Discovery"
-          numero="0"
-          color="#9C27B0"
-          icono="🧠"
+        <DashboardCard
+          title="Discovery"
+          value="0"
+          color="text-purple-500"
+          icon="🧠"
         />
       </div>
     </div>
   );
 }
 
-function Card({ titulo, numero, color, icono }) {
+function DashboardCard({ title, value, color, icon }) {
   return (
-    <div
-      style={{
-        background: "#161616",
-        borderRadius: "16px",
-        padding: "25px",
-        border: "1px solid #2D2D2D",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "35px",
-          marginBottom: "15px",
-        }}
-      >
-        {icono}
+    <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-lg transition duration-300 hover:border-yellow-400 hover:scale-[1.02]">
+      <div className="mb-4 text-4xl">
+        {icon}
       </div>
 
-      <h3
-        style={{
-          color: "#DDD",
-          marginBottom: "10px",
-        }}
-      >
-        {titulo}
+      <h3 className="mb-2 text-lg font-semibold text-gray-300">
+        {title}
       </h3>
 
-      <h1
-        style={{
-          color,
-          margin: 0,
-        }}
-      >
-        {numero}
-      </h1>
+      <h2 className={`text-4xl font-bold ${color}`}>
+        {value}
+      </h2>
     </div>
   );
 }
