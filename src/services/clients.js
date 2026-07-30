@@ -12,9 +12,13 @@ export async function getClients() {
 }
 
 export async function createClient(client) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
-    .insert([client]);
+    .insert([client])
+    .select()
+    .single();
 
   if (error) throw error;
+
+  return data;
 }

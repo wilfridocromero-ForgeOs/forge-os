@@ -1,8 +1,8 @@
 export default function Button({
   children,
   variant = "primary",
+  size = "md",
   className = "",
-  disabled = false,
   ...props
 }) {
   const variants = {
@@ -10,37 +10,35 @@ export default function Button({
       "bg-white text-black hover:bg-zinc-200",
 
     secondary:
-      "border border-zinc-700 bg-transparent text-white hover:bg-zinc-800",
+      "bg-zinc-900 text-white border border-zinc-800 hover:bg-zinc-800",
 
     ghost:
-      "text-zinc-400 hover:text-white hover:bg-zinc-900",
+      "bg-transparent text-zinc-300 hover:bg-zinc-900",
+  };
+
+  const sizes = {
+    sm: "h-9 px-4 text-sm",
+    md: "h-11 px-5 text-sm",
+    lg: "h-12 px-6 text-base",
   };
 
   return (
     <button
-      disabled={disabled}
       className={`
         inline-flex
         items-center
         justify-center
-        gap-2
-
-        h-12
-        px-6
-
         rounded-xl
-
-        text-sm
         font-medium
-
         transition-all
-        duration-300
-        ease-out
-
+        duration-200
+        focus:outline-none
+        focus:ring-2
+        focus:ring-white/20
         disabled:opacity-50
-        disabled:cursor-not-allowed
-
+        disabled:pointer-events-none
         ${variants[variant]}
+        ${sizes[size]}
         ${className}
       `}
       {...props}
@@ -48,4 +46,6 @@ export default function Button({
       {children}
     </button>
   );
-}
+}<Button>
+    Nuevo cliente
+</Button>

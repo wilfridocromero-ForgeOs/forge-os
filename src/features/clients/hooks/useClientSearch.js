@@ -4,6 +4,9 @@ export default function useClientSearch(clients) {
   const [search, setSearch] = useState("");
 
   const filteredClients = useMemo(() => {
+    console.log("Texto:", search);
+    console.log("Clientes:", clients);
+
     if (!search.trim()) return clients;
 
     const value = search.toLowerCase();

@@ -1,20 +1,30 @@
-function EmptyState({
+import Button from "./Button";
+
+export default function EmptyState({
   title,
   description,
+  action,
+  actionText,
 }) {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "60px",
-        color: "#888",
-      }}
-    >
-      <h2>{title}</h2>
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-zinc-800 py-20 text-center">
 
-      <p>{description}</p>
+      <h2 className="text-2xl font-semibold text-white">
+        {title}
+      </h2>
+
+      <p className="mt-4 max-w-md text-zinc-500">
+        {description}
+      </p>
+
+      {action && (
+        <div className="mt-8">
+          <Button onClick={action}>
+            {actionText}
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 }
-
-export default EmptyState;

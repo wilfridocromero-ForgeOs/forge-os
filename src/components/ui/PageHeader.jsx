@@ -5,30 +5,67 @@ export default function PageHeader({
   children,
 }) {
   return (
-    <div className="flex items-end justify-between">
+    <div
+      className="
+        mb-10
+        flex
+        flex-col
+        gap-8
 
-      <div className="max-w-3xl">
+        lg:mb-12
+        lg:flex-row
+        lg:items-end
+        lg:justify-between
+      "
+    >
+      <div className="min-w-0">
 
         {eyebrow && (
-          <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+          <p className="mb-4 text-xs uppercase tracking-[0.35em] text-zinc-500">
             {eyebrow}
           </p>
         )}
 
-        <h1 className="mt-4 text-5xl font-semibold tracking-tight text-white">
+        <h1
+          className="
+            text-3xl
+            font-semibold
+            tracking-tight
+            text-white
+
+            sm:text-4xl
+
+            lg:text-5xl
+          "
+        >
           {title}
         </h1>
 
         {description && (
-          <p className="mt-5 text-lg leading-8 text-zinc-400">
+          <p
+            className="
+              mt-4
+              max-w-3xl
+              text-sm
+              leading-7
+              text-zinc-500
+
+              sm:text-base
+
+              lg:text-lg
+              lg:leading-8
+            "
+          >
             {description}
           </p>
         )}
-
       </div>
 
-      {children}
-
+      {children && (
+        <div className="w-full lg:w-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
