@@ -1,0 +1,28 @@
+export const clients = [
+  {
+    id: "cl_001",
+    company: "Acme Dental",
+    contact: "John Carter",
+    email: "john@acmedental.com",
+    phone: "(555) 123-4567",
+    status: "active",
+    tags: ["vip", "retainer"],
+    discovery: 82,
+    score: 867,
+    projects: 2,
+    lastActivity: "Hace 2 horas",
+  },
+  {
+    id: "cl_002",
+    company: "Elite Law",
+    contact: "Sarah Brooks",
+    email: "sarah@elitelaw.com",
+    phone: "(555) 987-6543",
+    status: "pending",
+    tags: ["lead"],
+    discovery: 46,
+    score: 612,
+    projects: 1,
+    lastActivity: "Hace 1 día",
+  },
+];

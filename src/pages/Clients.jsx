@@ -1,108 +1,140 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { useState } from "react";
+
+import useClients from "../features/clients/hooks/useClients";
+import useClientSearch from "../features/clients/hooks/useClientSearch";
+
+import ClientHeader from "../features/clients/components/ClientHeader";
+import ClientSearch from "../features/clients/components/ClientSearch";
+import ClientList from "../features/clients/components/ClientList";
+import ClientModal from "../features/clients/components/ClientModal";
 
 function Clients() {
-  const [clients, setClients] = useState([]);
+  const {
+    clients,
+    loading,
+    addClient,
+    editClient,
+    removeClient,
+  } = useClients();
 
-  const loadClients = async () => {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .order("id", { ascending: true });
+  const [showForm, setShowForm] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
 
-    if (!error) {
-      setClients(data);
+  const [form, setForm] = useState({
+    name: "",
+    company: "",
+    phone: "",
+    email: "",
+  });
+
+  const {
+    search,
+    setSearch,
+    filteredClients,
+  } = useClientSearch(clients);
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      company: "",
+      phone: "",
+      email: "",
+    });
+
+    setEditingClient(null);
+  };
+
+  const saveClient = async () => {
+    if (!form.name || !form.company) {
+      alert("Nombre y empresa son obligatorios.");
+      return;
+    }
+
+    try {
+      if (editingClient) {
+        await editClient(editingClient.id, form);
+      } else {
+        await addClient(form);
+      }
+
+      resetForm();
+      setShowForm(false);
+    } catch (error) {
+      alert(error.message);
     }
   };
 
-  useEffect(() => {
-    loadClients();
-  }, []);
+  const handleEdit = (client) => {
+    setEditingClient(client);
+
+    setForm({
+      name: client.name || "",
+      company: client.company || "",
+      phone: client.phone || "",
+      email: client.email || "",
+    });
+
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    const confirmed = window.confirm(
+      "¿Seguro que deseas eliminar este cliente?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await removeClient(id);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          color: "#999",
+          fontSize: "16px",
+        }}
+      >
+        Cargando clientes...
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "30px",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              color: "#D4AF37",
-              marginBottom: "8px",
-            }}
-          >
-            👥 Clientes
-          </h1>
-
-          <p
-            style={{
-              color: "#999",
-              margin: 0,
-            }}
-          >
-            Administra todos los clientes de Forge Digital.
-          </p>
-        </div>
-
-        <button
-          style={{
-            background: "#D4AF37",
-            color: "#000",
-            border: "none",
-            padding: "12px 22px",
-            borderRadius: "10px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          + Nuevo Cliente
-        </button>
-      </div>
-
-      <hr
-        style={{
-          borderColor: "#222",
-          marginBottom: "30px",
+      <ClientHeader
+        onNewClient={() => {
+          resetForm();
+          setShowForm(true);
         }}
       />
 
-      {clients.length === 0 ? (
-        <p style={{ color: "#777" }}>
-          No hay clientes registrados.
-        </p>
-      ) : (
-        <div>
-          {clients.map((client) => (
-            <div
-              key={client.id}
-              style={{
-                background: "#171717",
-                padding: "20px",
-                borderRadius: "12px",
-                marginBottom: "15px",
-                border: "1px solid #2a2a2a",
-              }}
-            >
-              <h2 style={{ color: "#D4AF37" }}>
-                {client.name}
-              </h2>
+      <ClientSearch
+        search={search}
+        setSearch={setSearch}
+      />
 
-              <p>🏢 {client.company}</p>
+      <ClientList
+        clients={filteredClients}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
 
-              <p>📞 {client.phone}</p>
-
-              <p>📧 {client.email}</p>
-
-              <p>Estado: {client.status}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      <ClientModal
+        show={showForm}
+        form={form}
+        setForm={setForm}
+        editingClient={editingClient}
+        onClose={() => {
+          resetForm();
+          setShowForm(false);
+        }}
+        onSave={saveClient}
+      />
     </div>
   );
 }

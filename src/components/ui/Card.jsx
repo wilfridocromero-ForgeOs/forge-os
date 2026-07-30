@@ -1,18 +1,25 @@
-function Card({ children }) {
+export default function Card({
+  children,
+  className = "",
+  hover = true,
+  padding = "p-8",
+}) {
   return (
     <div
-      style={{
-        background: "#171717",
-        border: "1px solid #2A2A2A",
-        borderRadius: "15px",
-        padding: "25px",
-        marginBottom: "20px",
-        boxShadow: "0 0 15px rgba(0,0,0,.25)",
-      }}
+      className={`
+        rounded-[32px]
+        border
+        border-zinc-900
+        bg-zinc-950/70
+        backdrop-blur
+        ${padding}
+        transition-all
+        duration-300
+        ${hover ? "hover:border-zinc-700" : ""}
+        ${className}
+      `}
     >
       {children}
     </div>
   );
 }
-
-export default Card;

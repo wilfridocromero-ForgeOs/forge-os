@@ -1,11 +1,12 @@
 import { Routes, Route } from "react-router-dom";
 
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
+import Sidebar from "./components/Layout/Sidebar";
+import Header from "./components/Layout/Header";
 
 import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import Discovery from "./pages/Discovery";
+import ClientProfile from "./pages/ClientProfile";
 
 function App() {
   return (
@@ -25,7 +26,11 @@ function App() {
         <div style={{ padding: "40px" }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+
             <Route path="/clientes" element={<Clients />} />
+
+            <Route path="/clientes/:id" element={<ClientProfile />} />
+
             <Route path="/discovery" element={<Discovery />} />
           </Routes>
         </div>

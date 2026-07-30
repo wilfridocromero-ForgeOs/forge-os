@@ -1,40 +1,34 @@
-function PageHeader({
+export default function PageHeader({
+  eyebrow,
   title,
-  subtitle,
-  right,
+  description,
+  children,
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "30px",
-      }}
-    >
-      <div>
-        <h1
-          style={{
-            color: "#D4AF37",
-            marginBottom: "8px",
-          }}
-        >
+    <div className="flex items-end justify-between">
+
+      <div className="max-w-3xl">
+
+        {eyebrow && (
+          <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+            {eyebrow}
+          </p>
+        )}
+
+        <h1 className="mt-4 text-5xl font-semibold tracking-tight text-white">
           {title}
         </h1>
 
-        <p
-          style={{
-            color: "#888",
-            margin: 0,
-          }}
-        >
-          {subtitle}
-        </p>
+        {description && (
+          <p className="mt-5 text-lg leading-8 text-zinc-400">
+            {description}
+          </p>
+        )}
+
       </div>
 
-      {right}
+      {children}
+
     </div>
   );
 }
-
-export default PageHeader;

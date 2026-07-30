@@ -1,41 +1,51 @@
-function Button({
+export default function Button({
   children,
-  onClick,
-  type = "primary",
+  variant = "primary",
+  className = "",
+  disabled = false,
+  ...props
 }) {
-  const styles = {
-    primary: {
-      background: "#D4AF37",
-      color: "#000",
-    },
+  const variants = {
+    primary:
+      "bg-white text-black hover:bg-zinc-200",
 
-    secondary: {
-      background: "#242424",
-      color: "#fff",
-    },
+    secondary:
+      "border border-zinc-700 bg-transparent text-white hover:bg-zinc-800",
 
-    danger: {
-      background: "#B91C1C",
-      color: "#fff",
-    },
+    ghost:
+      "text-zinc-400 hover:text-white hover:bg-zinc-900",
   };
 
   return (
     <button
-      onClick={onClick}
-      style={{
-        ...styles[type],
-        border: "none",
-        padding: "12px 20px",
-        borderRadius: "10px",
-        cursor: "pointer",
-        fontWeight: "bold",
-        fontSize: "15px",
-      }}
+      disabled={disabled}
+      className={`
+        inline-flex
+        items-center
+        justify-center
+        gap-2
+
+        h-12
+        px-6
+
+        rounded-xl
+
+        text-sm
+        font-medium
+
+        transition-all
+        duration-300
+        ease-out
+
+        disabled:opacity-50
+        disabled:cursor-not-allowed
+
+        ${variants[variant]}
+        ${className}
+      `}
+      {...props}
     >
       {children}
     </button>
   );
 }
-
-export default Button;
