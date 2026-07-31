@@ -1,44 +1,57 @@
-import Spinner from "../feedback/Spinner";
+import Spinner from "../../feedback/Spinner";
 
 export default function Button({
   children,
   loading = false,
   onClick,
   type = "button",
+  disabled = false,
+  className = "",
 }) {
   return (
     <button
       type={type}
-      disabled={loading}
       onClick={onClick}
-      className="
+      disabled={loading || disabled}
+      className={`
+        flex
+        items-center
+        justify-center
+        gap-2
+
         w-full
 
         rounded-2xl
 
         bg-white
 
+        px-6
         py-4
 
+        text-sm
         font-semibold
+
         text-black
 
         transition-all
-        duration-200
+        duration-300
 
-        hover:scale-[1.01]
         hover:bg-zinc-200
+        hover:scale-[1.01]
 
         active:scale-[0.99]
 
-        disabled:opacity-70
         disabled:cursor-not-allowed
-      "
+        disabled:opacity-60
+
+        ${className}
+      `}
     >
       {loading ? (
-        <div className="flex justify-center">
-          <Spinner />
-        </div>
+        <>
+          <Spinner size={18} />
+          Cargando...
+        </>
       ) : (
         children
       )}
