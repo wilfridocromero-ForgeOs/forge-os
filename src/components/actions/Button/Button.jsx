@@ -1,46 +1,47 @@
-export const layout = {
-  // Contenedores
-  page: {
-    sm: "max-w-3xl",
-    md: "max-w-5xl",
-    lg: "max-w-6xl",
-    xl: "max-w-7xl",
-    full: "max-w-full",
-  },
+import Spinner from "../feedback/Spinner";
 
-  // Espaciados
-  spacing: {
-    none: "gap-0",
-    xs: "gap-2",
-    sm: "gap-4",
-    md: "gap-6",
-    lg: "gap-8",
-    xl: "gap-10",
-  },
+export default function Button({
+  children,
+  loading = false,
+  onClick,
+  type = "button",
+}) {
+  return (
+    <button
+      type={type}
+      disabled={loading}
+      onClick={onClick}
+      className="
+        w-full
 
-  // Alineación
-  align: {
-    start: "items-start",
-    center: "items-center",
-    end: "items-end",
-    stretch: "items-stretch",
-  },
+        rounded-2xl
 
-  // Justificación
-  justify: {
-    start: "justify-start",
-    center: "justify-center",
-    end: "justify-end",
-    between: "justify-between",
-    around: "justify-around",
-    evenly: "justify-evenly",
-  },
+        bg-white
 
-  // Justificación Grid
-  justifyItems: {
-    start: "justify-items-start",
-    center: "justify-items-center",
-    end: "justify-items-end",
-    stretch: "justify-items-stretch",
-  },
-};
+        py-4
+
+        font-semibold
+        text-black
+
+        transition-all
+        duration-200
+
+        hover:scale-[1.01]
+        hover:bg-zinc-200
+
+        active:scale-[0.99]
+
+        disabled:opacity-70
+        disabled:cursor-not-allowed
+      "
+    >
+      {loading ? (
+        <div className="flex justify-center">
+          <Spinner />
+        </div>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}

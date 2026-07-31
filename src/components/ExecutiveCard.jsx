@@ -1,7 +1,8 @@
 import { ArrowUpRight } from "lucide-react";
+
 import Card from "./ui/Card";
 
-function ExecutiveCard({
+export default function ExecutiveCard({
   title,
   value,
   subtitle,
@@ -11,60 +12,31 @@ function ExecutiveCard({
   return (
     <Card
       className="
-        flex
-        h-full
-        min-h-[240px]
-        flex-col
+        p-8
 
-        p-5
-        sm:p-6
-        lg:p-7
+        min-h-[230px]
+
+        flex
+        flex-col
+        justify-between
       "
     >
-      {/* Parte superior */}
+      {/* Header */}
 
-      <div className="flex items-start justify-between gap-5">
+      <div className="flex items-start justify-between">
 
-        <div className="min-w-0 flex-1">
+        <div>
 
           <p
             className="
               text-[11px]
-              font-medium
               uppercase
-              tracking-[0.30em]
+              tracking-[0.35em]
+
               text-zinc-500
             "
           >
             {title}
-          </p>
-
-          <h2
-            className="
-              mt-4
-
-              text-3xl
-              sm:text-4xl
-
-              font-semibold
-              tracking-tight
-              text-white
-            "
-          >
-            {value}
-          </h2>
-
-          <p
-            className="
-              mt-3
-
-              text-sm
-              leading-6
-
-              text-zinc-500
-            "
-          >
-            {subtitle}
           </p>
 
         </div>
@@ -72,9 +44,9 @@ function ExecutiveCard({
         <div
           className="
             flex
+
             h-14
             w-14
-            shrink-0
 
             items-center
             justify-center
@@ -85,34 +57,59 @@ function ExecutiveCard({
             border-zinc-800
 
             bg-zinc-900
-
-            transition-colors
-            duration-200
-
-            group-hover:border-zinc-700
           "
         >
           <Icon
-            size={24}
+            size={22}
             className="text-zinc-300"
           />
         </div>
 
       </div>
 
-      {/* Empuja el footer abajo */}
+      {/* Value */}
 
-      <div className="flex-1" />
+      <div className="mt-8">
+
+        <h2
+          className="
+            text-5xl
+
+            font-semibold
+
+            tracking-tight
+
+            text-white
+          "
+        >
+          {value}
+        </h2>
+
+        <p
+          className="
+            mt-3
+
+            text-sm
+
+            leading-7
+
+            text-zinc-500
+          "
+        >
+          {subtitle}
+        </p>
+
+      </div>
 
       {/* Footer */}
 
       <div
         className="
-          mt-8
+          mt-10
 
           flex
           items-center
-          gap-2
+          justify-between
 
           border-t
           border-zinc-800
@@ -120,26 +117,48 @@ function ExecutiveCard({
           pt-5
         "
       >
-        <ArrowUpRight
-          size={16}
-          className="text-emerald-400"
-        />
-
-        <span
+        <div
           className="
-            text-sm
-            font-medium
-
-            text-emerald-400
+            flex
+            items-center
+            gap-2
           "
         >
-          {trend}
-        </span>
+          <ArrowUpRight
+            size={16}
+            className="text-emerald-400"
+          />
+
+          <span
+            className="
+              text-sm
+
+              font-medium
+
+              text-emerald-400
+            "
+          >
+            {trend}
+          </span>
+
+        </div>
+
+        <button
+          className="
+            text-sm
+
+            text-zinc-500
+
+            transition-colors
+
+            hover:text-white
+          "
+        >
+          Ver más →
+        </button>
 
       </div>
 
     </Card>
   );
 }
-
-export default ExecutiveCard;

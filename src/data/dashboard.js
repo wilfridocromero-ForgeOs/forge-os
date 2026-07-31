@@ -71,4 +71,39 @@ export const dashboardData = {
       trend: "+7 este mes",
     },
   ],
+
+  activities: [
+    {
+      id: 1,
+      time: "09:10",
+      title: "Nuevo cliente agregado",
+      description: "DentalCare PR fue añadido al sistema.",
+    },
+    {
+      id: 2,
+      time: "10:25",
+      title: "Discovery completado",
+      description: "Se finalizó el diagnóstico inicial.",
+    },
+    {
+      id: 3,
+      time: "12:40",
+      title: "Landing aprobada",
+      description: "El cliente aprobó la página principal.",
+    },
+    {
+      id: 4,
+      time: "14:15",
+      title: "Reunión programada",
+      description: "Seguimiento para el próximo lunes.",
+    },
+  ],
+
+  nextAction: {
+    title: "Completar Discovery",
+    client: "DentalCare PR",
+    duration: "25 minutos",
+    description:
+      "Completa el Discovery para desbloquear el diagnóstico integral del cliente y permitir que ORVESEN IA genere recomendaciones estratégicas.",
+  },
 };

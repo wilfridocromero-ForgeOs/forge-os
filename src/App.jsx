@@ -6,6 +6,7 @@ import Dashboard from "./app/Dashboard";
 import Clients from "./app/Clients";
 import Discovery from "./app/Discovery";
 import ClientProfile from "./app/ClientProfile";
+import Score from "./app/Score";
 
 import Login from "./auth/Login";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -21,6 +22,7 @@ function App() {
           <Route path="/clientes" element={<Clients />} />
           <Route path="/clientes/:id" element={<ClientProfile />} />
           <Route path="/discovery" element={<Discovery />} />
+          <Route path="/score" element={<Score />} />
         </Route>
       </Route>
     </Routes>

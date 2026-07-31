@@ -1,99 +1,102 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
+import Logo from "../components/display/Logo";
+import LoginForm from "../components/forms/LoginForm";
+import AuthBackground from "../components/display/AuthBackground";
 
 export default function Login() {
-  const navigate = useNavigate();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleLogin(e) {
-    e.preventDefault();
-
-    setLoading(true);
-    setError("");
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    navigate("/");
-  }
-
   return (
-    <div className="min-h-screen bg-[#09090B] flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113] p-8">
+    <div
+      className="
+        relative
+        min-h-screen
+        overflow-hidden
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-wide text-white">
-            ORVESEN
-          </h1>
+        bg-[#09090B]
 
-          <p className="mt-2 text-sm text-zinc-400">
-            Inicia sesión para continuar.
-          </p>
-        </div>
+        flex
+        items-center
+        justify-center
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        px-6
+      "
+    >
+      {/* Fondo */}
+      <AuthBackground />
 
-          <div>
-            <label className="mb-2 block text-sm text-zinc-400">
-              Correo electrónico
-            </label>
+      {/* Contenido */}
+      <div className="relative z-10 w-full max-w-md">
+        <div
+          className="
+            rounded-3xl
 
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-white"
-              placeholder="correo@orvesen.com"
-              required
-            />
+            border
+            border-zinc-800
+
+            bg-[#111113]/80
+            backdrop-blur-xl
+
+            p-10
+
+            shadow-[0_30px_80px_rgba(0,0,0,.45)]
+          "
+        >
+          {/* Logo */}
+
+          <Logo />
+
+          {/* Texto */}
+
+          <div className="mt-10 text-center">
+            <h2 className="text-2xl font-semibold text-white">
+              Bienvenido nuevamente
+            </h2>
+
+            <p className="mt-3 text-sm leading-7 text-zinc-500">
+              Inicia sesión para acceder a tu espacio de trabajo
+              y continuar gestionando tu empresa con ORVESEN.
+            </p>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm text-zinc-400">
-              Contraseña
-            </label>
+          {/* Formulario */}
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-white"
-              placeholder="••••••••"
-              required
-            />
+          <div className="mt-10">
+            <LoginForm />
           </div>
 
-          {error && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-              {error}
-            </div>
-          )}
+          {/* Footer */}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-white py-3 font-medium text-black transition hover:opacity-90 disabled:opacity-50"
+          <div
+            className="
+              mt-10
+
+              border-t
+              border-zinc-800
+
+              pt-6
+
+              flex
+              items-center
+              justify-between
+
+              text-sm
+            "
           >
-            {loading ? "Ingresando..." : "Continuar"}
-          </button>
+            <button
+              className="
+                text-zinc-500
 
-        </form>
+                transition-colors
 
+                hover:text-white
+              "
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+
+            <span className="text-zinc-600">
+              v1.0
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

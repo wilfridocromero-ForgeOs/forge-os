@@ -13,6 +13,9 @@ import Card from "../components/ui/Card";
 import OrvesenScore from "../components/OrvesenScore";
 import ExecutiveCard from "../components/ExecutiveCard";
 
+import NextActionCard from "../components/business/NextActionCard";
+import ActivityTimeline from "../components/business/ActivityTimeline";
+
 import { dashboardData } from "../data/dashboard";
 
 function Dashboard() {
@@ -53,13 +56,11 @@ function Dashboard() {
             xl:w-auto
 
             px-6
-            sm:px-7
-
             py-5
           "
         >
 
-          <p className="text-xs uppercase tracking-[0.30em] text-zinc-500">
+          <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
             Hoy
           </p>
 
@@ -76,7 +77,6 @@ function Dashboard() {
       <section
         className="
           grid
-          grid-cols-1
           gap-8
 
           2xl:grid-cols-2
@@ -87,7 +87,7 @@ function Dashboard() {
 
         <Card>
 
-          <p className="text-xs uppercase tracking-[0.30em] text-zinc-500">
+          <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
             ORVESEN IA
           </p>
 
@@ -96,7 +96,7 @@ function Dashboard() {
           </h2>
 
           <p className="mt-3 leading-7 text-zinc-400">
-            Estas son las prioridades con mayor impacto para tu organización.
+            Estas son las prioridades estratégicas detectadas hoy.
           </p>
 
           <div className="mt-10 space-y-10">
@@ -130,7 +130,6 @@ function Dashboard() {
         <div
           className="
             grid
-            grid-cols-1
             gap-6
 
             md:grid-cols-2
@@ -151,6 +150,35 @@ function Dashboard() {
             />
 
           ))}
+
+        </div>
+
+      </Section>
+
+      {/* Próxima acción + Actividad */}
+
+      <Section eyebrow="TODAY">
+
+        <div
+          className="
+            grid
+            gap-8
+
+            xl:grid-cols-[420px_1fr]
+          "
+        >
+
+          <NextActionCard
+            title={dashboardData.nextAction.title}
+            client={dashboardData.nextAction.client}
+            duration={dashboardData.nextAction.duration}
+            description={dashboardData.nextAction.description}
+            onStart={() => {}}
+          />
+
+          <ActivityTimeline
+            activities={dashboardData.activities}
+          />
 
         </div>
 
