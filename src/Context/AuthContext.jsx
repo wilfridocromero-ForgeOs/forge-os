@@ -28,17 +28,21 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        loading,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+ return (
+  <AuthContext.Provider
+    value={{
+      session,
+      user: session?.user ?? null,
+      loading,
+
+      logout: async () => {
+        await supabase.auth.signOut();
+      },
+    }}
+  >
+    {children}
+  </AuthContext.Provider>
+);
 }
 
 export function useAuth() {

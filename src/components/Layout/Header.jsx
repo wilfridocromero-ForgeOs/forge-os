@@ -1,12 +1,27 @@
+import { useNavigate } from "react-router-dom";
+import { Menu as HeadlessMenu } from "@headlessui/react";
 import {
   Bell,
   Search,
   Plus,
   ChevronDown,
   Menu,
+  LogOut,
+  User,
+  Settings,
 } from "lucide-react";
 
+import { useAuth } from "../../Context/AuthContext";
+
 export default function Header({ setSidebarOpen }) {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
+
   return (
     <header
       className="
@@ -34,8 +49,6 @@ export default function Header({ setSidebarOpen }) {
 
       <div className="flex items-center gap-4">
 
-        {/* Menú móvil */}
-
         <button
           onClick={() => setSidebarOpen(true)}
           className="
@@ -61,15 +74,11 @@ export default function Header({ setSidebarOpen }) {
           <Menu size={20} />
         </button>
 
-        {/* Logo móvil */}
-
         <div className="lg:hidden">
           <h1 className="text-lg font-bold tracking-[0.20em]">
             ORVESEN
           </h1>
         </div>
-
-        {/* Buscador */}
 
         <div
           className="
@@ -123,8 +132,6 @@ export default function Header({ setSidebarOpen }) {
 
       <div className="flex items-center gap-3">
 
-        {/* Nuevo */}
-
         <button
           className="
             hidden
@@ -154,8 +161,6 @@ export default function Header({ setSidebarOpen }) {
           Nuevo
         </button>
 
-        {/* Notificaciones */}
-
         <button
           className="
             flex
@@ -178,65 +183,115 @@ export default function Header({ setSidebarOpen }) {
           <Bell size={18} />
         </button>
 
-        {/* Usuario */}
+        <HeadlessMenu as="div" className="relative">
 
-        <button
-          className="
-            flex
-            items-center
-            gap-3
-
-            rounded-xl
-
-            border
-            border-zinc-800
-
-            bg-zinc-900
-
-            px-3
-            py-2
-
-            transition-colors
-            hover:bg-zinc-800
-          "
-        >
-          <div
+          <HeadlessMenu.Button
             className="
               flex
-              h-10
-              w-10
               items-center
-              justify-center
+              gap-3
 
-              rounded-full
+              rounded-xl
 
-              bg-white
+              border
+              border-zinc-800
 
-              font-bold
+              bg-zinc-900
 
-              text-black
+              px-3
+              py-2
+
+              transition-colors
+              hover:bg-zinc-800
             "
           >
-            W
-          </div>
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                items-center
+                justify-center
 
-          <div className="hidden lg:block text-left">
+                rounded-full
 
-            <p className="text-sm font-semibold text-white">
-              Wilfrido
-            </p>
+                bg-white
 
-            <p className="text-xs text-zinc-500">
-              Founder
-            </p>
+                font-bold
 
-          </div>
+                text-black
+              "
+            >
+              W
+            </div>
 
-          <ChevronDown
-            size={16}
-            className="hidden lg:block text-zinc-500"
-          />
-        </button>
+            <div className="hidden lg:block text-left">
+
+              <p className="text-sm font-semibold">
+                Wilfrido
+              </p>
+
+              <p className="text-xs text-zinc-500">
+                Founder
+              </p>
+
+            </div>
+
+            <ChevronDown
+              size={16}
+              className="hidden lg:block text-zinc-500"
+            />
+          </HeadlessMenu.Button>
+
+          <HeadlessMenu.Items
+            className="
+              absolute
+              right-0
+              mt-3
+              w-56
+
+              overflow-hidden
+
+              rounded-2xl
+
+              border
+              border-zinc-800
+
+              bg-[#111113]
+
+              shadow-2xl
+            "
+          >
+
+            <HeadlessMenu.Item>
+              <button className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900">
+                <User size={18} />
+                Perfil
+              </button>
+            </HeadlessMenu.Item>
+
+            <HeadlessMenu.Item>
+              <button className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900">
+                <Settings size={18} />
+                Configuración
+              </button>
+            </HeadlessMenu.Item>
+
+            <div className="border-t border-zinc-800" />
+
+            <HeadlessMenu.Item>
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-4 py-3 text-red-400 hover:bg-zinc-900"
+              >
+                <LogOut size={18} />
+                Cerrar sesión
+              </button>
+            </HeadlessMenu.Item>
+
+          </HeadlessMenu.Items>
+
+        </HeadlessMenu>
 
       </div>
 
