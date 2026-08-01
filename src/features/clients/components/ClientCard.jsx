@@ -1,93 +1,73 @@
-import { useNavigate } from "react-router-dom";
+import Card from "../../../components/ui/Card";
+
+import ClientHeader from "./ClientHeader";
+import ClientScoreRing from "./ClientScoreRing";
+import ClientMetrics from "./ClientMetrics";
+import ClientFooter from "./ClientFooter";
 
 export default function ClientCard({
   client,
-  onEdit,
-  onDelete,
 }) {
-  const navigate = useNavigate();
-
   return (
-    <div
-      onClick={() => navigate(`/clientes/${client.id}`)}
-      style={{
-        background: "#171717",
-        padding: "20px",
-        borderRadius: "12px",
-        marginBottom: "15px",
-        border: "1px solid #2a2a2a",
-        cursor: "pointer",
-        transition: "0.25s",
-      }}
+    <Card
+      glow
+      className="
+        w-full
+
+        transition-all
+        duration-500
+
+        hover:-translate-y-1
+      "
     >
-      <h2
-        style={{
-          color: "#D4AF37",
-          marginBottom: "10px",
-        }}
-      >
-        {client.name}
-      </h2>
+      {/* HEADER */}
 
-      <p>🏢 {client.company}</p>
+      <ClientHeader
+        name={client.name}
+        company={client.company}
+        email={client.email}
+        phone={client.phone}
+      />
 
-      <p>📞 {client.phone || "-"}</p>
+      {/* Divider */}
 
-      <p>📧 {client.email || "-"}</p>
+      <div className="my-10 h-px bg-zinc-800" />
 
-      <p>
-        Estado{" "}
-        <span
-          style={{
-            color: "#D4AF37",
-          }}
-        >
-          {client.status || "Lead"}
-        </span>
-      </p>
+      {/* Score + Metrics */}
 
       <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginTop: "20px",
-        }}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(client);
-          }}
-          style={{
-            background: "#D4AF37",
-            color: "#000",
-            border: "none",
-            padding: "10px 16px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          ✏ Editar
-        </button>
+        className="
+          grid
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(client.id);
-          }}
-          style={{
-            background: "#8B1E1E",
-            color: "#fff",
-            border: "none",
-            padding: "10px 16px",
-            borderRadius: "8px",
-            cursor: "pointer",
-          }}
-        >
-          🗑 Eliminar
-        </button>
+          gap-10
+
+          xl:grid-cols-[220px_1fr]
+
+          items-center
+        "
+      >
+        <div className="flex justify-center">
+
+          <ClientScoreRing
+            score={client.score}
+          />
+
+        </div>
+
+        <ClientMetrics
+          discovery={client.discovery}
+          playbooks={client.playbooks}
+          projects={client.projects}
+          improvement={client.improvement}
+        />
+
       </div>
-    </div>
+
+      {/* Footer */}
+
+      <ClientFooter
+        recommendation={client.recommendation}
+      />
+    </Card>
   );
 }

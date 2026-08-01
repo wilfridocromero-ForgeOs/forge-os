@@ -5,20 +5,19 @@ import {
   Brain,
 } from "lucide-react";
 
-import Section from "../components/ui/Section";
 import Page from "../components/ui/Page";
+import Section from "../components/ui/Section";
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
 
-import OrvesenScore from "../components/OrvesenScore";
-import ExecutiveCard from "../components/ExecutiveCard";
-
+import OrvesenScore from "../components/business/OrvesenScore";
+import MetricCard from "../components/business/MetricCard";
 import NextActionCard from "../components/business/NextActionCard";
 import ActivityTimeline from "../components/business/ActivityTimeline";
 
 import { dashboardData } from "../data/dashboard";
 
-function Dashboard() {
+export default function Dashboard() {
   const icons = [
     Users,
     FolderKanban,
@@ -29,13 +28,15 @@ function Dashboard() {
   return (
     <Page>
 
-      {/* Hero */}
+      {/* ========================= */}
+      {/* HERO */}
+      {/* ========================= */}
 
       <section
         className="
           flex
           flex-col
-          gap-6
+          gap-8
 
           xl:flex-row
           xl:items-end
@@ -54,9 +55,6 @@ function Dashboard() {
           className="
             w-full
             xl:w-auto
-
-            px-6
-            py-5
           "
         >
 
@@ -64,15 +62,17 @@ function Dashboard() {
             Hoy
           </p>
 
-          <h3 className="mt-2 text-3xl font-semibold text-white">
+          <h2 className="mt-3 text-4xl font-semibold text-white">
             {dashboardData.date.day} {dashboardData.date.month}
-          </h3>
+          </h2>
 
         </Card>
 
       </section>
 
-      {/* Score + IA */}
+      {/* ========================= */}
+      {/* SCORE + IA */}
+      {/* ========================= */}
 
       <section
         className="
@@ -85,7 +85,7 @@ function Dashboard() {
 
         <OrvesenScore />
 
-        <Card>
+        <Card glow>
 
           <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
             ORVESEN IA
@@ -96,10 +96,10 @@ function Dashboard() {
           </h2>
 
           <p className="mt-3 leading-7 text-zinc-400">
-            Estas son las prioridades estratégicas detectadas hoy.
+            Estas son las prioridades detectadas hoy por ORVESEN IA.
           </p>
 
-          <div className="mt-10 space-y-10">
+          <div className="mt-10 space-y-8">
 
             {dashboardData.ai.recommendations.map((item) => (
 
@@ -109,7 +109,7 @@ function Dashboard() {
                   {String(item.id).padStart(2, "0")} · {item.title}
                 </p>
 
-                <p className="mt-2 text-sm leading-7 text-zinc-400">
+                <p className="mt-3 leading-7 text-zinc-400">
                   {item.description}
                 </p>
 
@@ -123,9 +123,15 @@ function Dashboard() {
 
       </section>
 
-      {/* KPIs */}
+      {/* ========================= */}
+      {/* MÉTRICAS */}
+      {/* ========================= */}
 
-      <Section eyebrow="EXECUTIVE OVERVIEW">
+      <Section
+        eyebrow="EXECUTIVE OVERVIEW"
+        title="Resumen Ejecutivo"
+        description="Indicadores principales del rendimiento de la organización."
+      >
 
         <div
           className="
@@ -140,7 +146,7 @@ function Dashboard() {
 
           {dashboardData.metrics.map((metric, index) => (
 
-            <ExecutiveCard
+            <MetricCard
               key={metric.title}
               icon={icons[index]}
               title={metric.title}
@@ -155,9 +161,15 @@ function Dashboard() {
 
       </Section>
 
-      {/* Próxima acción + Actividad */}
+      {/* ========================= */}
+      {/* ACTIVIDAD */}
+      {/* ========================= */}
 
-      <Section eyebrow="TODAY">
+      <Section
+        eyebrow="TODAY"
+        title="Actividad"
+        description="Prioridades y movimientos recientes."
+      >
 
         <div
           className="
@@ -187,5 +199,3 @@ function Dashboard() {
     </Page>
   );
 }
-
-export default Dashboard;

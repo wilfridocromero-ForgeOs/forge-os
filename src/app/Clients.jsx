@@ -1,142 +1,44 @@
-import { useState } from "react";
+import PageHeader from "../components/ui/PageHeader";
+import Section from "../components/ui/Section";
 
-import useClients from "../features/clients/hooks/useClients";
-import useClientSearch from "../features/clients/hooks/useClientSearch";
+import OrvesenScore from "../components/business/OrvesenScore";
+import CategoryGrid from "../components/business/CategoryGrid";
+import StrengthsCard from "../components/business/StrengthsCard";
+import RisksCard from "../components/business/RisksCard";
+import RecommendationsCard from "../components/business/RecommendationsCard";
+import ActionPlanCard from "../components/business/ActionPlanCard";
 
-import ClientHeader from "../features/clients/components/ClientHeader";
-import ClientSearch from "../features/clients/components/ClientSearch";
-import ClientList from "../features/clients/components/ClientList";
-import ClientModal from "../features/clients/components/ClientModal";
-
-function Clients() {
-  const {
-    clients,
-    loading,
-    addClient,
-    editClient,
-    removeClient,
-  } = useClients();
-
-  const [showForm, setShowForm] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
-
-  const [form, setForm] = useState({
-    name: "",
-    company: "",
-    phone: "",
-    email: "",
-  });
-
-  const {
-    search,
-    setSearch,
-    filteredClients,
-  } = useClientSearch(clients);
-
-  const resetForm = () => {
-    setForm({
-      name: "",
-      company: "",
-      phone: "",
-      email: "",
-    });
-
-    setEditingClient(null);
-  };
-
-  const saveClient = async () => {
-    if (!form.name || !form.company) {
-      alert("Nombre y empresa son obligatorios.");
-      return;
-    }
-
-    try {
-      if (editingClient) {
-        await editClient(editingClient.id, form);
-      } else {
-        await addClient(form);
-      }
-
-      resetForm();
-      setShowForm(false);
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  const handleEdit = (client) => {
-    setEditingClient(client);
-
-    setForm({
-      name: client.name || "",
-      company: client.company || "",
-      phone: client.phone || "",
-      email: client.email || "",
-    });
-
-    setShowForm(true);
-  };
-
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "¿Seguro que deseas eliminar este cliente?"
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await removeClient(id);
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          color: "#999",
-          fontSize: "16px",
-        }}
-      >
-        Cargando clientes...
-      </div>
-    );
-  }
-
+export default function Score() {
   return (
-    <div>
-      <ClientHeader
-        onNewClient={() => {
-          resetForm();
-          setShowForm(true);
-        }}
+    <main className="mx-auto max-w-7xl px-8 py-10">
+
+      <PageHeader
+        eyebrow="ORVESEN SCORE"
+        title="Organización"
+        description="Analiza el estado general de la empresa y recibe recomendaciones de ORVESEN IA."
       />
 
-      <ClientSearch
-        search={search}
-        setSearch={setSearch}
-      />
+      <div className="mt-12">
+        <OrvesenScore />
+      </div>
 
-      <ClientList
-        clients={filteredClients}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
+      <Section
+        eyebrow="CATEGORÍAS"
+        className="mt-14"
+      >
+        <CategoryGrid />
+      </Section>
 
-      <ClientModal
-        show={showForm}
-        form={form}
-        setForm={setForm}
-        editingClient={editingClient}
-        onClose={() => {
-          resetForm();
-          setShowForm(false);
-        }}
-        onSave={saveClient}
-      />
-    </div>
+      <div className="mt-14 grid gap-8 xl:grid-cols-2">
+        <StrengthsCard />
+        <RisksCard />
+      </div>
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-2">
+        <RecommendationsCard />
+        <ActionPlanCard />
+      </div>
+
+    </main>
   );
 }
-
-export default Clients;

@@ -1,64 +1,143 @@
 export default function Input({
   label,
+  hint,
   error,
+
   leftIcon: LeftIcon,
   rightIcon: RightIcon,
+
+  size = "md",
+
+  disabled = false,
+
+  required = false,
+
   className = "",
+
   ...props
 }) {
+  const sizes = {
+    sm: "px-4 py-3 text-sm",
+
+    md: "px-5 py-4 text-base",
+
+    lg: "px-6 py-5 text-lg",
+  };
+
   return (
-    <div className="w-full">
+    <div className="space-y-3">
+
+      {/* Label */}
 
       {label && (
-        <label className="mb-2 block text-sm font-medium text-zinc-300">
+        <label
+          className="
+            block
+
+            text-sm
+            font-medium
+
+            text-zinc-300
+          "
+        >
           {label}
+
+          {required && (
+            <span className="ml-1 text-red-400">
+              *
+            </span>
+          )}
+
         </label>
       )}
 
-      <div className="relative">
+      {/* Input */}
+
+      <div
+        className="
+          group
+
+          relative
+
+          flex
+          items-center
+
+          rounded-2xl
+
+          border
+          border-zinc-800
+
+          bg-[#111113]
+
+          transition-all
+          duration-300
+
+          focus-within:border-zinc-600
+
+          focus-within:ring-4
+          focus-within:ring-white/5
+        "
+      >
+
+        {/* Left Icon */}
 
         {LeftIcon && (
           <LeftIcon
             size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
+            className="ml-5 text-zinc-500"
           />
         )}
 
         <input
+          disabled={disabled}
           className={`
-            h-12
             w-full
-            rounded-xl
-            border
-            border-zinc-800
-            bg-[#111113]
-            px-4
+
+            bg-transparent
+
             text-white
+
+            placeholder:text-zinc-500
+
             outline-none
-            transition-all
-            duration-200
-            placeholder:text-zinc-600
-            focus:border-zinc-600
-            focus:ring-2
-            focus:ring-white/10
-            ${LeftIcon ? "pl-11" : ""}
-            ${RightIcon ? "pr-11" : ""}
+
+            ${LeftIcon ? "pl-3" : ""}
+
+            ${RightIcon ? "pr-3" : ""}
+
+            ${sizes[size]}
+
+            disabled:cursor-not-allowed
+            disabled:opacity-50
+
             ${className}
           `}
           {...props}
         />
 
+        {/* Right Icon */}
+
         {RightIcon && (
           <RightIcon
             size={18}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500"
+            className="mr-5 text-zinc-500"
           />
         )}
 
       </div>
 
+      {/* Hint */}
+
+      {!error && hint && (
+        <p className="text-sm text-zinc-500">
+          {hint}
+        </p>
+      )}
+
+      {/* Error */}
+
       {error && (
-        <p className="mt-2 text-sm text-red-400">
+        <p className="text-sm text-red-400">
           {error}
         </p>
       )}

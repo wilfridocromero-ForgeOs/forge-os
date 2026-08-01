@@ -1,35 +1,9 @@
 export default function Card({
-  title,
-  subtitle,
-  actions,
   children,
   className = "",
   hover = true,
-  variant = "default",
-  padding = "default",
+  glow = false,
 }) {
-  const variants = {
-    default: "bg-[#111113] border-zinc-800",
-
-    outlined: `
-      bg-transparent
-      border-zinc-800
-    `,
-
-    glass: `
-      bg-white/[0.02]
-      backdrop-blur-xl
-      border-white/10
-    `,
-  };
-
-  const paddings = {
-    none: "",
-    sm: "p-5",
-    default: "p-6 sm:p-8",
-    lg: "p-8 sm:p-10",
-  };
-
   return (
     <section
       className={`
@@ -37,22 +11,26 @@ export default function Card({
         relative
         overflow-hidden
 
-        rounded-3xl
+        rounded-[28px]
 
         border
+        border-zinc-800
 
-        ${variants[variant]}
+        bg-[#111113]
 
         transition-all
-        duration-200
+        duration-500
         ease-out
 
         ${
           hover
             ? `
-              hover:-translate-y-[2px]
-              hover:border-zinc-700
-              hover:shadow-[0_24px_70px_rgba(0,0,0,.35)]
+              hover:-translate-y-1
+              hover:scale-[1.005]
+
+              hover:border-zinc-600
+
+              hover:shadow-[0_35px_100px_rgba(0,0,0,.55)]
             `
             : ""
         }
@@ -60,7 +38,7 @@ export default function Card({
         ${className}
       `}
     >
-      {/* Glow */}
+      {/* Gradiente superior */}
 
       <div
         className="
@@ -69,7 +47,73 @@ export default function Card({
           absolute
           inset-0
 
-          rounded-3xl
+          bg-gradient-to-b
+
+          from-white/[0.035]
+          via-transparent
+          to-transparent
+        "
+      />
+
+      {/* Glow metálico */}
+
+      {glow && (
+        <div
+          className="
+            pointer-events-none
+
+            absolute
+            inset-0
+
+            opacity-0
+
+            transition-opacity
+            duration-500
+
+            group-hover:opacity-100
+          "
+        >
+          <div
+            className="
+              absolute
+
+              left-1/2
+              top-0
+
+              h-52
+              w-52
+
+              -translate-x-1/2
+
+              rounded-full
+
+              bg-white/[0.045]
+
+              blur-3xl
+            "
+          />
+        </div>
+      )}
+
+      {/* Línea metálica superior */}
+
+      <div
+        className="
+          pointer-events-none
+
+          absolute
+
+          left-10
+          right-10
+          top-0
+
+          h-px
+
+          bg-gradient-to-r
+
+          from-transparent
+          via-white/25
+          to-transparent
 
           opacity-0
 
@@ -77,86 +121,64 @@ export default function Card({
           duration-500
 
           group-hover:opacity-100
-
-          bg-gradient-to-br
-          from-white/[0.025]
-          via-transparent
-          to-transparent
         "
       />
 
-      {(title || subtitle || actions) && (
-        <header
-          className="
-            relative
-
-            flex
-            flex-col
-            gap-6
-
-            border-b
-            border-zinc-800
-
-            p-6
-
-            sm:flex-row
-            sm:items-start
-            sm:justify-between
-
-            lg:px-8
-            lg:py-6
-          "
-        >
-          <div className="min-w-0">
-
-            {title && (
-              <h2
-                className="
-                  text-xl
-                  font-semibold
-                  tracking-tight
-                  text-white
-                "
-              >
-                {title}
-              </h2>
-            )}
-
-            {subtitle && (
-              <p
-                className="
-                  mt-2
-
-                  text-sm
-                  leading-7
-
-                  text-zinc-500
-                "
-              >
-                {subtitle}
-              </p>
-            )}
-
-          </div>
-
-          {actions && (
-            <div className="w-full sm:w-auto">
-              {actions}
-            </div>
-          )}
-
-        </header>
-      )}
+      {/* Borde interior */}
 
       <div
-        className={`
-          relative
-          ${paddings[padding]}
-        `}
-      >
+        className="
+          pointer-events-none
+
+          absolute
+          inset-0
+
+          rounded-[28px]
+
+          ring-1
+          ring-inset
+
+          ring-white/[0.03]
+        "
+      />
+
+      {/* Reflejo lateral */}
+
+      <div
+        className="
+          pointer-events-none
+
+          absolute
+
+          -left-24
+          top-0
+
+          h-full
+          w-24
+
+          rotate-12
+
+          bg-gradient-to-r
+
+          from-transparent
+          via-white/[0.02]
+          to-transparent
+
+          opacity-0
+
+          transition-all
+          duration-700
+
+          group-hover:left-[120%]
+          group-hover:opacity-100
+        "
+      />
+
+      {/* Contenido */}
+
+      <div className="relative z-10 p-8">
         {children}
       </div>
-
     </section>
   );
 }

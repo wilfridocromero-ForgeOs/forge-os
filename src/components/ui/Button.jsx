@@ -1,51 +1,82 @@
+import Spinner from "../feedback/Spinner";
+
 export default function Button({
   children,
+  loading = false,
   variant = "primary",
-  size = "md",
+  disabled = false,
   className = "",
   ...props
 }) {
   const variants = {
-    primary:
-      "bg-white text-black hover:bg-zinc-200",
+    primary: `
+      bg-white
+      text-black
+      border-white
+      hover:bg-zinc-200
+    `,
 
-    secondary:
-      "bg-zinc-900 text-white border border-zinc-800 hover:bg-zinc-800",
+    secondary: `
+      bg-[#17171A]
+      text-white
+      border-zinc-800
+      hover:border-zinc-700
+      hover:bg-[#1D1D21]
+    `,
 
-    ghost:
-      "bg-transparent text-zinc-300 hover:bg-zinc-900",
-  };
-
-  const sizes = {
-    sm: "h-9 px-4 text-sm",
-    md: "h-11 px-5 text-sm",
-    lg: "h-12 px-6 text-base",
+    ghost: `
+      bg-transparent
+      text-zinc-300
+      border-transparent
+      hover:bg-zinc-900
+    `,
   };
 
   return (
     <button
+      disabled={loading || disabled}
       className={`
+        group
+
+        relative
+
         inline-flex
         items-center
         justify-center
-        rounded-xl
-        font-medium
+
+        gap-2
+
+        rounded-2xl
+
+        border
+
+        px-6
+        py-3.5
+
+        text-sm
+        font-semibold
+
         transition-all
-        duration-200
-        focus:outline-none
-        focus:ring-2
-        focus:ring-white/20
+        duration-300
+
+        hover:-translate-y-[1px]
+
+        active:translate-y-0
+
         disabled:opacity-50
         disabled:pointer-events-none
+
         ${variants[variant]}
-        ${sizes[size]}
+
         ${className}
       `}
       {...props}
     >
-      {children}
+      {loading ? (
+        <Spinner size={18} />
+      ) : (
+        children
+      )}
     </button>
   );
-}<Button>
-    Nuevo cliente
-</Button>
+}

@@ -2,7 +2,7 @@ import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
 import Section from "../components/ui/Section";
 
-import ScoreGauge from "../components/business/ScoreGauge";
+import OrvesenScore from "../components/business/OrvesenScore";
 import CategoryGrid from "../components/business/CategoryGrid";
 
 import StrengthsCard from "../components/business/StrengthsCard";
@@ -15,7 +15,6 @@ import { scoreData } from "../data/score";
 export default function Score() {
   return (
     <Page>
-
       {/* Hero */}
 
       <PageHeader
@@ -27,15 +26,13 @@ export default function Score() {
       {/* Score General */}
 
       <Section>
-
-        <ScoreGauge
+        <OrvesenScore
           score={scoreData.score}
           max={scoreData.max}
           status={scoreData.status}
           improvement={scoreData.improvement}
           description={scoreData.description}
         />
-
       </Section>
 
       {/* Categorías */}
@@ -45,11 +42,9 @@ export default function Score() {
         title="Áreas evaluadas"
         description="Cada categoría representa un componente esencial del rendimiento de tu organización."
       >
-
         <CategoryGrid
           categories={scoreData.categories}
         />
-
       </Section>
 
       {/* Resumen Ejecutivo */}
@@ -59,16 +54,13 @@ export default function Score() {
         title="Resumen Ejecutivo"
         description="ORVESEN IA identifica fortalezas, riesgos y oportunidades prioritarias."
       >
-
         <div
           className="
             grid
             gap-6
-
             lg:grid-cols-3
           "
         >
-
           <StrengthsCard
             strengths={scoreData.strengths}
           />
@@ -80,9 +72,7 @@ export default function Score() {
           <RecommendationsCard
             recommendations={scoreData.recommendations}
           />
-
         </div>
-
       </Section>
 
       {/* Plan de Acción */}
@@ -92,16 +82,13 @@ export default function Score() {
         title="Acción Prioritaria"
         description="La recomendación con mayor impacto estimado según ORVESEN IA."
       >
-
         <ActionPlanCard
           title={scoreData.actionPlan.title}
           impact={scoreData.actionPlan.impact}
           time={scoreData.actionPlan.time}
           description={scoreData.actionPlan.description}
         />
-
       </Section>
-
     </Page>
   );
 }
