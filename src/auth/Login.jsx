@@ -1,6 +1,7 @@
 import Logo from "../components/display/Logo";
 import LoginForm from "../components/forms/LoginForm";
 import AuthBackground from "../components/display/AuthBackground";
+import { Link } from "react-router-dom";
 
 export default function Login() {
   return (
@@ -64,37 +65,11 @@ export default function Login() {
 
           {/* Footer */}
 
-          <div
-            className="
-              mt-10
-
-              border-t
-              border-zinc-800
-
-              pt-6
-
-              flex
-              items-center
-              justify-between
-
-              text-sm
-            "
-          >
-            <button
-              className="
-                text-zinc-500
-
-                transition-colors
-
-                hover:text-white
-              "
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
-
-            <span className="text-zinc-600">
-              v1.0
-            </span>
+          <div className="mt-10 flex items-center justify-between border-t border-zinc-800 pt-6 text-sm">
+            <span className="text-zinc-500">¿No tienes cuenta?</span>
+            <Link className="text-white hover:underline" to="/register">
+              Regístrate
+            </Link>
           </div>
         </div>
       </div>

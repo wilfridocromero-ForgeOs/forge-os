@@ -8,21 +8,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function getSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      setSession(session);
-      setLoading(false);
-    }
-
-    getSession();
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoading(false);
+    });
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error("No se pudo restaurar la sesión:", error.message);
+      }
+
+      setSession(data.session);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -35,9 +34,7 @@ export function AuthProvider({ children }) {
       user: session?.user ?? null,
       loading,
 
-      logout: async () => {
-        await supabase.auth.signOut();
-      },
+      logout: () => supabase.auth.signOut(),
     }}
   >
     {children}
@@ -46,5 +43,11 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth debe utilizarse dentro de AuthProvider.");
+  }
+
+  return context;
 }

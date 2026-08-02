@@ -1,40 +1,36 @@
-import OrganizationService from "./OrganizationService";
-import AIService from "./AIService";
+import { supabase } from "../lib/supabase";
 
-class DashboardService {
-  getDashboard() {
-    const organization =
-      OrganizationService.getOrganization();
 
-    return {
-      greeting: {
-        eyebrow: "ORVESEN PLATFORM",
+export async function getDashboardData(organizationId) {
 
-        title: `Buenos días, ${organization.owner.firstName}.`,
 
-        description:
-          AIService.getGreeting(),
-      },
+  const clients = await supabase
+    .from("clients")
+    .select("*", { count:"exact" })
+    .eq(
+      "organization_id",
+      organizationId
+    );
 
-      score:
-        OrganizationService.getScore(),
 
-      projects:
-        OrganizationService.getProjects(),
+  const discoveries = await supabase
+    .from("discoveries")
+    .select("*", { count:"exact" })
+    .eq(
+      "organization_id",
+      organizationId
+    );
 
-      playbooks:
-        OrganizationService.getPlaybooks(),
 
-      discovery:
-        OrganizationService.getDiscovery(),
+  return {
 
-      nextAction:
-        AIService.getNextAction(),
+    clients:
+      clients.count ?? 0,
 
-      recommendations:
-        AIService.getRecommendations(),
-    };
-  }
+
+    discoveries:
+      discoveries.count ?? 0,
+
+  };
+
 }
-
-export default new DashboardService();
