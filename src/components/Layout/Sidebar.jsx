@@ -63,7 +63,7 @@ export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }) {
-  const { displayName, initial } = useAuth();
+  const { displayName, initial, displayTitle } = useAuth();
 
   return (
     <>
@@ -236,7 +236,7 @@ export default function Sidebar({
               </p>
 
               <p className="text-sm text-zinc-500">
-                Miembro
+                {displayTitle}
               </p>
 
             </div>

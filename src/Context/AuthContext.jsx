@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
 
     supabase
       .from("users")
-      .select("first_name, organization_id")
+      .select("first_name, organization_id, title")
       .eq("id", session.user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -65,6 +65,28 @@ export function AuthProvider({ children }) {
     "Usuario";
 
   const initial = displayName.trim().charAt(0).toUpperCase() || "U";
+  const displayTitle = profile?.title || "Miembro";
+
+  async function updateProfile({ firstName, title }) {
+    if (!session?.user?.id) {
+      throw new Error("No hay una sesión activa.");
+    }
+
+    const { data, error } = await supabase
+      .from("users")
+      .update({
+        first_name: firstName.trim(),
+        title: title.trim() || "Miembro",
+      })
+      .eq("id", session.user.id)
+      .select("first_name, organization_id, title")
+      .single();
+
+    if (error) throw error;
+
+    setProfile(data);
+    return data;
+  }
 
  return (
   <AuthContext.Provider
@@ -74,6 +96,8 @@ export function AuthProvider({ children }) {
       profile,
       displayName,
       initial,
+      displayTitle,
+      updateProfile,
       loading,
 
       logout: () => supabase.auth.signOut(),

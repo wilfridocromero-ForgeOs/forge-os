@@ -22,6 +22,10 @@ export default function Dashboard() {
   const { displayName } = useAuth();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+  const today = new Intl.DateTimeFormat("es", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date());
 
   const icons = [
     Users,
@@ -55,23 +59,12 @@ export default function Dashboard() {
           description={dashboardData.greeting.description}
         />
 
-        <Card
-          hover={false}
-          className="
-            w-full
-            xl:w-auto
-          "
-        >
-
-          <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+        <div className="w-fit rounded-2xl border border-zinc-800 bg-[#111113] px-5 py-3">
+          <p className="text-[10px] uppercase tracking-[0.30em] text-zinc-500">
             Hoy
           </p>
-
-          <h2 className="mt-3 text-4xl font-semibold text-white">
-            {dashboardData.date.day} {dashboardData.date.month}
-          </h2>
-
-        </Card>
+          <p className="mt-1 text-lg font-medium capitalize text-white">{today}</p>
+        </div>
 
       </section>
 

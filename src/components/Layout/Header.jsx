@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu as HeadlessMenu } from "@headlessui/react";
 import {
@@ -12,9 +13,11 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../../Context/AuthContext";
+import ProfileModal from "./ProfileModal";
 
 export default function Header({ setSidebarOpen }) {
-  const { logout, displayName, initial } = useAuth();
+  const { logout, displayName, initial, displayTitle } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -232,7 +235,7 @@ export default function Header({ setSidebarOpen }) {
               </p>
 
               <p className="text-xs text-zinc-500">
-                Miembro
+                {displayTitle}
               </p>
 
             </div>
@@ -264,7 +267,10 @@ export default function Header({ setSidebarOpen }) {
           >
 
             <HeadlessMenu.Item>
-              <button className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900">
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900"
+              >
                 <User size={18} />
                 Perfil
               </button>
@@ -295,6 +301,7 @@ export default function Header({ setSidebarOpen }) {
 
       </div>
 
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </header>
   );
 }
