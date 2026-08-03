@@ -7,13 +7,15 @@ export default function ScoreGauge({
   improvement = null,
   description = "",
   loading = false,
+  compact = false,
+  onEvaluate,
 }) {
-  const hasScore = Number.isFinite(Number(score));
+  const hasScore = score !== null && score !== undefined && Number.isFinite(Number(score));
   const safeScore = hasScore ? Number(score) : 0;
   const percentage = Math.min(100, Math.max(0, (safeScore / max) * 100));
 
   return (
-    <Card className="relative overflow-hidden">
+    <Card className="relative overflow-hidden" contentClassName={compact ? "p-5 sm:p-6" : "p-8"}>
 
       {/* Glow muy sutil */}
 
@@ -38,9 +40,9 @@ export default function ScoreGauge({
           ORVESEN SCORE
         </p>
 
-        <div className="mt-10 flex items-center justify-center">
+        <div className={`${compact ? "mt-5" : "mt-10"} flex items-center justify-center`}>
 
-          <div className="relative h-64 w-64">
+          <div className={`relative ${compact ? "h-40 w-40" : "h-64 w-64"}`}>
 
             {/* Círculo exterior */}
 
@@ -85,11 +87,11 @@ export default function ScoreGauge({
                 justify-center
               "
             >
-              <h1 className="text-6xl font-semibold tracking-tight text-white">
+              <h1 className={`${compact ? "text-4xl" : "text-6xl"} font-semibold tracking-tight text-white`}>
                 {loading ? "…" : hasScore ? safeScore : "—"}
               </h1>
 
-              <p className="mt-3 text-sm uppercase tracking-[0.25em] text-zinc-400">
+              <p className="mt-2 text-center text-xs uppercase tracking-[0.2em] text-zinc-400">
                 {loading ? "Calculando" : hasScore ? status : "Evaluación pendiente"}
               </p>
 
@@ -104,18 +106,17 @@ export default function ScoreGauge({
 
         </div>
 
-        <p
-          className="
-            mx-auto
-            mt-10
-            max-w-xl
-            text-center
-            leading-8
-            text-zinc-400
-          "
-        >
+        <p className={`mx-auto max-w-xl text-center text-zinc-400 ${compact ? "mt-5 text-sm leading-6" : "mt-10 leading-8"}`}>
           {description}
         </p>
+
+        {!loading && !hasScore && onEvaluate && (
+          <div className="mt-4 text-center">
+            <button onClick={onEvaluate} className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200">
+              Completar Discovery
+            </button>
+          </div>
+        )}
 
       </div>
 

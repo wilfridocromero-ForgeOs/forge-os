@@ -4,7 +4,7 @@ import Card from "../ui/Card";
 
 export default function ActivityTimeline({ activities = [] }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full" contentClassName="p-5 sm:p-6">
 
       {/* Header */}
 
@@ -14,7 +14,7 @@ export default function ActivityTimeline({ activities = [] }) {
           Actividad reciente
         </p>
 
-        <h2 className="mt-5 text-3xl font-semibold text-white">
+        <h2 className="mt-2 text-xl font-semibold text-white">
           Últimos movimientos
         </h2>
 
@@ -22,7 +22,13 @@ export default function ActivityTimeline({ activities = [] }) {
 
       {/* Timeline */}
 
-      <div className="mt-10 space-y-8">
+      <div className="mt-5 space-y-5">
+
+        {activities.length === 0 && (
+          <p className="rounded-xl border border-dashed border-zinc-800 p-5 text-sm text-zinc-500">
+            Todavía no hay movimientos reales para mostrar.
+          </p>
+        )}
 
         {activities.map((activity, index) => (
           <div
@@ -60,11 +66,11 @@ export default function ActivityTimeline({ activities = [] }) {
                 {activity.time}
               </p>
 
-              <h3 className="mt-2 text-lg font-medium text-white">
+              <h3 className="mt-1 text-base font-medium text-white">
                 {activity.title}
               </h3>
 
-              <p className="mt-2 text-sm leading-7 text-zinc-500">
+              <p className="mt-1 text-sm leading-6 text-zinc-500">
                 {activity.description}
               </p>
 

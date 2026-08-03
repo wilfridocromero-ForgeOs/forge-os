@@ -1,6 +1,7 @@
 export default function Card({
   children,
   className = "",
+  contentClassName = "p-8",
   hover = true,
   glow = false,
 }) {
@@ -176,7 +177,7 @@ export default function Card({
 
       {/* Contenido */}
 
-      <div className="relative z-10 p-8">
+      <div className={`relative z-10 ${contentClassName}`}>
         {children}
       </div>
     </section>

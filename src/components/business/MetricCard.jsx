@@ -6,9 +6,10 @@ export default function MetricCard({
   value,
   subtitle,
   trend,
+  loading = false,
 }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full" contentClassName="p-5 sm:p-6">
 
       <div className="flex h-full flex-col">
 
@@ -24,8 +25,8 @@ export default function MetricCard({
             <div
               className="
                 flex
-                h-11
-                w-11
+                h-9
+                w-9
                 items-center
                 justify-center
 
@@ -48,46 +49,23 @@ export default function MetricCard({
 
         {/* Valor */}
 
-        <div className="mt-8">
+        <div className="mt-5">
 
-          <h2 className="text-5xl font-semibold tracking-tight text-white">
-            {value}
+          <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            {loading ? "…" : value}
           </h2>
 
-          <p className="mt-4 leading-7 text-zinc-400">
+          <p className="mt-2 text-sm text-zinc-400">
             {subtitle}
           </p>
 
         </div>
 
-        <div className="flex-1" />
-
-        {/* Footer */}
-
-        <div
-          className="
-            mt-10
-
-            flex
-            items-center
-            justify-between
-
-            border-t
-            border-zinc-800
-
-            pt-6
-          "
-        >
-
-          <span className="text-sm text-zinc-500">
-            Tendencia
-          </span>
-
-          <span className="font-medium text-white">
+        {trend && (
+          <p className="mt-4 border-t border-zinc-800 pt-3 text-xs text-zinc-500">
             {trend}
-          </span>
-
-        </div>
+          </p>
+        )}
 
       </div>
 
