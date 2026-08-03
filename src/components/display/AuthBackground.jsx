@@ -15,7 +15,7 @@ export default function AuthBackground() {
           left-1/2
 
           h-[700px]
-          w-[700px]
+          w-[min(700px,100vw)]
 
           -translate-x-1/2
 
@@ -37,7 +37,7 @@ export default function AuthBackground() {
           right-0
 
           h-[500px]
-          w-[500px]
+          w-[min(500px,100vw)]
 
           rounded-full
 

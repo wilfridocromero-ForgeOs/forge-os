@@ -9,7 +9,7 @@ export default function Logo({
   };
 
   return (
-    <div className={`flex items-center ${compact ? "w-full justify-center gap-2.5 text-left" : "flex-col text-center"}`}>
+    <div className={`flex items-center ${compact ? "w-full justify-start gap-2.5 text-left lg:justify-center" : "flex-col text-center"}`}>
 
       <img
         src="/orvesen-mark.png"
