@@ -30,8 +30,8 @@ export default function ProfileModal({ onClose }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center overflow-y-auto bg-black/70 px-3 pt-16 sm:items-center sm:px-4 sm:py-8">
-      <div className="w-full max-w-md rounded-t-3xl border border-zinc-800 bg-[#111113] p-6 shadow-2xl sm:rounded-3xl sm:p-7">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/70 px-3 py-6 sm:px-4 sm:py-8">
+      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113] p-6 shadow-2xl sm:p-7">
         <h2 className="text-2xl font-semibold text-white">Editar perfil</h2>
         <p className="mt-2 text-sm text-zinc-500">
           Personaliza el nombre y el título que aparecen en ORVESEN.
