@@ -19,7 +19,7 @@ import { dashboardData } from "../data/dashboard";
 import { useAuth } from "../Context/AuthContext";
 
 export default function Dashboard() {
-  const { displayName } = useAuth();
+  const { displayName, displayTitle } = useAuth();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
   const today = new Intl.DateTimeFormat("es", {
@@ -41,29 +41,19 @@ export default function Dashboard() {
       {/* HERO */}
       {/* ========================= */}
 
-      <section
-        className="
-          flex
-          flex-col
-          gap-8
-
-          xl:flex-row
-          xl:items-end
-          xl:justify-between
-        "
-      >
+      <section className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:gap-6">
 
         <PageHeader
-          eyebrow={dashboardData.greeting.eyebrow}
+          eyebrow={displayTitle}
           title={`${greeting}, ${displayName}.`}
           description={dashboardData.greeting.description}
         />
 
-        <div className="w-fit rounded-2xl border border-zinc-800 bg-[#111113] px-5 py-3">
+        <div className="justify-self-end rounded-xl border border-zinc-800 bg-[#111113] px-3 py-2 text-right sm:px-4">
           <p className="text-[10px] uppercase tracking-[0.30em] text-zinc-500">
             Hoy
           </p>
-          <p className="mt-1 text-lg font-medium capitalize text-white">{today}</p>
+          <p className="mt-0.5 whitespace-nowrap text-sm font-medium capitalize text-white sm:text-base">{today}</p>
         </div>
 
       </section>
