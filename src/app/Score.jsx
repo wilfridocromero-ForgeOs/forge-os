@@ -10,9 +10,17 @@ import RisksCard from "../components/business/RisksCard";
 import RecommendationsCard from "../components/business/RecommendationsCard";
 import ActionPlanCard from "../components/business/ActionPlanCard";
 
-import { scoreData } from "../data/score";
+import useOrganizationScore from "../hooks/useOrganizationScore";
 
 export default function Score() {
+  const { data: currentScore, loading } = useOrganizationScore();
+  const categories = Array.isArray(currentScore?.categories) ? currentScore.categories : [];
+  const strengths = Array.isArray(currentScore?.strengths) ? currentScore.strengths : [];
+  const risks = Array.isArray(currentScore?.risks) ? currentScore.risks : [];
+  const recommendations = Array.isArray(currentScore?.recommendations)
+    ? currentScore.recommendations
+    : [];
+  const actionPlan = currentScore?.next_action || null;
   return (
     <Page>
       {/* Hero */}
@@ -27,11 +35,15 @@ export default function Score() {
 
       <Section>
         <OrvesenScore
-          score={scoreData.score}
-          max={scoreData.max}
-          status={scoreData.status}
-          improvement={scoreData.improvement}
-          description={scoreData.description}
+          score={currentScore?.total_score ?? null}
+          max={currentScore?.max_score ?? 1000}
+          status={currentScore?.status ?? "Evaluación pendiente"}
+          improvement={currentScore?.improvement ?? null}
+          description={
+            currentScore?.recommendation ||
+            "Completa el Discovery para generar una evaluación con datos reales."
+          }
+          loading={loading}
         />
       </Section>
 
@@ -43,7 +55,7 @@ export default function Score() {
         description="Cada categoría representa un componente esencial del rendimiento de tu organización."
       >
         <CategoryGrid
-          categories={scoreData.categories}
+          categories={categories}
         />
       </Section>
 
@@ -62,15 +74,15 @@ export default function Score() {
           "
         >
           <StrengthsCard
-            strengths={scoreData.strengths}
+            strengths={strengths}
           />
 
           <RisksCard
-            risks={scoreData.risks}
+            risks={risks}
           />
 
           <RecommendationsCard
-            recommendations={scoreData.recommendations}
+            recommendations={recommendations}
           />
         </div>
       </Section>
@@ -83,10 +95,13 @@ export default function Score() {
         description="La recomendación con mayor impacto estimado según ORVESEN IA."
       >
         <ActionPlanCard
-          title={scoreData.actionPlan.title}
-          impact={scoreData.actionPlan.impact}
-          time={scoreData.actionPlan.time}
-          description={scoreData.actionPlan.description}
+          title={actionPlan?.title || "Completar Discovery"}
+          impact={actionPlan?.impact ?? 0}
+          time={actionPlan?.time || "Pendiente"}
+          description={
+            actionPlan?.description ||
+            "Aún no existe información suficiente para recomendar una acción prioritaria."
+          }
         />
       </Section>
     </Page>

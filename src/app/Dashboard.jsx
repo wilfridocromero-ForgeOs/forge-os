@@ -17,9 +17,11 @@ import ActivityTimeline from "../components/business/ActivityTimeline";
 
 import { dashboardData } from "../data/dashboard";
 import { useAuth } from "../Context/AuthContext";
+import useOrganizationScore from "../hooks/useOrganizationScore";
 
 export default function Dashboard() {
   const { displayName, displayTitle } = useAuth();
+  const { data: currentScore, loading: scoreLoading } = useOrganizationScore();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
   const today = new Intl.DateTimeFormat("es", {
@@ -71,7 +73,17 @@ export default function Dashboard() {
         "
       >
 
-        <OrvesenScore />
+        <OrvesenScore
+          score={currentScore?.total_score ?? null}
+          max={currentScore?.max_score ?? 1000}
+          status={currentScore?.status ?? "Evaluación pendiente"}
+          improvement={currentScore?.improvement ?? null}
+          description={
+            currentScore?.recommendation ||
+            "Completa el Discovery para generar el primer ORVESEN Score con datos de tu organización."
+          }
+          loading={scoreLoading}
+        />
 
         <Card glow>
 

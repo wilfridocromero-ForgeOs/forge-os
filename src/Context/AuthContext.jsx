@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [profileUserId, setProfileUserId] = useState(null);
 
   useEffect(() => {
     const {
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
 
     if (!session?.user?.id) {
       setProfile(null);
+      setProfileUserId(null);
       return undefined;
     }
 
@@ -47,10 +49,12 @@ export function AuthProvider({ children }) {
         if (error) {
           console.error("No se pudo cargar el perfil:", error.message);
           setProfile(null);
+          setProfileUserId(session.user.id);
           return;
         }
 
         setProfile(data);
+        setProfileUserId(session.user.id);
       });
 
     return () => {
@@ -98,7 +102,7 @@ export function AuthProvider({ children }) {
       initial,
       displayTitle,
       updateProfile,
-      loading,
+      loading: loading || Boolean(session?.user?.id && profileUserId !== session.user.id),
 
       logout: () => supabase.auth.signOut(),
     }}

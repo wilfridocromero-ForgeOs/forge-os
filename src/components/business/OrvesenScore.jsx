@@ -1,13 +1,16 @@
 import Card from "../ui/Card";
 
 export default function ScoreGauge({
-  score = 867,
+  score = null,
   max = 1000,
   status = "Organización Saludable",
-  improvement = 12,
+  improvement = null,
   description = "",
+  loading = false,
 }) {
-  const percentage = (score / max) * 100;
+  const hasScore = Number.isFinite(Number(score));
+  const safeScore = hasScore ? Number(score) : 0;
+  const percentage = Math.min(100, Math.max(0, (safeScore / max) * 100));
 
   return (
     <Card className="relative overflow-hidden">
@@ -83,16 +86,18 @@ export default function ScoreGauge({
               "
             >
               <h1 className="text-6xl font-semibold tracking-tight text-white">
-                {score}
+                {loading ? "…" : hasScore ? safeScore : "—"}
               </h1>
 
               <p className="mt-3 text-sm uppercase tracking-[0.25em] text-zinc-400">
-                {status}
+                {loading ? "Calculando" : hasScore ? status : "Evaluación pendiente"}
               </p>
 
-              <p className="mt-5 text-sm text-zinc-500">
-                ↑ +{improvement} este mes
-              </p>
+              {!loading && improvement !== null && improvement !== undefined && (
+                <p className="mt-5 text-sm text-zinc-500">
+                  {Number(improvement) >= 0 ? "↑ +" : "↓ "}{improvement} este mes
+                </p>
+              )}
             </div>
 
           </div>

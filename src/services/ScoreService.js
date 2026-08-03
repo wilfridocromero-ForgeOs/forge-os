@@ -12,14 +12,7 @@ export async function getScores(
 
  .from("scores")
 
- .select(`
-   id,
-   total_score,
-   max_score,
-   status,
-   recommendation,
-   client_id
- `)
+ .select("*")
 
  .eq(
   "organization_id",
