@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
+import Logo from "../display/Logo";
 
 const menu = [
   {
@@ -128,17 +129,7 @@ export default function Sidebar({
 
           <div className="flex items-center justify-between">
 
-            <div>
-
-              <h1 className="text-2xl font-bold tracking-[0.25em] sm:text-3xl">
-                ORVESEN
-              </h1>
-
-              <p className="mt-3 text-xs tracking-[0.25em] text-zinc-500">
-                Enterprise Intelligence
-              </p>
-
-            </div>
+            <Logo compact size="small" />
 
             <button
               onClick={() => setSidebarOpen(false)}

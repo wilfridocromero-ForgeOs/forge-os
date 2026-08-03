@@ -82,9 +82,7 @@ export default function Header({ setSidebarOpen }) {
         </button>
 
         <div className="lg:hidden">
-          <h1 className="text-lg font-bold tracking-[0.20em]">
-            ORVESEN
-          </h1>
+          <img src="/orvesen-mark.png" alt="ORVESEN" className="h-10 w-10 object-contain drop-shadow-md" />
         </div>
 
         <div

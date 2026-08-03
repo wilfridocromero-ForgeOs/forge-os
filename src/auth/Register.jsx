@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { supabase } from "../lib/supabase";
+import Logo from "../components/display/Logo";
+import AuthBackground from "../components/display/AuthBackground";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -59,10 +61,12 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#09090B] px-6">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113] p-8">
-        <h1 className="mb-2 text-3xl font-semibold text-white">Crear cuenta</h1>
-        <p className="mb-8 text-zinc-400">Crea tu espacio ORVESEN.</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#09090B] px-6 py-8">
+      <AuthBackground />
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113]/80 p-8 shadow-[0_30px_80px_rgba(0,0,0,.45)] backdrop-blur-xl">
+        <Logo size="small" />
+        <h1 className="mb-2 mt-8 text-center text-2xl font-semibold text-white">Crear cuenta</h1>
+        <p className="mb-8 text-center text-zinc-400">Crea tu espacio ORVESEN.</p>
 
         {error && <div className="mb-4 text-sm text-red-400">{error}</div>}
         {message && (
