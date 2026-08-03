@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuth } from "../../Context/AuthContext";
 
@@ -28,9 +29,9 @@ export default function ProfileModal({ onClose }) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113] p-7 shadow-2xl">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center overflow-y-auto bg-black/70 px-3 pt-16 sm:items-center sm:px-4 sm:py-8">
+      <div className="w-full max-w-md rounded-t-3xl border border-zinc-800 bg-[#111113] p-6 shadow-2xl sm:rounded-3xl sm:p-7">
         <h2 className="text-2xl font-semibold text-white">Editar perfil</h2>
         <p className="mt-2 text-sm text-zinc-500">
           Personaliza el nombre y el título que aparecen en ORVESEN.
@@ -79,6 +80,7 @@ export default function ProfileModal({ onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
