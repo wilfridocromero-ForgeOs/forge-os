@@ -61,9 +61,9 @@ export default function Register() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#09090B] px-6 py-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-y-auto bg-[#09090B] px-4 py-6">
       <AuthBackground />
-      <div className="relative z-10 w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113]/80 p-8 shadow-[0_30px_80px_rgba(0,0,0,.45)] backdrop-blur-xl">
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113]/80 p-6 shadow-[0_30px_80px_rgba(0,0,0,.45)] backdrop-blur-xl sm:p-8">
         <Logo size="small" />
         <h1 className="mb-2 mt-8 text-center text-2xl font-semibold text-white">Crear cuenta</h1>
         <p className="mb-8 text-center text-zinc-400">Crea tu espacio ORVESEN.</p>

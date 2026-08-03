@@ -125,9 +125,9 @@ export default function Sidebar({
       >
         {/* Logo */}
 
-        <div className="px-8 pt-8">
+        <div className="px-5 pt-7">
 
-          <div className="flex items-center justify-between">
+          <div className="relative flex items-center justify-center">
 
             <Logo compact size="small" />
 
@@ -138,7 +138,7 @@ export default function Sidebar({
                 p-2
                 transition-colors
                 hover:bg-zinc-900
-                lg:hidden
+                absolute right-0 lg:hidden
               "
             >
               <X size={20} />

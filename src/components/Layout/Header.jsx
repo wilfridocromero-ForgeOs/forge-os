@@ -81,10 +81,6 @@ export default function Header({ setSidebarOpen }) {
           <Menu size={20} />
         </button>
 
-        <div className="lg:hidden">
-          <img src="/orvesen-mark.png" alt="ORVESEN" className="h-10 w-10 object-contain drop-shadow-md" />
-        </div>
-
         <div
           className="
             hidden
@@ -133,6 +129,11 @@ export default function Header({ setSidebarOpen }) {
 
       </div>
 
+      <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-1.5 lg:hidden">
+        <img src="/orvesen-mark.png" alt="" className="h-9 w-9 object-contain drop-shadow-md" />
+        <span className="hidden text-sm font-bold tracking-[0.2em] min-[390px]:block">ORVESEN</span>
+      </div>
+
       {/* Lado derecho */}
 
       <div className="flex items-center gap-3">
@@ -177,7 +178,8 @@ export default function Header({ setSidebarOpen }) {
 
         <button
           className="
-            flex
+            hidden
+            sm:flex
             h-11
             w-11
             items-center

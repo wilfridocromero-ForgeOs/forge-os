@@ -9,7 +9,7 @@ export default function Login() {
       className="
         relative
         min-h-screen
-        overflow-hidden
+        overflow-y-auto
 
         bg-[#09090B]
 
@@ -17,7 +17,8 @@ export default function Login() {
         items-center
         justify-center
 
-        px-6
+        px-4
+        py-6
       "
     >
       {/* Fondo */}
@@ -35,7 +36,8 @@ export default function Login() {
             bg-[#111113]/80
             backdrop-blur-xl
 
-            p-10
+            p-6
+            sm:p-9
 
             shadow-[0_30px_80px_rgba(0,0,0,.45)]
           "
@@ -46,7 +48,7 @@ export default function Login() {
 
           {/* Texto */}
 
-          <div className="mt-10 text-center">
+          <div className="mt-7 text-center sm:mt-8">
             <h2 className="text-2xl font-semibold text-white">
               Bienvenido nuevamente
             </h2>
@@ -59,13 +61,13 @@ export default function Login() {
 
           {/* Formulario */}
 
-          <div className="mt-10">
+          <div className="mt-7 sm:mt-8">
             <LoginForm />
           </div>
 
           {/* Footer */}
 
-          <div className="mt-10 flex items-center justify-between border-t border-zinc-800 pt-6 text-sm">
+          <div className="mt-7 flex items-center justify-between border-t border-zinc-800 pt-5 text-sm sm:mt-8">
             <span className="text-zinc-500">¿No tienes cuenta?</span>
             <Link className="text-white hover:underline" to="/register">
               Regístrate

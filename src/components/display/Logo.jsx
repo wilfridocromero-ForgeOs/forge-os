@@ -9,23 +9,23 @@ export default function Logo({
   };
 
   return (
-    <div className={`flex items-center ${compact ? "gap-3 text-left" : "flex-col text-center"}`}>
+    <div className={`flex items-center ${compact ? "w-full justify-center gap-2.5 text-left" : "flex-col text-center"}`}>
 
       <img
         src="/orvesen-mark.png"
         alt="Símbolo de ORVESEN"
-        className={`${compact ? "h-12 w-12" : "mb-4 h-20 w-20 sm:h-24 sm:w-24"} object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,0.35)]`}
+        className={`${compact ? "h-10 w-10 shrink-0" : "mb-3 h-16 w-16 sm:h-20 sm:w-20"} object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,0.35)]`}
       />
 
       <div>
 
       <h1
         className={`
-          ${compact ? "text-xl sm:text-2xl" : title[size]}
+          ${compact ? "text-lg sm:text-xl" : `${size === "default" ? "text-3xl sm:text-5xl" : title[size]}`}
 
           font-semibold
 
-          ${compact ? "tracking-[0.28em]" : "tracking-[0.45em]"}
+          ${compact ? "tracking-[0.2em]" : "pl-[0.32em] tracking-[0.32em] sm:pl-[0.4em] sm:tracking-[0.4em]"}
 
           text-white
         `}
@@ -34,7 +34,7 @@ export default function Logo({
       </h1>
 
       <p
-        className={`${compact ? "mt-1" : "mt-5"} text-xs uppercase ${compact ? "tracking-[0.22em]" : "tracking-[0.45em]"} text-zinc-500`}
+        className={`${compact ? "mt-1 text-[9px] tracking-[0.16em]" : "mt-3 pl-[0.25em] text-[10px] tracking-[0.25em] sm:mt-4 sm:pl-[0.35em] sm:text-xs sm:tracking-[0.35em]"} uppercase text-zinc-500`}
       >
         Enterprise Intelligence
       </p>
