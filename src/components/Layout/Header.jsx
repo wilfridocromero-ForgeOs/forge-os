@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../../Context/AuthContext";
 
 export default function Header({ setSidebarOpen }) {
-  const { logout } = useAuth();
+  const { logout, displayName, initial } = useAuth();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -222,17 +222,17 @@ export default function Header({ setSidebarOpen }) {
                 text-black
               "
             >
-              W
+              {initial}
             </div>
 
             <div className="hidden lg:block text-left">
 
               <p className="text-sm font-semibold">
-                Wilfrido
+                {displayName}
               </p>
 
               <p className="text-xs text-zinc-500">
-                Founder
+                Miembro
               </p>
 
             </div>

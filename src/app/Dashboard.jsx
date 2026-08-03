@@ -16,8 +16,13 @@ import NextActionCard from "../components/business/NextActionCard";
 import ActivityTimeline from "../components/business/ActivityTimeline";
 
 import { dashboardData } from "../data/dashboard";
+import { useAuth } from "../Context/AuthContext";
 
 export default function Dashboard() {
+  const { displayName } = useAuth();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+
   const icons = [
     Users,
     FolderKanban,
@@ -46,7 +51,7 @@ export default function Dashboard() {
 
         <PageHeader
           eyebrow={dashboardData.greeting.eyebrow}
-          title={dashboardData.greeting.title}
+          title={`${greeting}, ${displayName}.`}
           description={dashboardData.greeting.description}
         />
 

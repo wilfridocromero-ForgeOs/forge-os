@@ -9,6 +9,7 @@ import {
   DollarSign,
   X,
 } from "lucide-react";
+import { useAuth } from "../../Context/AuthContext";
 
 const menu = [
   {
@@ -62,6 +63,8 @@ export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }) {
+  const { displayName, initial } = useAuth();
+
   return (
     <>
       {/* Overlay móvil */}
@@ -223,17 +226,17 @@ export default function Sidebar({
           <div className="flex items-center gap-4">
 
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white font-bold text-black">
-              W
+              {initial}
             </div>
 
             <div>
 
               <p className="font-semibold text-white">
-                Wilfrido
+                {displayName}
               </p>
 
               <p className="text-sm text-zinc-500">
-                Founder
+                Miembro
               </p>
 
             </div>
