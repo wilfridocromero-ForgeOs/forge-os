@@ -15,6 +15,82 @@ body {
     sans-serif;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body,
+body * {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 180ms;
+}
+
+html[data-theme="light"] body {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+html[data-theme="light"] [class*="bg-[#09090B]"] {
+  background-color: rgba(250, 250, 250, 0.97) !important;
+}
+
+html[data-theme="light"] [class*="bg-[#111113]"],
+html[data-theme="light"] .bg-zinc-950,
+html[data-theme="light"] .bg-zinc-900 {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .bg-zinc-800 {
+  background-color: #e4e4e7 !important;
+}
+
+html[data-theme="light"] .text-white,
+html[data-theme="light"] .text-zinc-100,
+html[data-theme="light"] .text-zinc-200,
+html[data-theme="light"] .text-zinc-300 {
+  color: #18181b !important;
+}
+
+html[data-theme="light"] .text-zinc-400 {
+  color: #52525b !important;
+}
+
+html[data-theme="light"] .text-zinc-500,
+html[data-theme="light"] .text-zinc-600 {
+  color: #71717a !important;
+}
+
+html[data-theme="light"] .border-zinc-800,
+html[data-theme="light"] .border-zinc-700 {
+  border-color: #d4d4d8 !important;
+}
+
+html[data-theme="light"] .ring-white\/\[0\.03\] {
+  --tw-ring-color: rgba(24, 24, 27, 0.06) !important;
+}
+
+html[data-theme="light"] .bg-white {
+  background-color: #18181b !important;
+}
+
+html[data-theme="light"] .bg-white.text-black,
+html[data-theme="light"] button.bg-white {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .hover\:bg-zinc-900:hover,
+html[data-theme="light"] .hover\:bg-zinc-800:hover {
+  background-color: #e4e4e7 !important;
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  color: #18181b;
+}
+
 * {
   box-sizing: border-box;
 }

@@ -16,6 +16,11 @@ import {
 import {
   OrganizationProvider
 } from "./Context/OrganizationContext";
+import { ThemeProvider } from "./Context/ThemeContext";
+
+const savedTheme = localStorage.getItem("orvesen-theme") || "dark";
+document.documentElement.dataset.theme = savedTheme;
+document.documentElement.style.colorScheme = savedTheme;
 
 
 ReactDOM.createRoot(
@@ -26,6 +31,8 @@ ReactDOM.createRoot(
 
     <BrowserRouter>
 
+      <ThemeProvider>
+
       <AuthProvider>
 
         <OrganizationProvider>
@@ -35,6 +42,8 @@ ReactDOM.createRoot(
         </OrganizationProvider>
 
       </AuthProvider>
+
+      </ThemeProvider>
 
     </BrowserRouter>
 

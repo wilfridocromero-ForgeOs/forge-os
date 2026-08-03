@@ -10,14 +10,18 @@ import {
   LogOut,
   User,
   Settings,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 import { useAuth } from "../../Context/AuthContext";
 import ProfileModal from "./ProfileModal";
+import { useTheme } from "../../Context/ThemeContext";
 
 export default function Header({ setSidebarOpen }) {
   const { logout, displayName, initial, displayTitle } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -134,6 +138,15 @@ export default function Header({ setSidebarOpen }) {
       {/* Lado derecho */}
 
       <div className="flex items-center gap-3">
+
+        <button
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 transition-colors hover:bg-zinc-800"
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
 
         <button
           className="
