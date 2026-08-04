@@ -4,8 +4,9 @@ import { useAuth } from "../Context/AuthContext";
 import { supabase } from "../lib/supabase";
 
 export default function useOrganizationScore() {
-  const { profile, areaAccess } = useAuth();
+  const { profile, areaAccess, role } = useAuth();
   const organizationId = profile?.organization_id;
+  const assignedAreaId = areaAccess.find((item) => item.is_primary)?.area_id || areaAccess[0]?.area_id;
   const [state, setState] = useState({ data: null, loading: true, error: null });
 
   useEffect(() => {
@@ -16,12 +17,23 @@ export default function useOrganizationScore() {
       return undefined;
     }
 
+    if (role !== "platform_owner" && !assignedAreaId) {
+      setState({ data: null, loading: false, error: null });
+      return undefined;
+    }
+
     setState((current) => ({ ...current, loading: true, error: null }));
 
-    supabase
+    let query = supabase
       .from("area_scores")
       .select("id, area_id, score, max_score, status, breakdown, recommendations, computed_at, work_areas(name)")
-      .eq("organization_id", organizationId)
+      .eq("organization_id", organizationId);
+
+    if (role !== "platform_owner") {
+      query = query.eq("area_id", assignedAreaId);
+    }
+
+    query
       .order("computed_at", { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -45,7 +57,7 @@ export default function useOrganizationScore() {
     return () => {
       active = false;
     };
-  }, [organizationId, areaAccess]);
+  }, [organizationId, assignedAreaId, role]);
 
   return state;
 }

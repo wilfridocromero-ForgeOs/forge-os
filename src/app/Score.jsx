@@ -29,7 +29,7 @@ export default function Score() {
       <Page>
         <div className="rounded-3xl border border-zinc-800 bg-[#111113] p-8">
           <h1 className="text-2xl font-semibold text-white">Score no asignado</h1>
-          <p className="mt-3 text-zinc-400">Tu administrador todavía no te ha asignado acceso al Score de un área.</p>
+          <p className="mt-3 text-zinc-400">Tu administrador todavía no te ha asignado una división y su score.</p>
         </div>
       </Page>
     );
@@ -40,8 +40,8 @@ export default function Score() {
 
       <PageHeader
         eyebrow="ORVESEN SCORE"
-        title={currentScore?.area_name ? `Score de ${currentScore.area_name}` : "Evaluación del área"}
-        description={canManageUsers ? "Consulta la evaluación de las áreas autorizadas." : "Esta puntuación corresponde únicamente a tu área de trabajo asignada."}
+        title={currentScore?.area_name ? `Score de ${currentScore.area_name}` : "Score de la división"}
+        description={canManageUsers ? "Consulta el score más reciente asignado por ORVESEN." : "Esta puntuación corresponde únicamente a tu división asignada."}
       />
 
       {/* Score General */}
@@ -50,11 +50,11 @@ export default function Score() {
         <OrvesenScore
           score={currentScore?.total_score ?? null}
           max={currentScore?.max_score ?? 1000}
-          status={currentScore?.status ?? "Evaluación pendiente"}
+          status={currentScore?.status ?? "Score pendiente"}
           improvement={currentScore?.improvement ?? null}
           description={
             currentScore?.recommendation ||
-            (areaAccess.length ? "Completa el Discovery del área para generar una evaluación con datos reales." : "Aún no tienes un área de trabajo asignada.")
+            (areaAccess.length ? "ORVESEN todavía no ha asignado un score a esta división." : "Aún no tienes una división asignada.")
           }
           loading={loading}
         />

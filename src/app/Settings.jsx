@@ -31,8 +31,10 @@ export default function Settings() {
   const [members, setMembers] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [access, setAccess] = useState([]);
+  const [areas, setAreas] = useState([]);
+  const [scores, setScores] = useState([]);
   const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "" });
+  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "", score: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -52,16 +54,20 @@ export default function Settings() {
     const organizationsRequest = role === "platform_owner"
       ? supabase.rpc("admin_list_organizations")
       : supabase.from("organizations").select("id, name, organization_type").order("name");
-    const [membersResult, organizationsResult, accessResult] = await Promise.all([
+    const [membersResult, organizationsResult, accessResult, areasResult, scoresResult] = await Promise.all([
       supabase.rpc("admin_list_members_v2"),
       organizationsRequest,
       supabase.from("member_module_access").select("user_id, module_key, enabled"),
+      supabase.from("work_areas").select("id, organization_id, name"),
+      supabase.from("area_scores").select("id, area_id, score, status, computed_at").order("computed_at", { ascending: false }),
     ]);
-    const error = membersResult.error || organizationsResult.error || accessResult.error;
+    const error = membersResult.error || organizationsResult.error || accessResult.error || areasResult.error || scoresResult.error;
     if (error) setMessage(error.message);
     setMembers(membersResult.data || []);
     setOrganizations(organizationsResult.data || []);
     setAccess(accessResult.data || []);
+    setAreas(areasResult.data || []);
+    setScores(scoresResult.data || []);
     setLoading(false);
   }
 
@@ -71,6 +77,8 @@ export default function Settings() {
 
   useEffect(() => {
     if (!selected) return;
+    const selectedArea = areas.find((area) => area.organization_id === selected.organization_id && area.name === selected.division);
+    const selectedScore = scores.find((score) => score.area_id === selectedArea?.id);
     setForm({
       first_name: selected.first_name || "",
       title: selected.title || "Miembro del equipo",
@@ -78,15 +86,20 @@ export default function Settings() {
       division: selected.division || "",
       job_position: selected.job_position || "",
       specialty: selected.specialty || "",
+      score: selectedScore?.score ?? "",
     });
     setMessage("");
-  }, [selectedId]);
+  }, [selectedId, areas, scores]);
 
   async function saveMember(addToOrvesen = false) {
     const organizationId = addToOrvesen ? internalOrganization?.id : selected?.organization_id;
     if (!organizationId) return setMessage("No se encontró el equipo interno de ORVESEN.");
     setMessage("");
-    const { error } = await supabase.rpc("admin_update_member_professional", {
+    const parsedScore = form.score === "" ? null : Number(form.score);
+    if (parsedScore !== null && (!Number.isInteger(parsedScore) || parsedScore < 0 || parsedScore > 1000)) {
+      return setMessage("El score debe ser un número entero entre 0 y 1000.");
+    }
+    const { error } = await supabase.rpc("admin_update_member_with_score", {
       target_user_id: selectedId,
       new_first_name: form.first_name.trim(),
       new_title: form.title.trim(),
@@ -95,6 +108,7 @@ export default function Settings() {
       new_division: form.division.trim(),
       new_position: form.job_position.trim(),
       new_specialty: form.specialty.trim(),
+      new_score: parsedScore,
     });
     if (error) return setMessage(error.message);
     setMessage(addToOrvesen ? `${form.first_name} fue añadido al equipo ORVESEN.` : "Cambios guardados correctamente.");
@@ -203,6 +217,7 @@ export default function Settings() {
                 <Field label="Puesto"><input placeholder="Ej. Especialista digital" value={form.job_position} onChange={(event) => setForm({ ...form, job_position: event.target.value })} className="field" /></Field>
                 <Field label="Especialidad"><input placeholder="Ej. Contenido y redes" value={form.specialty} onChange={(event) => setForm({ ...form, specialty: event.target.value })} className="field" /></Field>
                 <Field label="Nivel de acceso"><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} className="field"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador</option>{role === "platform_owner" && <option value="platform_owner">Propietario</option>}</select></Field>
+                <Field label="Score que verá"><input type="number" min="0" max="1000" step="1" placeholder="Ej. 760" value={form.score} onChange={(event) => setForm({ ...form, score: event.target.value })} className="field" /><span className="mt-2 block text-xs text-zinc-500">De 0 a 1000. Las personas de esta misma división verán el score más reciente que asignes.</span></Field>
               </div>
               <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
                 {isInternal ? <button onClick={() => saveMember(false)} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar cambios</button> : <button onClick={() => saveMember(true)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><UserPlus size={18} /> Añadir al equipo ORVESEN</button>}
