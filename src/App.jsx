@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute";
+import AppLayout from "./components/Layout/AppLayout";
 
 // Auth
 import Login from "./auth/Login";
@@ -29,6 +30,7 @@ export default function App() {
 
       {/* APP PROTEGIDA */}
       <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
 
         <Route
           path="/"
@@ -57,6 +59,7 @@ export default function App() {
 
         <Route path="/configuracion" element={<Settings />} />
 
+        </Route>
       </Route>
 
 
