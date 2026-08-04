@@ -6,7 +6,7 @@ import AppLayout from "./components/Layout/AppLayout";
 
 // Auth
 import Login from "./auth/Login";
-import Register from "./auth/Register";
+import ResetPassword from "./auth/ResetPassword";
 
 // Pages
 import Dashboard from "./app/Dashboard";
@@ -24,8 +24,10 @@ export default function App() {
       {/* AUTH */}
       <Route element={<PublicOnlyRoute />}>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/register" element={<Login />} />
       </Route>
+
+      <Route path="/reset-password" element={<ResetPassword />} />
 
 
       {/* APP PROTEGIDA */}

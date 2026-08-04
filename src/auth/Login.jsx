@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import Logo from "../components/display/Logo";
 import LoginForm from "../components/forms/LoginForm";
 import AuthBackground from "../components/display/AuthBackground";
@@ -34,10 +32,8 @@ export default function Login() {
               </div>
 
               <div className="mt-7 flex items-center justify-between border-t border-zinc-800 pt-5 text-sm">
-                <span className="text-zinc-500">¿No tienes cuenta?</span>
-                <Link className="font-medium text-white hover:underline" to="/register">
-                  Regístrate
-                </Link>
+                <span className="text-zinc-500">¿Necesitas acceso?</span>
+                <span className="font-medium text-white">Solicita una invitación</span>
               </div>
             </div>
           </section>

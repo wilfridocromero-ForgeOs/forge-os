@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Check, Plus, Shield, Users } from "lucide-react";
+import { Building2, Check, Mail, Plus, Shield, Users, X } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import Card from "../components/ui/Card";
@@ -20,6 +20,16 @@ const emptyForm = {
   title: "Miembro",
   role: "member",
   organization_id: "",
+};
+
+const emptyInvite = {
+  email: "",
+  firstName: "",
+  title: "Miembro",
+  role: "member",
+  organizationId: "",
+  areaIds: [],
+  moduleKeys: ["dashboard", "clients", "discovery"],
 };
 
 function slugify(value) {
@@ -44,6 +54,10 @@ export default function Settings() {
   const [newArea, setNewArea] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invite, setInvite] = useState(emptyInvite);
+  const [invitations, setInvitations] = useState([]);
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   const selected = members.find((member) => member.id === selectedId);
   const organizationAreas = useMemo(
@@ -53,21 +67,23 @@ export default function Settings() {
 
   async function loadData() {
     setLoading(true);
-    const [membersResult, organizationsResult, areasResult, assignmentsResult, accessResult] = await Promise.all([
+    const [membersResult, organizationsResult, areasResult, assignmentsResult, accessResult, invitationsResult] = await Promise.all([
       supabase.rpc("admin_list_members"),
       supabase.from("organizations").select("id, name").order("name"),
       supabase.from("work_areas").select("id, organization_id, name, slug, active").order("name"),
       supabase.from("user_area_access").select("user_id, area_id, is_primary"),
       supabase.from("member_module_access").select("user_id, module_key, enabled"),
+      supabase.from("user_invitations").select("id, email, first_name, title, status, expires_at, created_at").order("created_at", { ascending: false }),
     ]);
 
-    const error = membersResult.error || organizationsResult.error || areasResult.error || assignmentsResult.error || accessResult.error;
+    const error = membersResult.error || organizationsResult.error || areasResult.error || assignmentsResult.error || accessResult.error || invitationsResult.error;
     if (error) setMessage(error.message);
     setMembers(membersResult.data || []);
     setOrganizations(organizationsResult.data || []);
     setAreas(areasResult.data || []);
     setAssignments(assignmentsResult.data || []);
     setAccess(accessResult.data || []);
+    setInvitations(invitationsResult.data || []);
     setLoading(false);
   }
 
@@ -137,6 +153,40 @@ export default function Settings() {
     await loadData();
   }
 
+  function openInvitation() {
+    setInvite({
+      ...emptyInvite,
+      organizationId: organizations[0]?.id || "",
+    });
+    setMessage("");
+    setInviteOpen(true);
+  }
+
+  function toggleInviteValue(field, value) {
+    const current = invite[field];
+    setInvite({
+      ...invite,
+      [field]: current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    });
+  }
+
+  async function sendInvitation(event) {
+    event.preventDefault();
+    setSendingInvite(true);
+    setMessage("");
+    const { data, error } = await supabase.functions.invoke("invite-user", {
+      body: invite,
+    });
+    setSendingInvite(false);
+    if (error) return setMessage(data?.error || error.message || "No se pudo enviar la invitación.");
+    if (data?.error) return setMessage(data.error);
+    setInviteOpen(false);
+    setMessage("Invitación enviada correctamente.");
+    await loadData();
+  }
+
   if (!canManageUsers) {
     return (
       <Page>
@@ -150,13 +200,43 @@ export default function Settings() {
 
   return (
     <Page className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Configuración</p>
-        <h1 className="mt-2 text-3xl font-semibold text-white">Usuarios y permisos</h1>
-        <p className="mt-2 text-zinc-400">Separa negocios, asigna títulos y controla qué área ve cada persona.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Configuración</p>
+          <h1 className="mt-2 text-3xl font-semibold text-white">Usuarios y permisos</h1>
+          <p className="mt-2 text-zinc-400">Separa negocios, asigna títulos y controla qué área ve cada persona.</p>
+        </div>
+        <button onClick={openInvitation} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Mail size={18} /> Invitar usuario</button>
       </div>
 
       {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
+
+      {inviteOpen && (
+        <Card hover={false} contentClassName="p-6">
+          <form onSubmit={sendInvitation}>
+            <div className="flex items-start justify-between gap-4">
+              <div><h2 className="text-xl font-semibold text-white">Invitar una persona</h2><p className="mt-1 text-sm text-zinc-400">Recibirá un correo para crear su contraseña y entrar con los permisos asignados.</p></div>
+              <button type="button" onClick={() => setInviteOpen(false)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label><span className="mb-2 block text-sm text-zinc-400">Correo</span><input required type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">Nombre</span><input required value={invite.firstName} onChange={(e) => setInvite({ ...invite, firstName: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input required value={invite.title} onChange={(e) => setInvite({ ...invite, title: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">Nivel</span><select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="organization_admin">Administrador</option></select></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Negocio</span><select required value={invite.organizationId} onChange={(e) => setInvite({ ...invite, organizationId: e.target.value, areaIds: [] })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
+            </div>
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <div><p className="mb-3 text-sm text-zinc-400">Áreas de trabajo</p><div className="flex flex-wrap gap-2">{areas.filter((area) => area.organization_id === invite.organizationId).map((area) => <button type="button" key={area.id} onClick={() => toggleInviteValue("areaIds", area.id)} className={`rounded-full border px-3 py-2 text-sm ${invite.areaIds.includes(area.id) ? "border-white bg-white text-black" : "border-zinc-700 text-zinc-300"}`}>{area.name}</button>)}{!areas.some((area) => area.organization_id === invite.organizationId) && <span className="text-sm text-zinc-500">Este negocio todavía no tiene áreas.</span>}</div></div>
+              <div><p className="mb-3 text-sm text-zinc-400">Módulos disponibles</p><div className="flex flex-wrap gap-2">{modules.map(([key, label]) => <button type="button" key={key} onClick={() => toggleInviteValue("moduleKeys", key)} className={`rounded-full border px-3 py-2 text-sm ${invite.moduleKeys.includes(key) ? "border-white bg-white text-black" : "border-zinc-700 text-zinc-300"}`}>{label}</button>)}</div></div>
+            </div>
+            <div className="mt-6 flex justify-end"><button disabled={sendingInvite} className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-60">{sendingInvite ? "Enviando..." : "Enviar invitación"}</button></div>
+          </form>
+        </Card>
+      )}
+
+      {invitations.some((item) => item.status === "pending") && (
+        <div className="flex flex-wrap gap-2">{invitations.filter((item) => item.status === "pending").map((item) => <span key={item.id} className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">Pendiente: {item.first_name} · {item.email}</span>)}</div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
         <Card hover={false} contentClassName="p-4 sm:p-5">
