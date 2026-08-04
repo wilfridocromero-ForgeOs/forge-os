@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { useAuth } from "../Context/AuthContext";
-import { getScores } from "../services/ScoreService";
+import { supabase } from "../lib/supabase";
 
 export default function useOrganizationScore() {
-  const { profile } = useAuth();
+  const { profile, areaAccess } = useAuth();
   const organizationId = profile?.organization_id;
   const [state, setState] = useState({ data: null, loading: true, error: null });
 
@@ -18,25 +18,34 @@ export default function useOrganizationScore() {
 
     setState((current) => ({ ...current, loading: true, error: null }));
 
-    getScores(organizationId)
-      .then((scores) => {
+    supabase
+      .from("area_scores")
+      .select("id, area_id, score, max_score, status, breakdown, recommendations, computed_at, work_areas(name)")
+      .eq("organization_id", organizationId)
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
         if (!active) return;
-        const sorted = [...scores].sort((a, b) => {
-          const aDate = new Date(a.updated_at || a.created_at || 0).getTime();
-          const bDate = new Date(b.updated_at || b.created_at || 0).getTime();
-          return bDate - aDate;
+        if (error) return setState({ data: null, loading: false, error });
+        setState({
+          data: data ? {
+            ...data,
+            total_score: data.score,
+            area_name: data.work_areas?.name,
+            categories: data.breakdown?.categories || [],
+            strengths: data.breakdown?.strengths || [],
+            risks: data.breakdown?.risks || [],
+          } : null,
+          loading: false,
+          error: null,
         });
-        setState({ data: sorted[0] ?? null, loading: false, error: null });
-      })
-      .catch((error) => {
-        if (!active) return;
-        setState({ data: null, loading: false, error });
       });
 
     return () => {
       active = false;
     };
-  }, [organizationId]);
+  }, [organizationId, areaAccess]);
 
   return state;
 }

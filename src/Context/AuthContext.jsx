@@ -8,6 +8,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [profileUserId, setProfileUserId] = useState(null);
+  const [moduleAccess, setModuleAccess] = useState([]);
+  const [areaAccess, setAreaAccess] = useState([]);
 
   useEffect(() => {
     const {
@@ -40,7 +42,7 @@ export function AuthProvider({ children }) {
 
     supabase
       .from("users")
-      .select("first_name, organization_id, title")
+      .select("first_name, organization_id, title, role")
       .eq("id", session.user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -57,6 +59,15 @@ export function AuthProvider({ children }) {
         setProfileUserId(session.user.id);
       });
 
+    Promise.all([
+      supabase.from("member_module_access").select("module_key, enabled").eq("user_id", session.user.id),
+      supabase.from("user_area_access").select("area_id, is_primary, work_areas(id, name)").eq("user_id", session.user.id),
+    ]).then(([modulesResult, areasResult]) => {
+      if (!active) return;
+      setModuleAccess(modulesResult.data || []);
+      setAreaAccess(areasResult.data || []);
+    });
+
     return () => {
       active = false;
     };
@@ -70,21 +81,24 @@ export function AuthProvider({ children }) {
 
   const initial = displayName.trim().charAt(0).toUpperCase() || "U";
   const displayTitle = profile?.title || "Miembro";
+  const role = profile?.role || "member";
+  const canManageUsers = role === "platform_owner" || role === "organization_admin";
 
-  async function updateProfile({ firstName, title }) {
+  function canAccess(moduleKey) {
+    if (canManageUsers) return true;
+    const configured = moduleAccess.find((item) => item.module_key === moduleKey);
+    if (configured) return configured.enabled;
+    return moduleKey !== "area_score";
+  }
+
+  async function updateProfile({ firstName }) {
     if (!session?.user?.id) {
       throw new Error("No hay una sesión activa.");
     }
 
-    const { data, error } = await supabase
-      .from("users")
-      .update({
-        first_name: firstName.trim(),
-        title: title.trim() || "Miembro",
-      })
-      .eq("id", session.user.id)
-      .select("first_name, organization_id, title")
-      .single();
+    const { data, error } = await supabase.rpc("update_my_profile", {
+      new_first_name: firstName.trim(),
+    });
 
     if (error) throw error;
 
@@ -101,6 +115,11 @@ export function AuthProvider({ children }) {
       displayName,
       initial,
       displayTitle,
+      role,
+      canManageUsers,
+      canAccess,
+      moduleAccess,
+      areaAccess,
       updateProfile,
       loading: loading || Boolean(session?.user?.id && profileUserId !== session.user.id),
 

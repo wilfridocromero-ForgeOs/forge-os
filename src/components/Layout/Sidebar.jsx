@@ -7,6 +7,7 @@ import {
   FolderKanban,
   CalendarDays,
   DollarSign,
+  Settings,
   X,
 } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
@@ -34,7 +35,8 @@ const menu = [
       {
         label: "ORVESEN Score",
         icon: BarChart3,
-        to: "/score",
+        to: "/orvesen-score",
+        moduleKey: "area_score",
       },
     ],
   },
@@ -45,6 +47,7 @@ const menu = [
         label: "Proyectos",
         icon: FolderKanban,
         to: "/proyectos",
+        moduleKey: "projects",
       },
       {
         label: "Calendario",
@@ -64,7 +67,7 @@ export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }) {
-  const { displayName, initial, displayTitle } = useAuth();
+  const { displayName, initial, displayTitle, canManageUsers, canAccess } = useAuth();
 
   return (
     <>
@@ -163,7 +166,7 @@ export default function Sidebar({
 
               <div className="space-y-2">
 
-                {section.items.map((item) => {
+                {section.items.filter((item) => !item.moduleKey || canAccess(item.moduleKey)).map((item) => {
                   const Icon = item.icon;
 
                   return (
@@ -204,6 +207,17 @@ export default function Sidebar({
                 })}
 
               </div>
+
+              {section.title === "OPERACIONES" && canManageUsers && (
+                <NavLink
+                  to="/configuracion"
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) => `mt-2 flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
+                >
+                  <Settings size={20} />
+                  <span className="font-medium">Configuración</span>
+                </NavLink>
+              )}
 
             </div>
           ))}

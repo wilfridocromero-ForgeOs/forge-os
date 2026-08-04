@@ -290,7 +290,7 @@ export default function Header({ setSidebarOpen }) {
             </HeadlessMenu.Item>
 
             <HeadlessMenu.Item>
-              <button className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900">
+              <button onClick={() => navigate("/configuracion")} className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-900">
                 <Settings size={18} />
                 Configuración
               </button>

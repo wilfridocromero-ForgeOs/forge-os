@@ -11,8 +11,10 @@ import RecommendationsCard from "../components/business/RecommendationsCard";
 import ActionPlanCard from "../components/business/ActionPlanCard";
 
 import useOrganizationScore from "../hooks/useOrganizationScore";
+import { useAuth } from "../Context/AuthContext";
 
 export default function Score() {
+  const { canAccess, areaAccess, canManageUsers } = useAuth();
   const { data: currentScore, loading } = useOrganizationScore();
   const categories = Array.isArray(currentScore?.categories) ? currentScore.categories : [];
   const strengths = Array.isArray(currentScore?.strengths) ? currentScore.strengths : [];
@@ -21,14 +23,25 @@ export default function Score() {
     ? currentScore.recommendations
     : [];
   const actionPlan = currentScore?.next_action || null;
+
+  if (!canAccess("area_score")) {
+    return (
+      <Page>
+        <div className="rounded-3xl border border-zinc-800 bg-[#111113] p-8">
+          <h1 className="text-2xl font-semibold text-white">Score no asignado</h1>
+          <p className="mt-3 text-zinc-400">Tu administrador todavía no te ha asignado acceso al Score de un área.</p>
+        </div>
+      </Page>
+    );
+  }
   return (
     <Page>
       {/* Hero */}
 
       <PageHeader
         eyebrow="ORVESEN SCORE"
-        title="Enterprise Health Analysis"
-        description="Analiza la salud general de tu organización y descubre oportunidades para mejorar cada área de tu empresa."
+        title={currentScore?.area_name ? `Score de ${currentScore.area_name}` : "Evaluación del área"}
+        description={canManageUsers ? "Consulta la evaluación de las áreas autorizadas." : "Esta puntuación corresponde únicamente a tu área de trabajo asignada."}
       />
 
       {/* Score General */}
@@ -41,7 +54,7 @@ export default function Score() {
           improvement={currentScore?.improvement ?? null}
           description={
             currentScore?.recommendation ||
-            "Completa el Discovery para generar una evaluación con datos reales."
+            (areaAccess.length ? "Completa el Discovery del área para generar una evaluación con datos reales." : "Aún no tienes un área de trabajo asignada.")
           }
           loading={loading}
         />
