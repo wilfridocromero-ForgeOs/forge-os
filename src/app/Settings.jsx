@@ -38,6 +38,19 @@ const emptyInvite = {
   specialty: "",
 };
 
+const organizationTypeLabels = {
+  internal: "Equipo interno",
+  pending: "Pendiente",
+  client: "Cliente con acceso",
+  business: "Negocio",
+  legacy: "Registro anterior",
+};
+
+function organizationLabel(organization) {
+  const type = organizationTypeLabels[organization.organization_type];
+  return type ? `${organization.name} — ${type}` : organization.name;
+}
+
 function slugify(value) {
   return value
     .normalize("NFD")
@@ -64,6 +77,8 @@ export default function Settings() {
   const [invite, setInvite] = useState(emptyInvite);
   const [invitations, setInvitations] = useState([]);
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [newOrganizationName, setNewOrganizationName] = useState("");
+  const [organizationDrafts, setOrganizationDrafts] = useState({});
 
   const selected = members.find((member) => member.id === selectedId);
   const organizationAreas = useMemo(
@@ -73,9 +88,12 @@ export default function Settings() {
 
   async function loadData() {
     setLoading(true);
+    const organizationsRequest = role === "platform_owner"
+      ? supabase.rpc("admin_list_organizations")
+      : supabase.from("organizations").select("id, name, organization_type").order("name");
     const [membersResult, organizationsResult, areasResult, assignmentsResult, accessResult, invitationsResult] = await Promise.all([
       supabase.rpc("admin_list_members_v2"),
-      supabase.from("organizations").select("id, name").order("name"),
+      organizationsRequest,
       supabase.from("work_areas").select("id, organization_id, name, slug, active").order("name"),
       supabase.from("user_area_access").select("user_id, area_id, is_primary"),
       supabase.from("member_module_access").select("user_id, module_key, enabled"),
@@ -86,6 +104,7 @@ export default function Settings() {
     if (error) setMessage(error.message);
     setMembers(membersResult.data || []);
     setOrganizations(organizationsResult.data || []);
+    setOrganizationDrafts(Object.fromEntries((organizationsResult.data || []).map((item) => [item.id, item.name])));
     setAreas(areasResult.data || []);
     setAssignments(assignmentsResult.data || []);
     setAccess(accessResult.data || []);
@@ -166,12 +185,41 @@ export default function Settings() {
   }
 
   function openInvitation() {
+    const preferredOrganization = organizations.find((item) => item.organization_type === "internal") || organizations[0];
     setInvite({
       ...emptyInvite,
-      organizationId: organizations[0]?.id || "",
+      organizationId: preferredOrganization?.id || "",
     });
     setMessage("");
     setInviteOpen(true);
+  }
+
+  async function createOrganization(event) {
+    event.preventDefault();
+    if (!newOrganizationName.trim()) return;
+    setMessage("");
+    const { error } = await supabase.rpc("admin_create_organization", {
+      new_name: newOrganizationName.trim(),
+      new_type: "business",
+    });
+    if (error) return setMessage(error.message);
+    setNewOrganizationName("");
+    setMessage("Negocio creado correctamente.");
+    await loadData();
+  }
+
+  async function renameOrganization(organization) {
+    const name = organizationDrafts[organization.id]?.trim();
+    if (!name || name === organization.name) return;
+    setMessage("");
+    const { error } = await supabase.rpc("admin_update_organization", {
+      target_organization_id: organization.id,
+      new_name: name,
+      new_type: organization.organization_type,
+    });
+    if (error) return setMessage(error.message);
+    setMessage("Nombre del negocio actualizado.");
+    await loadData();
   }
 
   function toggleInviteValue(field, value) {
@@ -223,6 +271,40 @@ export default function Settings() {
 
       {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
 
+      <Card hover={false} contentClassName="p-5 sm:p-6">
+        <h2 className="font-semibold text-white">CÃ³mo administrar las personas</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          Si la persona ya aparece en Usuarios, selecciÃ³nala y cambia su negocio aquÃ­; no necesitas invitarla otra vez.
+          Usa <span className="text-zinc-200">ORVESEN — Equipo interno</span> para tu personal y
+          <span className="text-zinc-200"> Pendiente de asignaciÃ³n</span> cuando todavÃ­a no sabes dÃ³nde ubicarla.
+          El negocio determina quÃ© informaciÃ³n puede ver.
+        </p>
+      </Card>
+
+      {role === "platform_owner" && (
+        <Card hover={false} contentClassName="p-5 sm:p-6">
+          <div className="flex items-center gap-2"><Building2 size={19} /><h2 className="font-semibold text-white">Negocios y espacios de trabajo</h2></div>
+          <p className="mt-2 text-sm text-zinc-400">Crea negocios nuevos o corrige sus nombres. Los registros anteriores se conservan hasta que reasignes a sus usuarios.</p>
+          <form onSubmit={createOrganization} className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <input value={newOrganizationName} onChange={(event) => setNewOrganizationName(event.target.value)} placeholder="Nombre del nuevo negocio" className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" />
+            <button className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Plus size={18} /> Crear negocio</button>
+          </form>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {organizations.map((organization) => (
+              <div key={organization.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div><span className="text-xs uppercase tracking-wider text-zinc-500">{organizationTypeLabels[organization.organization_type] || "Negocio"}</span><p className="mt-1 text-xs text-zinc-500">{organization.member_count ?? 0} usuario(s) Â· {organization.linked_client_count ?? 0} cliente(s)</p></div>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input value={organizationDrafts[organization.id] ?? organization.name} onChange={(event) => setOrganizationDrafts({ ...organizationDrafts, [organization.id]: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-black px-3 py-2 text-white" />
+                  <button type="button" onClick={() => renameOrganization(organization)} className="rounded-lg border border-zinc-700 px-3 text-sm text-white">Guardar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {inviteOpen && (
         <Card hover={false} contentClassName="p-6">
           <form onSubmit={sendInvitation}>
@@ -235,7 +317,7 @@ export default function Settings() {
               <label><span className="mb-2 block text-sm text-zinc-400">Nombre</span><input required value={invite.firstName} onChange={(e) => setInvite({ ...invite, firstName: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input required value={invite.title} onChange={(e) => setInvite({ ...invite, title: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label><span className="mb-2 block text-sm text-zinc-400">Nivel</span><select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador</option></select></label>
-              <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Negocio</span><select required value={invite.organizationId} onChange={(e) => setInvite({ ...invite, organizationId: e.target.value, areaIds: [] })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Negocio o equipo</span><select required value={invite.organizationId} onChange={(e) => setInvite({ ...invite, organizationId: e.target.value, areaIds: [] })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organizationLabel(organization)}</option>)}</select><span className="mt-2 block text-xs text-zinc-500">No puede quedar vacÃ­o porque separa y protege los datos. Si aÃºn no estÃ¡ decidido, elige Pendiente de asignaciÃ³n.</span></label>
               <label><span className="mb-2 block text-sm text-zinc-400">División</span><input placeholder="Ej. Studio Creativo" value={invite.division} onChange={(e) => setInvite({ ...invite, division: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input placeholder="Ej. Especialista" value={invite.jobPosition} onChange={(e) => setInvite({ ...invite, jobPosition: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Especialidad</span><input placeholder="Ej. Producción Audiovisual" value={invite.specialty} onChange={(e) => setInvite({ ...invite, specialty: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
@@ -283,7 +365,7 @@ export default function Settings() {
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Nombre</span><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Título visible</span><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Nivel de acceso</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador del negocio</option>{role === "platform_owner" && <option value="platform_owner">Propietario de ORVESEN</option>}</select></label>
-                <label className="block"><span className="mb-2 block text-sm text-zinc-400">Negocio</span><select value={form.organization_id} onChange={(e) => setForm({ ...form, organization_id: e.target.value })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
+                <label className="block"><span className="mb-2 block text-sm text-zinc-400">Negocio o equipo</span><select value={form.organization_id} onChange={(e) => setForm({ ...form, organization_id: e.target.value })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organizationLabel(organization)}</option>)}</select><span className="mt-2 block text-xs text-zinc-500">Para una persona existente, cambia esta opciÃ³n y pulsa Guardar usuario.</span></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">División</span><input placeholder="Ej. Marketing" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input placeholder="Ej. Especialista" value={form.job_position} onChange={(e) => setForm({ ...form, job_position: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
                 <label className="block md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Especialidad</span><input placeholder="Ej. Marketing Digital" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
