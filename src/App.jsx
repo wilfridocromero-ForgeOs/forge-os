@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute";
@@ -19,6 +19,8 @@ import Settings from "./app/Settings";
 import Calendar from "./app/Calendar";
 import Brain from "./app/Brain";
 import ScoreBuilder from "./app/ScoreBuilder";
+import BusinessScore from "./app/BusinessScore";
+import { useAuth } from "./Context/AuthContext";
 
 
 export default function App() {
@@ -62,8 +64,10 @@ export default function App() {
 
         <Route
           path="/orvesen-score"
-          element={<Score />}
+          element={<InternalOnly><Score /></InternalOnly>}
         />
+
+        <Route path="/business-score" element={<BusinessOnly><BusinessScore /></BusinessOnly>} />
 
         <Route path="/configuracion" element={<Settings />} />
 
@@ -89,4 +93,14 @@ export default function App() {
 
     </Routes>
   );
+}
+
+function InternalOnly({ children }) {
+  const { isInternalOrganization } = useAuth();
+  return isInternalOrganization ? children : <Navigate to="/business-score" replace />;
+}
+
+function BusinessOnly({ children }) {
+  const { isInternalOrganization } = useAuth();
+  return isInternalOrganization ? <Navigate to="/orvesen-score" replace /> : children;
 }

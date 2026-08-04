@@ -9,6 +9,7 @@ export default function ScoreGauge({
   loading = false,
   compact = false,
   onEvaluate,
+  label = "ORVESEN SCORE",
 }) {
   const hasScore = score !== null && score !== undefined && Number.isFinite(Number(score));
   const safeScore = hasScore ? Number(score) : 0;
@@ -37,7 +38,7 @@ export default function ScoreGauge({
       <div className="relative">
 
         <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
-          ORVESEN SCORE
+          {label}
         </p>
 
         <div className={`${compact ? "mt-5" : "mt-10"} flex items-center justify-center`}>

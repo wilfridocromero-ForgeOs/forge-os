@@ -52,7 +52,8 @@ export function OrganizationProvider({ children }) {
           organization_id,
           organizations (
             id,
-            name
+            name,
+            organization_type
           )
         `)
 

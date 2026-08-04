@@ -27,7 +27,7 @@ function emptyEvent(date = new Date()) {
 }
 
 export default function Calendar() {
-  const { profile, user, canManageUsers } = useAuth();
+  const { profile, user, canManageUsers, isInternalOrganization } = useAuth();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [view, setView] = useState(() => window.matchMedia("(max-width: 767px)").matches ? "list" : "month");
   const [events, setEvents] = useState([]);
@@ -114,7 +114,7 @@ export default function Calendar() {
   return (
     <Page className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div><p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Organización</p><h1 className="mt-2 text-3xl font-semibold text-white">Calendario ORVESEN</h1><p className="mt-2 text-zinc-400">Reuniones, tareas, entregas y recordatorios en un solo lugar.</p></div>
+        <div><p className="text-xs uppercase tracking-[0.3em] text-zinc-500">{isInternalOrganization ? "Equipo ORVESEN" : "Tu negocio"}</p><h1 className="mt-2 text-3xl font-semibold text-white">{isInternalOrganization ? "Calendario del equipo" : "Agenda del negocio"}</h1><p className="mt-2 text-zinc-400">{isInternalOrganization ? "Reuniones, tareas y recordatorios del equipo interno." : "Reuniones, tareas y entregas de tu propia organización."}</p></div>
         <button onClick={() => openNew()} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Plus size={18} /> Nuevo evento</button>
       </div>
 

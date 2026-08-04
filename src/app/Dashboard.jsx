@@ -18,7 +18,7 @@ function valueOf(source) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { displayName, displayTitle } = useAuth();
+  const { displayName, displayTitle, isInternalOrganization } = useAuth();
   const { data: dashboard, loading: dashboardLoading } = useDashboardData();
   const { data: currentScore, loading: scoreLoading } = useOrganizationScore();
   const hour = new Date().getHours();
@@ -61,17 +61,20 @@ export default function Dashboard() {
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <OrvesenScore
+          label={isInternalOrganization ? "ORVESEN SCORE" : "BUSINESS SCORE"}
           score={currentScore?.total_score ?? null}
           max={currentScore?.max_score ?? 1000}
           status={currentScore?.status ?? "Evaluación pendiente"}
           improvement={currentScore?.improvement ?? null}
           description={
             currentScore?.recommendation ||
-            "Completa el Discovery para generar una evaluación con datos reales."
+            (isInternalOrganization
+              ? "Completa el Discovery para generar una evaluación con datos reales."
+              : "El Business Score se activará cuando el diagnóstico de tu negocio esté disponible.")
           }
           loading={scoreLoading}
           compact
-          onEvaluate={() => navigate("/discovery")}
+          onEvaluate={() => navigate(isInternalOrganization ? "/discovery" : "/business-score")}
         />
 
         <Card glow contentClassName="p-5 sm:p-6">

@@ -44,6 +44,13 @@ const menu = [
         icon: BarChart3,
         to: "/orvesen-score",
         moduleKey: "area_score",
+        internalOnly: true,
+      },
+      {
+        label: "Business Score",
+        icon: BarChart3,
+        to: "/business-score",
+        businessOnly: true,
       },
     ],
   },
@@ -74,7 +81,7 @@ export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }) {
-  const { displayName, initial, displayTitle, canManageUsers, canAccess } = useAuth();
+  const { displayName, initial, displayTitle, canManageUsers, canAccess, isInternalOrganization } = useAuth();
 
   return (
     <>
@@ -173,7 +180,11 @@ export default function Sidebar({
 
               <div className="space-y-2">
 
-                {section.items.filter((item) => !item.moduleKey || canAccess(item.moduleKey)).map((item) => {
+                {section.items.filter((item) => {
+                  if (item.internalOnly && !isInternalOrganization) return false;
+                  if (item.businessOnly && isInternalOrganization) return false;
+                  return !item.moduleKey || canAccess(item.moduleKey);
+                }).map((item) => {
                   const Icon = item.icon;
 
                   return (

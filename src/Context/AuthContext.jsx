@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
 
     supabase
       .from("users")
-      .select("first_name, organization_id, title, role")
+      .select("first_name, organization_id, title, role, organizations(name, organization_type)")
       .eq("id", session.user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -83,6 +83,8 @@ export function AuthProvider({ children }) {
   const displayTitle = profile?.title || "Miembro";
   const role = profile?.role || "member";
   const canManageUsers = role === "platform_owner" || role === "organization_admin";
+  const organizationType = profile?.organizations?.organization_type || "pending";
+  const isInternalOrganization = organizationType === "internal";
 
   function canAccess(moduleKey) {
     if (canManageUsers) return true;
@@ -102,7 +104,7 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
 
-    setProfile(data);
+    setProfile((current) => ({ ...current, ...data }));
     return data;
   }
 
@@ -117,6 +119,8 @@ export function AuthProvider({ children }) {
       displayTitle,
       role,
       canManageUsers,
+      organizationType,
+      isInternalOrganization,
       canAccess,
       moduleAccess,
       areaAccess,
