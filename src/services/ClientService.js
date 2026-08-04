@@ -14,6 +14,7 @@ export async function getClients(organizationId) {
 
     .select(`
       id,
+      organization_id,
       company_name,
       contact_name,
       email,
@@ -66,6 +67,7 @@ export async function getClient(clientId) {
 
     .select(`
       id,
+      organization_id,
       company_name,
       contact_name,
       email,

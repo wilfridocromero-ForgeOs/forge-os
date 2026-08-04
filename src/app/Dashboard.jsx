@@ -41,7 +41,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <Page className="space-y-6 lg:space-y-7">
+    <Page className="space-y-5 lg:space-y-6">
       <section className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <PageHeader
           eyebrow={displayTitle}
@@ -53,7 +53,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         {metrics.map((metric) => (
           <MetricCard key={metric.title} {...metric} loading={dashboardLoading} />
         ))}

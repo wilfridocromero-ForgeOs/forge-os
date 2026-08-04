@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Columns3, LayoutGrid, List, Mail, Search } from "lucide-react";
 
 import Page from "../components/ui/Page";
@@ -31,8 +32,9 @@ function labelStatus(status) {
   return statusLabels[String(status || "lead").toLowerCase()] || status || "Sin estado";
 }
 
-function ClientCard({ client, onInvite, canInvite }) {
+function ClientCard({ client, onInvite, canInvite, onOpen }) {
   return (
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }} className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-[28px]">
     <Card contentClassName="p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -52,15 +54,17 @@ function ClientCard({ client, onInvite, canInvite }) {
         <span>{client.score > 0 ? `Score ${client.score}` : "Sin evaluación"}</span>
       </div>
       {canInvite && (
-        <button onClick={() => onInvite(client)} disabled={client.portal_enabled} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-default disabled:opacity-60">
+        <button onClick={(event) => { event.stopPropagation(); onInvite(client); }} disabled={client.portal_enabled} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-default disabled:opacity-60">
           <Mail size={16} /> {client.portal_enabled ? "Acceso ORVESEN activo" : "Invitar a ORVESEN"}
         </button>
       )}
     </Card>
+    </div>
   );
 }
 
 export default function Clients() {
+  const navigate = useNavigate();
   const { organization } = useOrganization();
   const { role } = useAuth();
   const [clients, setClients] = useState([]);
@@ -182,7 +186,7 @@ export default function Clients() {
 
       {!loading && view === "cards" && (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {filtered.map((client) => <ClientCard key={client.id} client={client} canInvite={canInviteClients} onInvite={setInviteClient} />)}
+          {filtered.map((client) => <ClientCard key={client.id} client={client} canInvite={canInviteClients} onInvite={setInviteClient} onOpen={() => navigate(`/clientes/${client.id}`)} />)}
         </div>
       )}
 
@@ -192,13 +196,13 @@ export default function Clients() {
             <span>Empresa</span><span>Contacto</span><span>Correo</span><span>Estado</span><span>Score</span>
           </div>
           {filtered.map((client) => (
-            <div key={client.id} className="grid gap-2 border-b border-zinc-800 px-5 py-4 last:border-0 md:grid-cols-[1.3fr_1fr_1.3fr_.7fr_.6fr] md:items-center md:gap-4">
+            <button key={client.id} onClick={() => navigate(`/clientes/${client.id}`)} className="grid w-full gap-2 border-b border-zinc-800 px-5 py-4 text-left last:border-0 hover:bg-zinc-900/70 md:grid-cols-[1.3fr_1fr_1.3fr_.7fr_.6fr] md:items-center md:gap-4">
               <p className="font-medium text-white">{client.company_name}</p>
               <p className="text-sm text-zinc-400">{client.contact_name || "Sin contacto"}</p>
               <p className="truncate text-sm text-zinc-500">{client.email || "Sin correo"}</p>
               <span className="w-fit rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">{labelStatus(client.status)}</span>
               <p className="text-sm text-zinc-400">{client.score > 0 ? client.score : "—"}</p>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -215,10 +219,10 @@ export default function Clients() {
                 </div>
                 <div className="mt-2 space-y-3">
                   {group.map((client) => (
-                    <div key={client.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                    <button key={client.id} onClick={() => navigate(`/clientes/${client.id}`)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-left hover:border-zinc-600">
                       <p className="font-medium text-white">{client.company_name}</p>
                       <p className="mt-1 text-sm text-zinc-500">{client.contact_name || "Sin contacto"}</p>
-                    </div>
+                    </button>
                   ))}
                   {group.length === 0 && <p className="px-2 py-4 text-sm text-zinc-600">Sin clientes</p>}
                 </div>

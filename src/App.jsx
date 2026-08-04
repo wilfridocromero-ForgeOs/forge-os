@@ -11,6 +11,7 @@ import ResetPassword from "./auth/ResetPassword";
 // Pages
 import Dashboard from "./app/Dashboard";
 import Clients from "./app/Clients";
+import ClientProfile from "./app/ClientProfile";
 import Discovery from "./app/Discovery";
 import Projects from "./app/Projects";
 import Score from "./app/Score";
@@ -46,6 +47,8 @@ export default function App() {
           path="/clientes"
           element={<Clients />}
         />
+
+        <Route path="/clientes/:id" element={<ClientProfile />} />
 
         <Route
           path="/discovery"

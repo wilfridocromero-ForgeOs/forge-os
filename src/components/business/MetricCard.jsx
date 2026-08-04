@@ -9,7 +9,7 @@ export default function MetricCard({
   loading = false,
 }) {
   return (
-    <Card className="h-full" contentClassName="p-5 sm:p-6">
+    <Card className="h-full" contentClassName="p-4 sm:p-5">
 
       <div className="flex h-full flex-col">
 
@@ -25,8 +25,8 @@ export default function MetricCard({
             <div
               className="
                 flex
-                h-9
-                w-9
+                h-8
+                w-8
                 items-center
                 justify-center
 
@@ -39,7 +39,7 @@ export default function MetricCard({
               "
             >
               <Icon
-                size={18}
+                size={16}
                 className="text-zinc-300"
               />
             </div>
@@ -49,13 +49,13 @@ export default function MetricCard({
 
         {/* Valor */}
 
-        <div className="mt-5">
+        <div className="mt-3">
 
-          <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {loading ? "…" : value}
           </h2>
 
-          <p className="mt-2 text-sm text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
             {subtitle}
           </p>
 
