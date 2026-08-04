@@ -33,8 +33,10 @@ export default function Settings() {
   const [access, setAccess] = useState([]);
   const [areas, setAreas] = useState([]);
   const [scores, setScores] = useState([]);
+  const [scoreAssignments, setScoreAssignments] = useState([]);
+  const [divisionScore, setDivisionScore] = useState({ name: "", score: "" });
   const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "", score: "" });
+  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -47,6 +49,8 @@ export default function Settings() {
     [organizations],
   );
   const isInternal = selected?.organization_id === internalOrganization?.id;
+  const internalAreas = areas.filter((area) => area.organization_id === internalOrganization?.id);
+  const latestScores = internalAreas.map((area) => ({ ...area, currentScore: scores.find((score) => score.area_id === area.id) }));
 
   async function loadData() {
     setLoading(true);
@@ -54,20 +58,22 @@ export default function Settings() {
     const organizationsRequest = role === "platform_owner"
       ? supabase.rpc("admin_list_organizations")
       : supabase.from("organizations").select("id, name, organization_type").order("name");
-    const [membersResult, organizationsResult, accessResult, areasResult, scoresResult] = await Promise.all([
+    const [membersResult, organizationsResult, accessResult, areasResult, scoresResult, assignmentsResult] = await Promise.all([
       supabase.rpc("admin_list_members_v2"),
       organizationsRequest,
       supabase.from("member_module_access").select("user_id, module_key, enabled"),
       supabase.from("work_areas").select("id, organization_id, name"),
       supabase.from("area_scores").select("id, area_id, score, status, computed_at").order("computed_at", { ascending: false }),
+      supabase.from("user_area_access").select("user_id, area_id, is_primary"),
     ]);
-    const error = membersResult.error || organizationsResult.error || accessResult.error || areasResult.error || scoresResult.error;
+    const error = membersResult.error || organizationsResult.error || accessResult.error || areasResult.error || scoresResult.error || assignmentsResult.error;
     if (error) setMessage(error.message);
     setMembers(membersResult.data || []);
     setOrganizations(organizationsResult.data || []);
     setAccess(accessResult.data || []);
     setAreas(areasResult.data || []);
     setScores(scoresResult.data || []);
+    setScoreAssignments(assignmentsResult.data || []);
     setLoading(false);
   }
 
@@ -77,8 +83,6 @@ export default function Settings() {
 
   useEffect(() => {
     if (!selected) return;
-    const selectedArea = areas.find((area) => area.organization_id === selected.organization_id && area.name === selected.division);
-    const selectedScore = scores.find((score) => score.area_id === selectedArea?.id);
     setForm({
       first_name: selected.first_name || "",
       title: selected.title || "Miembro del equipo",
@@ -86,20 +90,15 @@ export default function Settings() {
       division: selected.division || "",
       job_position: selected.job_position || "",
       specialty: selected.specialty || "",
-      score: selectedScore?.score ?? "",
     });
     setMessage("");
-  }, [selectedId, areas, scores]);
+  }, [selectedId]);
 
   async function saveMember(addToOrvesen = false) {
     const organizationId = addToOrvesen ? internalOrganization?.id : selected?.organization_id;
     if (!organizationId) return setMessage("No se encontró el equipo interno de ORVESEN.");
     setMessage("");
-    const parsedScore = form.score === "" ? null : Number(form.score);
-    if (parsedScore !== null && (!Number.isInteger(parsedScore) || parsedScore < 0 || parsedScore > 1000)) {
-      return setMessage("El score debe ser un número entero entre 0 y 1000.");
-    }
-    const { error } = await supabase.rpc("admin_update_member_with_score", {
+    const { error } = await supabase.rpc("admin_update_member_professional", {
       target_user_id: selectedId,
       new_first_name: form.first_name.trim(),
       new_title: form.title.trim(),
@@ -108,12 +107,39 @@ export default function Settings() {
       new_division: form.division.trim(),
       new_position: form.job_position.trim(),
       new_specialty: form.specialty.trim(),
-      new_score: parsedScore,
     });
     if (error) return setMessage(error.message);
     setMessage(addToOrvesen ? `${form.first_name} fue añadido al equipo ORVESEN.` : "Cambios guardados correctamente.");
     await loadData();
     setSelectedId(selectedId);
+  }
+
+  async function saveDivisionScore(event) {
+    event.preventDefault();
+    const score = Number(divisionScore.score);
+    if (!divisionScore.name.trim() || !Number.isInteger(score) || score < 0 || score > 1000) {
+      return setMessage("Escribe una división y un score entero entre 0 y 1000.");
+    }
+    const { error } = await supabase.rpc("admin_upsert_division_score", {
+      division_name: divisionScore.name.trim(),
+      division_score: score,
+    });
+    if (error) return setMessage(error.message);
+    setDivisionScore({ name: "", score: "" });
+    setMessage("Score de la división guardado.");
+    await loadData();
+  }
+
+  async function toggleScoreVisibility(areaId) {
+    const currentIds = scoreAssignments.filter((item) => item.user_id === selectedId).map((item) => item.area_id);
+    const nextIds = currentIds.includes(areaId) ? currentIds.filter((id) => id !== areaId) : [...currentIds, areaId];
+    const { error } = await supabase.rpc("admin_set_member_score_access", {
+      target_user_id: selectedId,
+      allowed_area_ids: nextIds,
+    });
+    if (error) return setMessage(error.message);
+    setMessage("Scores visibles actualizados.");
+    await loadData();
   }
 
   async function toggleModule(moduleKey, enabled) {
@@ -176,6 +202,17 @@ export default function Settings() {
         </div>
       </Card>
 
+      <Card hover={false} contentClassName="p-5 sm:p-6">
+        <div className="flex items-center gap-2"><Check size={18} /><h2 className="font-semibold text-white">Scores por división</h2></div>
+        <p className="mt-2 text-sm text-zinc-400">Cada división tiene su propio score. Después podrás elegir cuáles de estos scores verá cada persona.</p>
+        <form onSubmit={saveDivisionScore} className="mt-5 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+          <input value={divisionScore.name} onChange={(event) => setDivisionScore({ ...divisionScore, name: event.target.value })} placeholder="División, por ejemplo Marketing" className="field" />
+          <input type="number" min="0" max="1000" value={divisionScore.score} onChange={(event) => setDivisionScore({ ...divisionScore, score: event.target.value })} placeholder="Score 0–1000" className="field" />
+          <button className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar score</button>
+        </form>
+        <div className="mt-4 flex flex-wrap gap-2">{latestScores.map((area) => <span key={area.id} className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-300">{area.name}: <strong>{area.currentScore?.score ?? "Pendiente"}</strong></span>)}{!latestScores.length && <span className="text-sm text-zinc-500">Todavía no has creado scores de divisiones.</span>}</div>
+      </Card>
+
       {inviteOpen && (
         <Card hover={false} contentClassName="p-6">
           <form onSubmit={sendInvitation}>
@@ -217,11 +254,16 @@ export default function Settings() {
                 <Field label="Puesto"><input placeholder="Ej. Especialista digital" value={form.job_position} onChange={(event) => setForm({ ...form, job_position: event.target.value })} className="field" /></Field>
                 <Field label="Especialidad"><input placeholder="Ej. Contenido y redes" value={form.specialty} onChange={(event) => setForm({ ...form, specialty: event.target.value })} className="field" /></Field>
                 <Field label="Nivel de acceso"><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} className="field"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador</option>{role === "platform_owner" && <option value="platform_owner">Propietario</option>}</select></Field>
-                <Field label="Score que verá"><input type="number" min="0" max="1000" step="1" placeholder="Ej. 760" value={form.score} onChange={(event) => setForm({ ...form, score: event.target.value })} className="field" /><span className="mt-2 block text-xs text-zinc-500">De 0 a 1000. Las personas de esta misma división verán el score más reciente que asignes.</span></Field>
               </div>
               <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
                 {isInternal ? <button onClick={() => saveMember(false)} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar cambios</button> : <button onClick={() => saveMember(true)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><UserPlus size={18} /> Añadir al equipo ORVESEN</button>}
               </div>
+            </Card>
+
+            <Card hover={false} contentClassName="p-6">
+              <div className="flex items-center gap-2"><Check size={18} /><h2 className="font-semibold text-white">Scores que podrá ver</h2></div>
+              <p className="mt-2 text-sm text-zinc-400">La división de la persona no limita esta selección. Puedes permitirle consultar uno o varios scores.</p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">{latestScores.map((area) => { const checked = scoreAssignments.some((item) => item.user_id === selectedId && item.area_id === area.id); return <label key={area.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200"><span>{area.name} · {area.currentScore?.score ?? "Pendiente"}</span><input type="checkbox" checked={checked} onChange={() => toggleScoreVisibility(area.id)} /></label>; })}{!latestScores.length && <p className="text-sm text-zinc-500">Primero crea un score de división arriba.</p>}</div>
             </Card>
 
             <Card hover={false} contentClassName="p-6">

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
 import Section from "../components/ui/Section";
@@ -15,7 +16,8 @@ import { useAuth } from "../Context/AuthContext";
 
 export default function Score() {
   const { canAccess, areaAccess, canManageUsers } = useAuth();
-  const { data: currentScore, loading } = useOrganizationScore();
+  const [selectedAreaId, setSelectedAreaId] = useState("");
+  const { data: currentScore, options: scoreOptions, loading } = useOrganizationScore(selectedAreaId);
   const categories = Array.isArray(currentScore?.categories) ? currentScore.categories : [];
   const strengths = Array.isArray(currentScore?.strengths) ? currentScore.strengths : [];
   const risks = Array.isArray(currentScore?.risks) ? currentScore.risks : [];
@@ -43,6 +45,12 @@ export default function Score() {
         title={currentScore?.area_name ? `Score de ${currentScore.area_name}` : "Score de la división"}
         description={canManageUsers ? "Consulta el score más reciente asignado por ORVESEN." : "Esta puntuación corresponde únicamente a tu división asignada."}
       />
+
+      {scoreOptions.length > 1 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {scoreOptions.map((score) => <button key={score.area_id} onClick={() => setSelectedAreaId(score.area_id)} className={`rounded-full border px-4 py-2 text-sm ${currentScore?.area_id === score.area_id ? "border-white bg-white text-black" : "border-zinc-700 text-zinc-300"}`}>{score.area_name}</button>)}
+        </div>
+      )}
 
       {/* Score General */}
 

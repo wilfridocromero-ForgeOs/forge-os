@@ -15,6 +15,7 @@ import Discovery from "./app/Discovery";
 import Projects from "./app/Projects";
 import Score from "./app/Score";
 import Settings from "./app/Settings";
+import Calendar from "./app/Calendar";
 
 
 export default function App() {
@@ -60,6 +61,8 @@ export default function App() {
         />
 
         <Route path="/configuracion" element={<Settings />} />
+
+        <Route path="/calendario" element={<Calendar />} />
 
         </Route>
       </Route>
