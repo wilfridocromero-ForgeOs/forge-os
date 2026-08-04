@@ -22,6 +22,8 @@ export async function getClients(organizationId) {
       industry,
       status,
       score,
+      workspace_organization_id,
+      portal_enabled,
       created_at
     `)
 
@@ -72,6 +74,8 @@ export async function getClient(clientId) {
       industry,
       status,
       score,
+      workspace_organization_id,
+      portal_enabled,
       created_at
     `)
 

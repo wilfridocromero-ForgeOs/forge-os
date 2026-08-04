@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Columns3, LayoutGrid, List, Search } from "lucide-react";
+import { Columns3, LayoutGrid, List, Mail, Search } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
@@ -8,6 +8,8 @@ import Button from "../components/ui/Button";
 import CreateClientModal from "./Clients/CreateClientModal";
 import { getClients } from "../services/ClientService";
 import { useOrganization } from "../Context/OrganizationContext";
+import { useAuth } from "../Context/AuthContext";
+import InviteClientModal from "./Clients/InviteClientModal";
 
 const views = [
   { id: "cards", label: "Tarjetas", icon: LayoutGrid },
@@ -29,7 +31,7 @@ function labelStatus(status) {
   return statusLabels[String(status || "lead").toLowerCase()] || status || "Sin estado";
 }
 
-function ClientCard({ client }) {
+function ClientCard({ client, onInvite, canInvite }) {
   return (
     <Card contentClassName="p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
@@ -49,12 +51,18 @@ function ClientCard({ client }) {
         <span>{client.industry || "Sin industria"}</span>
         <span>{client.score > 0 ? `Score ${client.score}` : "Sin evaluación"}</span>
       </div>
+      {canInvite && (
+        <button onClick={() => onInvite(client)} disabled={client.portal_enabled} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-default disabled:opacity-60">
+          <Mail size={16} /> {client.portal_enabled ? "Acceso ORVESEN activo" : "Invitar a ORVESEN"}
+        </button>
+      )}
     </Card>
   );
 }
 
 export default function Clients() {
   const { organization } = useOrganization();
+  const { role } = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +70,8 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [view, setView] = useState(() => localStorage.getItem("orvesen-client-view") || "cards");
+  const [inviteClient, setInviteClient] = useState(null);
+  const canInviteClients = role === "platform_owner";
 
   useEffect(() => {
     let active = true;
@@ -172,7 +182,7 @@ export default function Clients() {
 
       {!loading && view === "cards" && (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {filtered.map((client) => <ClientCard key={client.id} client={client} />)}
+          {filtered.map((client) => <ClientCard key={client.id} client={client} canInvite={canInviteClients} onInvite={setInviteClient} />)}
         </div>
       )}
 
@@ -223,6 +233,17 @@ export default function Clients() {
           organizationId={organization?.id}
           onCreated={handleCreated}
           onClose={() => setOpenModal(false)}
+        />
+      )}
+
+      {inviteClient && (
+        <InviteClientModal
+          client={inviteClient}
+          onClose={() => setInviteClient(null)}
+          onInvited={async () => {
+            const data = await getClients(organization.id);
+            setClients(data);
+          }}
         />
       )}
     </Page>

@@ -20,6 +20,9 @@ const emptyForm = {
   title: "Miembro",
   role: "member",
   organization_id: "",
+  division: "",
+  job_position: "",
+  specialty: "",
 };
 
 const emptyInvite = {
@@ -30,6 +33,9 @@ const emptyInvite = {
   organizationId: "",
   areaIds: [],
   moduleKeys: ["dashboard", "clients", "discovery"],
+  division: "",
+  jobPosition: "",
+  specialty: "",
 };
 
 function slugify(value) {
@@ -68,7 +74,7 @@ export default function Settings() {
   async function loadData() {
     setLoading(true);
     const [membersResult, organizationsResult, areasResult, assignmentsResult, accessResult, invitationsResult] = await Promise.all([
-      supabase.rpc("admin_list_members"),
+      supabase.rpc("admin_list_members_v2"),
       supabase.from("organizations").select("id, name").order("name"),
       supabase.from("work_areas").select("id, organization_id, name, slug, active").order("name"),
       supabase.from("user_area_access").select("user_id, area_id, is_primary"),
@@ -98,18 +104,24 @@ export default function Settings() {
       title: selected.title || "Miembro",
       role: selected.role || "member",
       organization_id: selected.organization_id,
+      division: selected.division || "",
+      job_position: selected.job_position || "",
+      specialty: selected.specialty || "",
     });
     setMessage("");
   }, [selectedId]);
 
   async function saveMember() {
     setMessage("");
-    const { error } = await supabase.rpc("admin_update_member", {
+    const { error } = await supabase.rpc("admin_update_member_professional", {
       target_user_id: selectedId,
       new_first_name: form.first_name,
       new_title: form.title,
       new_role: form.role,
       new_organization_id: form.organization_id,
+      new_division: form.division,
+      new_position: form.job_position,
+      new_specialty: form.specialty,
     });
     if (error) return setMessage(error.message);
     setMessage("Usuario actualizado correctamente.");
@@ -222,8 +234,11 @@ export default function Settings() {
               <label><span className="mb-2 block text-sm text-zinc-400">Correo</span><input required type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label><span className="mb-2 block text-sm text-zinc-400">Nombre</span><input required value={invite.firstName} onChange={(e) => setInvite({ ...invite, firstName: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               <label><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input required value={invite.title} onChange={(e) => setInvite({ ...invite, title: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
-              <label><span className="mb-2 block text-sm text-zinc-400">Nivel</span><select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="organization_admin">Administrador</option></select></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">Nivel</span><select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador</option></select></label>
               <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Negocio</span><select required value={invite.organizationId} onChange={(e) => setInvite({ ...invite, organizationId: e.target.value, areaIds: [] })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">División</span><input placeholder="Ej. Studio Creativo" value={invite.division} onChange={(e) => setInvite({ ...invite, division: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+              <label><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input placeholder="Ej. Especialista" value={invite.jobPosition} onChange={(e) => setInvite({ ...invite, jobPosition: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Especialidad</span><input placeholder="Ej. Producción Audiovisual" value={invite.specialty} onChange={(e) => setInvite({ ...invite, specialty: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
             </div>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div><p className="mb-3 text-sm text-zinc-400">Áreas de trabajo</p><div className="flex flex-wrap gap-2">{areas.filter((area) => area.organization_id === invite.organizationId).map((area) => <button type="button" key={area.id} onClick={() => toggleInviteValue("areaIds", area.id)} className={`rounded-full border px-3 py-2 text-sm ${invite.areaIds.includes(area.id) ? "border-white bg-white text-black" : "border-zinc-700 text-zinc-300"}`}>{area.name}</button>)}{!areas.some((area) => area.organization_id === invite.organizationId) && <span className="text-sm text-zinc-500">Este negocio todavía no tiene áreas.</span>}</div></div>
@@ -267,8 +282,11 @@ export default function Settings() {
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Nombre</span><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Título visible</span><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
-                <label className="block"><span className="mb-2 block text-sm text-zinc-400">Nivel de acceso</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="organization_admin">Administrador del negocio</option>{role === "platform_owner" && <option value="platform_owner">Propietario de ORVESEN</option>}</select></label>
+                <label className="block"><span className="mb-2 block text-sm text-zinc-400">Nivel de acceso</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador del negocio</option>{role === "platform_owner" && <option value="platform_owner">Propietario de ORVESEN</option>}</select></label>
                 <label className="block"><span className="mb-2 block text-sm text-zinc-400">Negocio</span><select value={form.organization_id} onChange={(e) => setForm({ ...form, organization_id: e.target.value })} disabled={role !== "platform_owner"} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white disabled:opacity-60">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
+                <label className="block"><span className="mb-2 block text-sm text-zinc-400">División</span><input placeholder="Ej. Marketing" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+                <label className="block"><span className="mb-2 block text-sm text-zinc-400">Puesto</span><input placeholder="Ej. Especialista" value={form.job_position} onChange={(e) => setForm({ ...form, job_position: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
+                <label className="block md:col-span-2"><span className="mb-2 block text-sm text-zinc-400">Especialidad</span><input placeholder="Ej. Marketing Digital" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white" /></label>
               </div>
               <div className="mt-6 flex justify-end"><button onClick={saveMember} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar usuario</button></div>
             </Card>

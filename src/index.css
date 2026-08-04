@@ -91,6 +91,24 @@ html[data-theme="light"] textarea {
   color: #18181b;
 }
 
+html[data-theme="light"] .bg-black,
+html[data-theme="light"] [class*="bg-black/"] {
+  background-color: #ffffff !important;
+}
+
+input,
+select,
+textarea {
+  color: #ffffff;
+  caret-color: currentColor;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #71717a;
+  opacity: 1;
+}
+
 html[data-theme="light"] img[src="/orvesen-mark.png"] {
   filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.3)) contrast(1.12);
 }
