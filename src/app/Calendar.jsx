@@ -29,7 +29,7 @@ function emptyEvent(date = new Date()) {
 export default function Calendar() {
   const { profile, user, canManageUsers } = useAuth();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [view, setView] = useState("month");
+  const [view, setView] = useState(() => window.matchMedia("(max-width: 767px)").matches ? "list" : "month");
   const [events, setEvents] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -127,7 +127,7 @@ export default function Calendar() {
         </div>
 
         {loading ? <p className="py-16 text-center text-zinc-500">Cargando calendario...</p> : view === "month" ? (
-          <div className="mt-6 overflow-x-auto"><div className="min-w-[760px]"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{calendarDays.map((day) => { const dayEvents = events.filter((item) => dateKey(new Date(item.starts_at)) === dateKey(day)); const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); return <button key={day.toISOString()} onClick={() => openNew(day)} className={`calendar-day ${outside ? "calendar-day-outside" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="mt-2 space-y-1">{dayEvents.slice(0, 3).map((item) => <span key={item.id} className={`calendar-event-pill priority-${item.priority}`}>{new Date(item.starts_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>)}{dayEvents.length > 3 && <span className="block text-xs text-zinc-500">+{dayEvents.length - 3} más</span>}</span></button>; })}</div></div></div>
+          <div className="calendar-month-scroll mt-6"><div className="calendar-month-shell"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{calendarDays.map((day) => { const dayEvents = events.filter((item) => dateKey(new Date(item.starts_at)) === dateKey(day)); const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); return <button key={day.toISOString()} onClick={() => openNew(day)} className={`calendar-day ${outside ? "calendar-day-outside" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="calendar-day-events mt-2 space-y-1">{dayEvents.slice(0, 3).map((item) => <span key={item.id} className={`calendar-event-pill priority-${item.priority}`}>{new Date(item.starts_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>)}{dayEvents.length > 3 && <span className="block text-xs text-zinc-500">+{dayEvents.length - 3} más</span>}</span></button>; })}</div></div></div>
         ) : (
           <EventList events={upcoming} members={members} onComplete={completeEvent} onDelete={deleteEvent} canManage={canManageUsers} userId={user.id} />
         )}

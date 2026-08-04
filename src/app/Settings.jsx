@@ -34,7 +34,6 @@ export default function Settings() {
   const [areas, setAreas] = useState([]);
   const [scores, setScores] = useState([]);
   const [scoreAssignments, setScoreAssignments] = useState([]);
-  const [divisionScore, setDivisionScore] = useState({ name: "", score: "" });
   const [selectedId, setSelectedId] = useState("");
   const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "" });
   const [message, setMessage] = useState("");
@@ -114,22 +113,6 @@ export default function Settings() {
     setSelectedId(selectedId);
   }
 
-  async function saveDivisionScore(event) {
-    event.preventDefault();
-    const score = Number(divisionScore.score);
-    if (!divisionScore.name.trim() || !Number.isInteger(score) || score < 0 || score > 1000) {
-      return setMessage("Escribe una división y un score entero entre 0 y 1000.");
-    }
-    const { error } = await supabase.rpc("admin_upsert_division_score", {
-      division_name: divisionScore.name.trim(),
-      division_score: score,
-    });
-    if (error) return setMessage(error.message);
-    setDivisionScore({ name: "", score: "" });
-    setMessage("Score de la división guardado.");
-    await loadData();
-  }
-
   async function toggleScoreVisibility(areaId) {
     const currentIds = scoreAssignments.filter((item) => item.user_id === selectedId).map((item) => item.area_id);
     const nextIds = currentIds.includes(areaId) ? currentIds.filter((id) => id !== areaId) : [...currentIds, areaId];
@@ -202,17 +185,6 @@ export default function Settings() {
         </div>
       </Card>
 
-      <Card hover={false} contentClassName="p-5 sm:p-6">
-        <div className="flex items-center gap-2"><Check size={18} /><h2 className="font-semibold text-white">Scores por división</h2></div>
-        <p className="mt-2 text-sm text-zinc-400">Cada división tiene su propio score. Después podrás elegir cuáles de estos scores verá cada persona.</p>
-        <form onSubmit={saveDivisionScore} className="mt-5 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
-          <input value={divisionScore.name} onChange={(event) => setDivisionScore({ ...divisionScore, name: event.target.value })} placeholder="División, por ejemplo Marketing" className="field" />
-          <input type="number" min="0" max="1000" value={divisionScore.score} onChange={(event) => setDivisionScore({ ...divisionScore, score: event.target.value })} placeholder="Score 0–1000" className="field" />
-          <button className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar score</button>
-        </form>
-        <div className="mt-4 flex flex-wrap gap-2">{latestScores.map((area) => <span key={area.id} className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-300">{area.name}: <strong>{area.currentScore?.score ?? "Pendiente"}</strong></span>)}{!latestScores.length && <span className="text-sm text-zinc-500">Todavía no has creado scores de divisiones.</span>}</div>
-      </Card>
-
       {inviteOpen && (
         <Card hover={false} contentClassName="p-6">
           <form onSubmit={sendInvitation}>
@@ -263,7 +235,7 @@ export default function Settings() {
             <Card hover={false} contentClassName="p-6">
               <div className="flex items-center gap-2"><Check size={18} /><h2 className="font-semibold text-white">Scores que podrá ver</h2></div>
               <p className="mt-2 text-sm text-zinc-400">La división de la persona no limita esta selección. Puedes permitirle consultar uno o varios scores.</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">{latestScores.map((area) => { const checked = scoreAssignments.some((item) => item.user_id === selectedId && item.area_id === area.id); return <label key={area.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200"><span>{area.name} · {area.currentScore?.score ?? "Pendiente"}</span><input type="checkbox" checked={checked} onChange={() => toggleScoreVisibility(area.id)} /></label>; })}{!latestScores.length && <p className="text-sm text-zinc-500">Primero crea un score de división arriba.</p>}</div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">{latestScores.map((area) => { const checked = scoreAssignments.some((item) => item.user_id === selectedId && item.area_id === area.id); return <label key={area.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200"><span>{area.name} · {area.currentScore?.score ?? "Pendiente"}</span><input type="checkbox" checked={checked} onChange={() => toggleScoreVisibility(area.id)} /></label>; })}{!latestScores.length && <p className="text-sm text-zinc-500">Los scores aparecerán aquí automáticamente cuando cada división complete su evaluación.</p>}</div>
             </Card>
 
             <Card hover={false} contentClassName="p-6">

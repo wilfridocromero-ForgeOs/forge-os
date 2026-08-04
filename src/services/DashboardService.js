@@ -40,11 +40,12 @@ function makeActivity(table, row) {
 }
 
 export async function getDashboardData(organizationId) {
-  const [clients, projects, playbooks, discoveries] = await Promise.all([
+  const [clients, projects, playbooks, discoveries, calendarResult] = await Promise.all([
     readTable("clients", organizationId),
     readTable("projects", organizationId),
     readTable("playbooks", organizationId),
     readTable("discoveries", organizationId),
+    supabase.from("calendar_events").select("id,title,starts_at,event_type,priority,status").eq("organization_id", organizationId).gte("starts_at", new Date().toISOString()).eq("status", "scheduled").order("starts_at").limit(5),
   ]);
 
   const activities = [
@@ -56,5 +57,5 @@ export async function getDashboardData(organizationId) {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
 
-  return { clients, projects, playbooks, discoveries, activities };
+  return { clients, projects, playbooks, discoveries, activities, upcomingEvents: calendarResult.data || [] };
 }

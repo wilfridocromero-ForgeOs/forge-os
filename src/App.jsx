@@ -16,6 +16,7 @@ import Projects from "./app/Projects";
 import Score from "./app/Score";
 import Settings from "./app/Settings";
 import Calendar from "./app/Calendar";
+import Brain from "./app/Brain";
 
 
 export default function App() {
@@ -63,6 +64,8 @@ export default function App() {
         <Route path="/configuracion" element={<Settings />} />
 
         <Route path="/calendario" element={<Calendar />} />
+
+        <Route path="/cerebro" element={<Brain />} />
 
         </Route>
       </Route>

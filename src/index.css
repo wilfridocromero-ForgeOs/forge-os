@@ -154,8 +154,11 @@ button {
   border-radius: 1rem;
 }
 
+.calendar-month-scroll { overflow-x: auto; }
+.calendar-month-shell { min-width: 760px; }
+
 .calendar-day {
-  min-height: 7.5rem;
+  min-height: 5.75rem;
   padding: 0.65rem;
   overflow: hidden;
   border-right: 1px solid rgb(39 39 42);
@@ -184,6 +187,18 @@ html[data-theme="light"] .calendar-list-item { background: #ffffff; color: #1818
 html[data-theme="light"] .calendar-day:hover { background: #f4f4f5; }
 html[data-theme="light"] .calendar-event-pill,
 html[data-theme="light"] .calendar-type { background: #f4f4f5; color: #27272a; }
+
+@media (max-width: 767px) {
+  .calendar-month-scroll { overflow-x: visible; }
+  .calendar-month-shell { min-width: 0; width: 100%; }
+  .calendar-grid { border-radius: 0.75rem; }
+  .calendar-day { min-height: 3.9rem; padding: 0.3rem; }
+  .calendar-day-number { width: 1.5rem; height: 1.5rem; font-size: 0.72rem; }
+  .calendar-day-events { display: flex; flex-wrap: wrap; gap: 0.18rem; margin-top: 0.2rem; }
+  .calendar-event-pill { width: 0.42rem; height: 0.42rem; padding: 0; border: 0; border-radius: 9999px; background: #71717a; color: transparent; }
+  .calendar-event-pill.priority-high { background: #ef4444; }
+  .calendar-list-item { padding: 0.85rem; }
+}
 
 input {
   font-family: inherit;

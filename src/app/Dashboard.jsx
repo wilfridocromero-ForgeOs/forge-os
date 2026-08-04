@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Brain, ClipboardCheck, FolderKanban, Users } from "lucide-react";
+import { Brain, CalendarDays, ClipboardCheck, Clock, FolderKanban, Users } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
@@ -97,6 +97,11 @@ export default function Dashboard() {
           )}
         </Card>
       </section>
+
+      <Card hover={false} contentClassName="p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Agenda</p><h2 className="mt-2 text-xl font-semibold text-white">Próximos recordatorios</h2></div><button onClick={() => navigate("/calendario")} className="calendar-icon-button"><CalendarDays size={18} /></button></div>
+        {dashboard?.upcomingEvents?.length ? <div className="mt-5 grid gap-3 md:grid-cols-2">{dashboard.upcomingEvents.map((event) => <button key={event.id} onClick={() => navigate("/calendario")} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left"><p className="font-medium text-white">{event.title}</p><p className="mt-2 flex items-center gap-2 text-sm text-zinc-400"><Clock size={15} /> {new Date(event.starts_at).toLocaleString("es-ES", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p></button>)}</div> : <div className="mt-5 rounded-xl border border-dashed border-zinc-800 p-5"><p className="text-sm text-zinc-400">No tienes recordatorios próximos.</p><button onClick={() => navigate("/calendario")} className="mt-3 text-sm font-medium text-white underline underline-offset-4">Crear un evento</button></div>}
+      </Card>
 
       <ActivityTimeline activities={dashboard?.activities || []} />
     </Page>

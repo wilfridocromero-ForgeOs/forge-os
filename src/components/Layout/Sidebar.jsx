@@ -8,6 +8,7 @@ import {
   CalendarDays,
   DollarSign,
   Settings,
+  BookOpen,
   X,
 } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
@@ -31,6 +32,11 @@ const menu = [
         label: "Discovery",
         icon: Brain,
         to: "/discovery",
+      },
+      {
+        label: "Cerebro",
+        icon: BookOpen,
+        to: "/cerebro",
       },
       {
         label: "ORVESEN Score",
