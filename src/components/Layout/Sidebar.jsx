@@ -9,6 +9,7 @@ import {
   DollarSign,
   Settings,
   BookOpen,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
@@ -215,6 +216,7 @@ export default function Sidebar({
               </div>
 
               {section.title === "OPERACIONES" && canManageUsers && (
+                <div className="space-y-2">
                 <NavLink
                   to="/configuracion"
                   onClick={() => setSidebarOpen(false)}
@@ -223,6 +225,15 @@ export default function Sidebar({
                   <Settings size={20} />
                   <span className="font-medium">Configuración</span>
                 </NavLink>
+                <NavLink
+                  to="/score-builder"
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) => `flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
+                >
+                  <SlidersHorizontal size={20} />
+                  <span className="font-medium">Score Builder</span>
+                </NavLink>
+                </div>
               )}
 
             </div>
