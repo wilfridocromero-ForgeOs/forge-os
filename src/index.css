@@ -124,3 +124,16 @@ button {
 input {
   font-family: inherit;
 }
+/* Shared form control used by the team administration screen. */
+.field {
+  width: 100%;
+  border: 1px solid rgb(63 63 70);
+  border-radius: 0.75rem;
+  background: #000;
+  padding: 0.75rem 1rem;
+  color: #fff;
+}
+
+.field::placeholder {
+  color: rgb(113 113 122);
+}
