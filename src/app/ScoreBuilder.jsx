@@ -5,13 +5,14 @@ import Card from "../components/ui/Card";
 import Page from "../components/ui/Page";
 import { useAuth } from "../Context/AuthContext";
 import { supabase } from "../lib/supabase";
+import { useDivisions } from "../hooks/useDivisions";
 
-const blankTemplate = { name: "", area_id: "", description: "" };
+const blankTemplate = { name: "", division_id: "", description: "" };
 
 export default function ScoreBuilder() {
   const { canManageUsers, profile, user } = useAuth();
   const [templates, setTemplates] = useState([]);
-  const [areas, setAreas] = useState([]);
+  const { divisions } = useDivisions(profile?.organization_id);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(blankTemplate);
   const [creating, setCreating] = useState(false);
@@ -26,14 +27,13 @@ export default function ScoreBuilder() {
 
   async function loadBuilder(preferredId = selectedId) {
     setLoading(true);
-    const [areasResult, templatesResult] = await Promise.all([
-      supabase.from("work_areas").select("id, name").eq("active", true).order("name"),
+    const [templatesResult] = await Promise.all([
       supabase
         .from("score_templates")
-        .select("id, name, description, status, area_id, max_score, published_at, work_areas(name), score_categories(id, name, description, weight, position, score_questions(id, prompt, help_text, response_type, weight, required, position))")
+        .select("id, name, description, status, division_id, max_score, published_at, divisions(name), score_instances(id, current_score, max_score, percentage, status, computed_at), score_categories(id, name, description, weight, position, score_questions(id, prompt, help_text, response_type, weight, required, position))")
         .order("updated_at", { ascending: false }),
     ]);
-    const error = areasResult.error || templatesResult.error;
+    const error = templatesResult.error;
     if (error) setMessage(error.message);
     const nextTemplates = (templatesResult.data || []).map((template) => ({
       ...template,
@@ -44,7 +44,6 @@ export default function ScoreBuilder() {
           score_questions: (category.score_questions || []).sort((a, b) => a.position - b.position),
         })),
     }));
-    setAreas(areasResult.data || []);
     setTemplates(nextTemplates);
     const nextId = nextTemplates.some((item) => item.id === preferredId) ? preferredId : nextTemplates[0]?.id || "";
     setSelectedId(nextId);
@@ -77,13 +76,13 @@ export default function ScoreBuilder() {
 
   async function createTemplate(event) {
     event.preventDefault();
-    if (!draft.name.trim() || !draft.area_id) return setMessage("Escribe el nombre y selecciona una división.");
+    if (!draft.name.trim() || !draft.division_id) return setMessage("Escribe el nombre y selecciona una división.");
     setSaving(true);
     const { data, error } = await supabase
       .from("score_templates")
       .insert({
         organization_id: profile.organization_id,
-        area_id: draft.area_id,
+        division_id: draft.division_id,
         name: draft.name.trim(),
         description: draft.description.trim(),
         created_by: user.id,
@@ -156,7 +155,7 @@ export default function ScoreBuilder() {
     const templatePayload = {
       name: selected.name.trim(),
       description: selected.description.trim(),
-      area_id: selected.area_id,
+      division_id: selected.division_id,
       status: publish ? "published" : selected.status,
       published_at: publish ? new Date().toISOString() : selected.published_at,
       updated_at: new Date().toISOString(),
@@ -196,13 +195,13 @@ export default function ScoreBuilder() {
 
       {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
 
-      {creating && <Card hover={false} contentClassName="p-6"><form onSubmit={createTemplate} className="grid gap-4 lg:grid-cols-[1fr_240px_auto]"><input className="field" placeholder="Nombre de la evaluación" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /><select className="field" value={draft.area_id} onChange={(event) => setDraft({ ...draft, area_id: event.target.value })}><option value="">Selecciona división</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select><button disabled={saving} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Crear borrador</button></form></Card>}
+      {creating && <Card hover={false} contentClassName="p-6"><form onSubmit={createTemplate} className="grid gap-4 lg:grid-cols-[1fr_240px_auto]"><input className="field" placeholder="Nombre de la evaluación" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /><select className="field" value={draft.division_id} onChange={(event) => setDraft({ ...draft, division_id: event.target.value })}><option value="">Selecciona división</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select><button disabled={saving} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Crear borrador</button></form></Card>}
 
       <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-        <Card hover={false} contentClassName="p-4"><div className="mb-3 flex items-center gap-2 px-2 font-medium text-zinc-300"><ClipboardList size={18} /> Evaluaciones</div><div className="space-y-2">{loading && <p className="p-3 text-sm text-zinc-500">Cargando...</p>}{templates.map((template) => <button key={template.id} onClick={() => { setSelectedId(template.id); setMessage(""); }} className={`flex w-full items-center justify-between rounded-xl border p-4 text-left ${selectedId === template.id ? "border-zinc-500 bg-zinc-800" : "border-transparent bg-zinc-900/70"}`}><span><span className="block font-medium text-white">{template.name}</span><span className="mt-1 block text-xs text-zinc-500">{template.work_areas?.name} · {template.status === "published" ? "Publicada" : "Borrador"}</span></span><ChevronRight size={17} /></button>)}{!loading && !templates.length && <p className="p-3 text-sm leading-6 text-zinc-500">Crea la primera evaluación para una división.</p>}</div></Card>
+        <Card hover={false} contentClassName="p-4"><div className="mb-3 flex items-center gap-2 px-2 font-medium text-zinc-300"><ClipboardList size={18} /> Evaluaciones</div><div className="space-y-2">{loading && <p className="p-3 text-sm text-zinc-500">Cargando...</p>}{templates.map((template) => <button key={template.id} onClick={() => { setSelectedId(template.id); setMessage(""); }} className={`flex w-full items-center justify-between rounded-xl border p-4 text-left ${selectedId === template.id ? "border-zinc-500 bg-zinc-800" : "border-transparent bg-zinc-900/70"}`}><span><span className="block font-medium text-white">{template.name}</span><span className="mt-1 block text-xs text-zinc-500">{template.divisions?.name} · {template.status === "published" ? "Publicada" : "Borrador"} · {template.score_instances?.[0]?.current_score ?? 0}/{template.score_instances?.[0]?.max_score ?? template.max_score}</span></span><ChevronRight size={17} /></button>)}{!loading && !templates.length && <p className="p-3 text-sm leading-6 text-zinc-500">Crea la primera evaluación para una división.</p>}</div></Card>
 
         {selected && <div className="space-y-5">
-          <Card hover={false} contentClassName="p-5 sm:p-6"><div className="grid gap-4 md:grid-cols-2"><Field label="Nombre"><input className="field" value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} /></Field><Field label="División evaluada"><select className="field" value={selected.area_id} onChange={(event) => updateSelected({ area_id: event.target.value })}>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></Field><div className="md:col-span-2"><Field label="Objetivo de la evaluación"><textarea rows="2" className="field resize-none" value={selected.description} onChange={(event) => updateSelected({ description: event.target.value })} /></Field></div></div></Card>
+          <Card hover={false} contentClassName="p-5 sm:p-6"><div className="grid gap-4 md:grid-cols-2"><Field label="Nombre"><input className="field" value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} /></Field><Field label="División evaluada"><select className="field" value={selected.division_id || ""} onChange={(event) => updateSelected({ division_id: event.target.value })}>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><div className="md:col-span-2"><Field label="Objetivo de la evaluación"><textarea rows="2" className="field resize-none" value={selected.description} onChange={(event) => updateSelected({ description: event.target.value })} /></Field></div></div></Card>
 
           {selected.score_categories.map((category) => <Card key={category.id} hover={false} contentClassName="p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end"><div className="flex-1"><Field label="Categoría"><input className="field" value={category.name} onChange={(event) => updateCategory(category.id, { name: event.target.value })} /></Field></div><div className="sm:w-36"><Field label="Peso total %"><input type="number" min="0" max="100" className="field" value={category.weight} onChange={(event) => updateCategory(category.id, { weight: event.target.value })} /></Field></div><button onClick={() => removeCategory(category.id)} className="rounded-xl border border-zinc-700 p-3 text-zinc-400 hover:text-white"><Trash2 size={18} /></button></div><div className="mt-5 space-y-3">{category.score_questions.map((question, index) => <div key={question.id} className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 lg:grid-cols-[1fr_150px_120px_auto]"><Field label={`Pregunta ${index + 1}`}><input className="field" value={question.prompt} onChange={(event) => updateQuestion(category.id, question.id, { prompt: event.target.value })} /></Field><Field label="Respuesta"><select className="field" value={question.response_type} onChange={(event) => updateQuestion(category.id, question.id, { response_type: event.target.value })}><option value="scale">Escala 1 a 5</option><option value="yes_no">Sí o no</option></select></Field><Field label="Peso %"><input type="number" min="0" max="100" className="field" value={question.weight} onChange={(event) => updateQuestion(category.id, question.id, { weight: event.target.value })} /></Field><button onClick={() => removeQuestion(category.id, question.id)} className="self-end rounded-xl border border-zinc-700 p-3 text-zinc-400"><Trash2 size={18} /></button></div>)}<button onClick={() => addQuestion(category)} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-300"><Plus size={16} /> Añadir pregunta</button></div></Card>)}
 

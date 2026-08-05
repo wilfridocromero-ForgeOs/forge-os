@@ -21,6 +21,7 @@ const emptyInvite = {
   title: "Miembro del equipo",
   role: "member",
   division: "",
+  divisionId: "",
   jobPosition: "",
   specialty: "",
   moduleKeys: ["dashboard", "clients", "discovery"],
@@ -31,11 +32,11 @@ export default function Settings() {
   const [members, setMembers] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [access, setAccess] = useState([]);
-  const [areas, setAreas] = useState([]);
+  const [divisions, setDivisions] = useState([]);
   const [scores, setScores] = useState([]);
   const [scoreAssignments, setScoreAssignments] = useState([]);
   const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", job_position: "", specialty: "" });
+  const [form, setForm] = useState({ first_name: "", title: "", role: "member", division: "", division_id: "", job_position: "", specialty: "" });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -48,8 +49,8 @@ export default function Settings() {
     [organizations],
   );
   const isInternal = selected?.organization_id === internalOrganization?.id;
-  const internalAreas = areas.filter((area) => area.organization_id === internalOrganization?.id);
-  const latestScores = internalAreas.map((area) => ({ ...area, currentScore: scores.find((score) => score.area_id === area.id) }));
+  const internalDivisions = divisions.filter((division) => division.organization_id === internalOrganization?.id);
+  const latestScores = internalDivisions.map((division) => ({ ...division, currentScore: scores.find((score) => score.division_id === division.id) }));
 
   async function loadData() {
     setLoading(true);
@@ -57,20 +58,20 @@ export default function Settings() {
     const organizationsRequest = role === "platform_owner"
       ? supabase.rpc("admin_list_organizations")
       : supabase.from("organizations").select("id, name, organization_type").order("name");
-    const [membersResult, organizationsResult, accessResult, areasResult, scoresResult, assignmentsResult] = await Promise.all([
+    const [membersResult, organizationsResult, accessResult, divisionsResult, scoresResult, assignmentsResult] = await Promise.all([
       supabase.rpc("admin_list_members_v2"),
       organizationsRequest,
       supabase.from("member_module_access").select("user_id, module_key, enabled"),
-      supabase.from("work_areas").select("id, organization_id, name"),
-      supabase.from("area_scores").select("id, area_id, score, status, computed_at").order("computed_at", { ascending: false }),
-      supabase.from("user_area_access").select("user_id, area_id, is_primary"),
+      supabase.from("divisions").select("id, organization_id, name").eq("active", true).order("position"),
+      supabase.from("score_instances").select("id, division_id, current_score, max_score, percentage, status, computed_at").order("computed_at", { ascending: false }),
+      supabase.from("user_division_score_access").select("user_id, division_id"),
     ]);
-    const error = membersResult.error || organizationsResult.error || accessResult.error || areasResult.error || scoresResult.error || assignmentsResult.error;
+    const error = membersResult.error || organizationsResult.error || accessResult.error || divisionsResult.error || scoresResult.error || assignmentsResult.error;
     if (error) setMessage(error.message);
     setMembers(membersResult.data || []);
     setOrganizations(organizationsResult.data || []);
     setAccess(accessResult.data || []);
-    setAreas(areasResult.data || []);
+    setDivisions(divisionsResult.data || []);
     setScores(scoresResult.data || []);
     setScoreAssignments(assignmentsResult.data || []);
     setLoading(false);
@@ -87,6 +88,7 @@ export default function Settings() {
       title: selected.title || "Miembro del equipo",
       role: selected.role || "member",
       division: selected.division || "",
+      division_id: selected.division_id || "",
       job_position: selected.job_position || "",
       specialty: selected.specialty || "",
     });
@@ -108,18 +110,21 @@ export default function Settings() {
       new_specialty: form.specialty.trim(),
     });
     if (error) return setMessage(error.message);
+    if (form.division_id) {
+      const divisionUpdate = await supabase.from("users").update({ division_id: form.division_id }).eq("id", selectedId);
+      if (divisionUpdate.error) return setMessage(divisionUpdate.error.message);
+    }
     setMessage(addToOrvesen ? `${form.first_name} fue añadido al equipo ORVESEN.` : "Cambios guardados correctamente.");
     await loadData();
     setSelectedId(selectedId);
   }
 
-  async function toggleScoreVisibility(areaId) {
-    const currentIds = scoreAssignments.filter((item) => item.user_id === selectedId).map((item) => item.area_id);
-    const nextIds = currentIds.includes(areaId) ? currentIds.filter((id) => id !== areaId) : [...currentIds, areaId];
-    const { error } = await supabase.rpc("admin_set_member_score_access", {
-      target_user_id: selectedId,
-      allowed_area_ids: nextIds,
-    });
+  async function toggleScoreVisibility(divisionId) {
+    const exists = scoreAssignments.some((item) => item.user_id === selectedId && item.division_id === divisionId);
+    const request = exists
+      ? supabase.from("user_division_score_access").delete().eq("user_id", selectedId).eq("division_id", divisionId)
+      : supabase.from("user_division_score_access").insert({ user_id: selectedId, division_id: divisionId });
+    const { error } = await request;
     if (error) return setMessage(error.message);
     setMessage("Scores visibles actualizados.");
     await loadData();
@@ -151,7 +156,7 @@ export default function Settings() {
     setSending(true);
     setMessage("");
     const { data, error } = await supabase.functions.invoke("invite-user", {
-      body: { ...invite, organizationId: internalOrganization.id, areaIds: [] },
+      body: { ...invite, organizationId: internalOrganization.id, divisionId: invite.divisionId || null, areaIds: [] },
     });
     setSending(false);
     if (error || data?.error) return setMessage(data?.error || error?.message || "No se pudo enviar la invitación.");
@@ -193,7 +198,7 @@ export default function Settings() {
               <Field label="Correo"><input required type="email" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} className="field" /></Field>
               <Field label="Nombre"><input required value={invite.firstName} onChange={(event) => setInvite({ ...invite, firstName: event.target.value })} className="field" /></Field>
               <Field label="Título visible"><input required value={invite.title} onChange={(event) => setInvite({ ...invite, title: event.target.value })} className="field" /></Field>
-              <Field label="División"><input placeholder="Ej. Marketing" value={invite.division} onChange={(event) => setInvite({ ...invite, division: event.target.value })} className="field" /></Field>
+              <Field label="División"><select value={invite.divisionId} onChange={(event) => { const division = internalDivisions.find((item) => item.id === event.target.value); setInvite({ ...invite, divisionId: event.target.value, division: division?.name || "" }); }} className="field"><option value="">Sin asignar</option>{internalDivisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></Field>
               <Field label="Puesto"><input placeholder="Ej. Especialista digital" value={invite.jobPosition} onChange={(event) => setInvite({ ...invite, jobPosition: event.target.value })} className="field" /></Field>
               <Field label="Especialidad"><input placeholder="Ej. Redes sociales" value={invite.specialty} onChange={(event) => setInvite({ ...invite, specialty: event.target.value })} className="field" /></Field>
             </div>
@@ -222,7 +227,7 @@ export default function Settings() {
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <Field label="Nombre"><input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} className="field" /></Field>
                 <Field label="Título visible"><input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="field" /></Field>
-                <Field label="División"><input placeholder="Ej. Marketing" value={form.division} onChange={(event) => setForm({ ...form, division: event.target.value })} className="field" /></Field>
+                <Field label="División"><select value={form.division_id} onChange={(event) => { const division = internalDivisions.find((item) => item.id === event.target.value); setForm({ ...form, division_id: event.target.value, division: division?.name || "" }); }} className="field"><option value="">Sin asignar</option>{internalDivisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></Field>
                 <Field label="Puesto"><input placeholder="Ej. Especialista digital" value={form.job_position} onChange={(event) => setForm({ ...form, job_position: event.target.value })} className="field" /></Field>
                 <Field label="Especialidad"><input placeholder="Ej. Contenido y redes" value={form.specialty} onChange={(event) => setForm({ ...form, specialty: event.target.value })} className="field" /></Field>
                 <Field label="Nivel de acceso"><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} className="field"><option value="member">Miembro</option><option value="area_lead">Líder de área</option><option value="organization_admin">Administrador</option>{role === "platform_owner" && <option value="platform_owner">Propietario</option>}</select></Field>
@@ -235,7 +240,7 @@ export default function Settings() {
             <Card hover={false} contentClassName="p-6">
               <div className="flex items-center gap-2"><Check size={18} /><h2 className="font-semibold text-white">Scores que podrá ver</h2></div>
               <p className="mt-2 text-sm text-zinc-400">La división de la persona no limita esta selección. Puedes permitirle consultar uno o varios scores.</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">{latestScores.map((area) => { const checked = scoreAssignments.some((item) => item.user_id === selectedId && item.area_id === area.id); return <label key={area.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200"><span>{area.name} · {area.currentScore?.score ?? "Pendiente"}</span><input type="checkbox" checked={checked} onChange={() => toggleScoreVisibility(area.id)} /></label>; })}{!latestScores.length && <p className="text-sm text-zinc-500">Los scores aparecerán aquí automáticamente cuando cada división complete su evaluación.</p>}</div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">{latestScores.map((division) => { const checked = scoreAssignments.some((item) => item.user_id === selectedId && item.division_id === division.id); return <label key={division.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200"><span>{division.name} · {division.currentScore?.current_score ?? "Pendiente"}/{division.currentScore?.max_score ?? 1000}</span><input type="checkbox" checked={checked} onChange={() => toggleScoreVisibility(division.id)} /></label>; })}{!latestScores.length && <p className="text-sm text-zinc-500">Los scores aparecerán aquí automáticamente cuando cada división complete su evaluación.</p>}</div>
             </Card>
 
             <Card hover={false} contentClassName="p-6">

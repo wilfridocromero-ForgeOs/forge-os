@@ -15,7 +15,7 @@ import useOrganizationScore from "../hooks/useOrganizationScore";
 import { useAuth } from "../Context/AuthContext";
 
 export default function Score() {
-  const { canAccess, areaAccess, canManageUsers } = useAuth();
+  const { canAccess, canManageUsers } = useAuth();
   const [selectedAreaId, setSelectedAreaId] = useState("");
   const { data: currentScore, options: scoreOptions, loading } = useOrganizationScore(selectedAreaId);
   const categories = Array.isArray(currentScore?.categories) ? currentScore.categories : [];
@@ -62,7 +62,7 @@ export default function Score() {
           improvement={currentScore?.improvement ?? null}
           description={
             currentScore?.recommendation ||
-            (areaAccess.length ? "ORVESEN todavía no ha asignado un score a esta división." : "Aún no tienes una división asignada.")
+            (scoreOptions.length ? "ORVESEN todavía no ha calculado este score." : "Aún no tienes un score de división asignado.")
           }
           loading={loading}
         />
