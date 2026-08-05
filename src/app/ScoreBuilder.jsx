@@ -19,6 +19,12 @@ export default function ScoreBuilder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("success");
+
+  function notify(text, type = "success") {
+    setMessage(text);
+    setMessageType(type);
+  }
 
   const selected = useMemo(
     () => templates.find((template) => template.id === selectedId),
@@ -34,7 +40,7 @@ export default function ScoreBuilder() {
         .order("updated_at", { ascending: false }),
     ]);
     const error = templatesResult.error;
-    if (error) setMessage(error.message);
+    if (error) notify(error.message, "error");
     const nextTemplates = (templatesResult.data || []).map((template) => ({
       ...template,
       score_categories: (template.score_categories || [])
@@ -51,7 +57,9 @@ export default function ScoreBuilder() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (canManageUsers && profile?.organization_id) loadBuilder();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageUsers, profile?.organization_id]);
 
   function updateSelected(changes) {
@@ -76,7 +84,7 @@ export default function ScoreBuilder() {
 
   async function createTemplate(event) {
     event.preventDefault();
-    if (!draft.name.trim() || !draft.division_id) return setMessage("Escribe el nombre y selecciona una división.");
+    if (!draft.name.trim() || !draft.division_id) return notify("Escribe el nombre y selecciona una división.", "error");
     setSaving(true);
     const { data, error } = await supabase
       .from("score_templates")
@@ -90,10 +98,10 @@ export default function ScoreBuilder() {
       .select("id")
       .single();
     setSaving(false);
-    if (error) return setMessage(error.message);
+    if (error) return notify(error.message, "error");
     setDraft(blankTemplate);
     setCreating(false);
-    setMessage("Evaluación creada como borrador.");
+    notify("Score creado correctamente como borrador.");
     await loadBuilder(data.id);
   }
 
@@ -103,7 +111,7 @@ export default function ScoreBuilder() {
       .insert({ template_id: selected.id, name: "Nueva categoría", weight: 0, position: selected.score_categories.length })
       .select("id, name, description, weight, position")
       .single();
-    if (error) return setMessage(error.message);
+    if (error) return notify(error.message, "error");
     updateSelected({ score_categories: [...selected.score_categories, { ...data, score_questions: [] }] });
   }
 
@@ -113,20 +121,20 @@ export default function ScoreBuilder() {
       .insert({ category_id: category.id, prompt: "Nueva pregunta", weight: 0, position: category.score_questions.length })
       .select("id, prompt, help_text, response_type, weight, required, position")
       .single();
-    if (error) return setMessage(error.message);
+    if (error) return notify(error.message, "error");
     updateCategory(category.id, { score_questions: [...category.score_questions, data] });
   }
 
   async function removeCategory(categoryId) {
     if (!window.confirm("¿Eliminar esta categoría y todas sus preguntas?")) return;
     const { error } = await supabase.from("score_categories").delete().eq("id", categoryId);
-    if (error) return setMessage(error.message);
+    if (error) return notify(error.message, "error");
     updateSelected({ score_categories: selected.score_categories.filter((category) => category.id !== categoryId) });
   }
 
   async function removeQuestion(categoryId, questionId) {
     const { error } = await supabase.from("score_questions").delete().eq("id", questionId);
-    if (error) return setMessage(error.message);
+    if (error) return notify(error.message, "error");
     const category = selected.score_categories.find((item) => item.id === categoryId);
     updateCategory(categoryId, { score_questions: category.score_questions.filter((question) => question.id !== questionId) });
   }
@@ -148,7 +156,7 @@ export default function ScoreBuilder() {
   async function saveTemplate(publish = false) {
     if (publish) {
       const validation = validateTemplate();
-      if (validation) return setMessage(validation);
+      if (validation) return notify(validation, "error");
     }
     setSaving(true);
     setMessage("");
@@ -177,9 +185,19 @@ export default function ScoreBuilder() {
       }
     }
     setSaving(false);
-    if (error) return setMessage(error.message);
-    setMessage(publish ? "Evaluación publicada. Ya está lista para responderse en Discovery." : "Borrador guardado.");
+    if (error) return notify(error.message, "error");
+    notify(publish ? "Score publicado. Ya está listo para responderse en Discovery." : "Cambios guardados correctamente.");
     await loadBuilder(selected.id);
+  }
+
+  async function removeTemplate() {
+    if (!selected || !window.confirm(`¿Eliminar el Score “${selected.name}”? También se eliminarán sus categorías y preguntas.`)) return;
+    setSaving(true);
+    const { error } = await supabase.from("score_templates").delete().eq("id", selected.id);
+    setSaving(false);
+    if (error) return notify(error.message, "error");
+    notify("Score eliminado correctamente.");
+    await loadBuilder("");
   }
 
   if (!canManageUsers) {
@@ -193,7 +211,7 @@ export default function ScoreBuilder() {
         <button onClick={() => setCreating((value) => !value)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Plus size={18} /> Nueva evaluación</button>
       </div>
 
-      {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
+      {message && <div className={`rounded-xl border px-4 py-3 text-sm ${messageType === "error" ? "border-red-900/60 bg-red-950/20 text-red-300" : "border-emerald-900/60 bg-emerald-950/20 text-emerald-300"}`}>{message}</div>}
 
       {creating && <Card hover={false} contentClassName="p-6"><form onSubmit={createTemplate} className="grid gap-4 lg:grid-cols-[1fr_240px_auto]"><input className="field" placeholder="Nombre de la evaluación" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /><select className="field" value={draft.division_id} onChange={(event) => setDraft({ ...draft, division_id: event.target.value })}><option value="">Selecciona división</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select><button disabled={saving} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Crear borrador</button></form></Card>}
 
@@ -205,7 +223,7 @@ export default function ScoreBuilder() {
 
           {selected.score_categories.map((category) => <Card key={category.id} hover={false} contentClassName="p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end"><div className="flex-1"><Field label="Categoría"><input className="field" value={category.name} onChange={(event) => updateCategory(category.id, { name: event.target.value })} /></Field></div><div className="sm:w-36"><Field label="Peso total %"><input type="number" min="0" max="100" className="field" value={category.weight} onChange={(event) => updateCategory(category.id, { weight: event.target.value })} /></Field></div><button onClick={() => removeCategory(category.id)} className="rounded-xl border border-zinc-700 p-3 text-zinc-400 hover:text-white"><Trash2 size={18} /></button></div><div className="mt-5 space-y-3">{category.score_questions.map((question, index) => <div key={question.id} className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 lg:grid-cols-[1fr_150px_120px_auto]"><Field label={`Pregunta ${index + 1}`}><input className="field" value={question.prompt} onChange={(event) => updateQuestion(category.id, question.id, { prompt: event.target.value })} /></Field><Field label="Respuesta"><select className="field" value={question.response_type} onChange={(event) => updateQuestion(category.id, question.id, { response_type: event.target.value })}><option value="scale">Escala 1 a 5</option><option value="yes_no">Sí o no</option></select></Field><Field label="Peso %"><input type="number" min="0" max="100" className="field" value={question.weight} onChange={(event) => updateQuestion(category.id, question.id, { weight: event.target.value })} /></Field><button onClick={() => removeQuestion(category.id, question.id)} className="self-end rounded-xl border border-zinc-700 p-3 text-zinc-400"><Trash2 size={18} /></button></div>)}<button onClick={() => addQuestion(category)} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-300"><Plus size={16} /> Añadir pregunta</button></div></Card>)}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between"><button onClick={addCategory} className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 py-3 text-zinc-200"><Plus size={17} /> Añadir categoría</button><div className="flex flex-col gap-3 sm:flex-row"><button disabled={saving} onClick={() => saveTemplate(false)} className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 py-3 text-zinc-200"><Save size={17} /> Guardar borrador</button><button disabled={saving || selected.status === "published"} onClick={() => saveTemplate(true)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"><Check size={17} /> {selected.status === "published" ? "Publicada" : "Publicar evaluación"}</button></div></div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><button onClick={addCategory} className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 py-3 text-zinc-200"><Plus size={17} /> Añadir categoría</button><button disabled={saving} onClick={removeTemplate} className="flex items-center justify-center gap-2 rounded-xl border border-red-900/70 px-5 py-3 text-red-300"><Trash2 size={17} /> Eliminar Score</button></div><div className="flex flex-col gap-3 sm:flex-row"><button disabled={saving} onClick={() => saveTemplate(false)} className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 py-3 text-zinc-200"><Save size={17} /> Guardar cambios</button><button disabled={saving || selected.status === "published"} onClick={() => saveTemplate(true)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"><Check size={17} /> {selected.status === "published" ? "Publicada" : "Publicar evaluación"}</button></div></div>
         </div>}
       </div>
     </Page>

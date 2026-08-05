@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Download, FileText, Folder, FolderUp, Pause, Search, Trash2, Upload, X } from "lucide-react";
+import { BookOpen, Download, FileText, FolderUp, Pause, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import Card from "../components/ui/Card";
@@ -9,7 +9,7 @@ import { supabase } from "../lib/supabase";
 
 const typeLabels = { sop: "SOP", playbook: "Playbook", policy: "Política", template: "Plantilla", reference: "Referencia" };
 const statusLabels = { draft: "Borrador", review: "En revisión", approved: "Aprobado", archived: "Archivado" };
-const emptyMetadata = { document_type: "reference", status: "draft", division_id: "", category: "", version: 1, tags: "" };
+const emptyMetadata = { document_type: "reference", status: "draft", division_id: "", folder_id: "", category: "", version: 1, tags: "" };
 
 export default function Brain() {
   const { profile, user, canManageUsers } = useAuth();
@@ -26,6 +26,8 @@ export default function Brain() {
   const [queue, setQueue] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const aborters = useRef(new Map());
 
   async function loadLibrary() {
@@ -40,6 +42,7 @@ export default function Brain() {
     setFolders(foldersResult.data || []);
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLibrary(); }, [profile?.organization_id]);
 
   const filtered = useMemo(() => documents.filter((document) => {
@@ -58,9 +61,9 @@ export default function Brain() {
     });
   }
 
-  async function ensureFolder(relativePath, cache) {
+  async function ensureFolder(relativePath, cache, baseParentId = null) {
     const parts = relativePath.split("/").slice(0, -1).filter(Boolean);
-    let parentId = null;
+    let parentId = baseParentId;
     for (const name of parts) {
       const key = `${parentId || "root"}/${name}`;
       if (cache.has(key)) { parentId = cache.get(key); continue; }
@@ -83,7 +86,7 @@ export default function Brain() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("La sesión expiró. Inicia sesión nuevamente.");
     const relativePath = item.file.webkitRelativePath || item.file.name;
-    const linkedFolderId = await ensureFolder(relativePath, folderCache);
+    const linkedFolderId = await ensureFolder(relativePath, folderCache, metadata.folder_id || null);
     const safeName = item.file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "-");
     const objectPath = `${profile.organization_id}/${crypto.randomUUID()}-${safeName}`;
     const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
@@ -147,19 +150,38 @@ export default function Brain() {
 
   function cancelUploads() { aborters.current.forEach((request) => request.abort()); aborters.current.clear(); }
   async function openDocument(document) { const { data, error } = await supabase.storage.from("knowledge-base").createSignedUrl(document.file_path, 60); if (error) return setMessage(error.message); window.open(data.signedUrl, "_blank", "noopener,noreferrer"); }
-  async function deleteDocument(document) { if (!window.confirm(`¿Eliminar ${document.title}?`)) return; const storage = await supabase.storage.from("knowledge-base").remove([document.file_path]); if (storage.error) return setMessage(storage.error.message); const result = await supabase.from("knowledge_documents").delete().eq("id", document.id); if (result.error) return setMessage(result.error.message); await loadLibrary(); }
+  function beginEdit(document) {
+    setEditingDocument(document);
+    setEditForm({ title: document.title, description: document.description || "", division_id: document.division_id || "", folder_id: document.folder_id || "", document_type: document.document_type, status: document.status, category: document.category || "", version: document.version || 1, tags: (document.tags || []).join(", ") });
+  }
+
+  async function saveDocument() {
+    if (!editForm.title.trim()) return setMessage("El documento necesita un título.");
+    const { error } = await supabase.from("knowledge_documents").update({
+      title: editForm.title.trim(), description: editForm.description.trim() || null,
+      division_id: editForm.division_id || null, folder_id: editForm.folder_id || null,
+      document_type: editForm.document_type, status: editForm.status,
+      category: editForm.category.trim() || null, version: Number(editForm.version) || 1,
+      tags: editForm.tags.split(",").map((tag) => tag.trim()).filter(Boolean), updated_at: new Date().toISOString(),
+    }).eq("id", editingDocument.id);
+    if (error) return setMessage(error.message);
+    setEditingDocument(null); setEditForm(null); setMessage("Documento actualizado correctamente."); await loadLibrary();
+  }
+
+  async function deleteDocument(document) { if (!window.confirm(`¿Eliminar ${document.title}?`)) return; const result = await supabase.from("knowledge_documents").delete().eq("id", document.id); if (result.error) return setMessage(result.error.message); const storage = await supabase.storage.from("knowledge-base").remove([document.file_path]); setMessage(storage.error ? `El registro se eliminó, pero el archivo requiere limpieza: ${storage.error.message}` : "Documento eliminado correctamente."); await loadLibrary(); }
 
   return <Page className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Conocimiento empresarial</p><h1 className="mt-2 text-3xl font-semibold text-white">Cerebro ORVESEN</h1><p className="mt-2 text-zinc-400">Documentos versionados, organizados y listos para el equipo.</p></div>{canManageUsers && <button onClick={() => setUploadOpen(true)} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Upload size={18}/> Carga masiva</button>}</div>
     {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
     <Card hover={false} contentClassName="p-3"><div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_200px]"><label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4"><Search size={18} className="text-zinc-500"/><input value={search} onChange={(e)=>setSearch(e.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none" placeholder="Buscar por nombre, etiqueta o categoría"/></label><select className="field" value={type} onChange={(e)=>setType(e.target.value)}><option value="all">Todos los tipos</option>{Object.entries(typeLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select><select className="field" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select><select className="field" value={folderId} onChange={(e)=>setFolderId(e.target.value)}><option value="all">Todas las carpetas</option>{folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></div></Card>
-    {!filtered.length ? <Card hover={false} contentClassName="py-16 text-center"><BookOpen className="mx-auto text-zinc-600" size={42}/><h2 className="mt-4 font-semibold text-white">El Cerebro está listo</h2><p className="mt-2 text-sm text-zinc-400">Sube documentos o una carpeta completa para comenzar.</p></Card> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map((document)=><Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[document.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · v{document.version}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<button onClick={()=>deleteDocument(document)} className="calendar-icon-button"><Trash2 size={16}/></button>}</div></Card>)}</div>}
+    {!filtered.length ? <Card hover={false} contentClassName="py-16 text-center"><BookOpen className="mx-auto text-zinc-600" size={42}/><h2 className="mt-4 font-semibold text-white">El Cerebro está listo</h2><p className="mt-2 text-sm text-zinc-400">Sube documentos o una carpeta completa para comenzar.</p></Card> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map((document)=><Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[document.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · v{document.version}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<div className="flex gap-2"><button onClick={()=>beginEdit(document)} className="calendar-icon-button" aria-label="Editar documento"><Pencil size={16}/></button><button onClick={()=>deleteDocument(document)} className="calendar-icon-button" aria-label="Eliminar documento"><Trash2 size={16}/></button></div>}</div></Card>)}</div>}
     {uploadOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3"><Card hover={false} className="w-full max-w-3xl" contentClassName="max-h-[92vh] overflow-y-auto p-5"><div className="flex justify-between"><div><h2 className="text-xl font-semibold text-white">Carga masiva</h2><p className="mt-1 text-sm text-zinc-400">Hasta cientos de archivos, con cuatro cargas paralelas y tres reintentos.</p></div><button onClick={()=>setUploadOpen(false)} className="calendar-icon-button"><X size={18}/></button></div>
       <div onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();addFiles(e.dataTransfer.files);}} className="mt-5 rounded-2xl border border-dashed border-zinc-700 p-7 text-center"><FolderUp className="mx-auto text-zinc-500"/><p className="mt-3 text-sm text-zinc-300">Arrastra archivos aquí</p><div className="mt-4 flex flex-wrap justify-center gap-2"><label className="cursor-pointer rounded-xl bg-white px-4 py-2 text-sm font-medium text-black">Seleccionar archivos<input hidden multiple type="file" onChange={(e)=>addFiles(e.target.files)}/></label><label className="cursor-pointer rounded-xl border border-zinc-700 px-4 py-2 text-sm text-white">Seleccionar carpeta<input hidden multiple type="file" webkitdirectory="" directory="" onChange={(e)=>addFiles(e.target.files)}/></label></div><p className="mt-3 text-xs text-zinc-500">{files.length} archivo(s) seleccionados</p></div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label="División"><select className="field" value={metadata.division_id} onChange={(e)=>setMetadata({...metadata,division_id:e.target.value})}><option value="">General</option>{divisions.map((division)=><option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><Field label="Tipo"><select className="field" value={metadata.document_type} onChange={(e)=>setMetadata({...metadata,document_type:e.target.value})}>{Object.entries(typeLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Estado"><select className="field" value={metadata.status} onChange={(e)=>setMetadata({...metadata,status:e.target.value})}>{Object.entries(statusLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Categoría"><input className="field" value={metadata.category} onChange={(e)=>setMetadata({...metadata,category:e.target.value})}/></Field><Field label="Versión"><input className="field" min="1" type="number" value={metadata.version} onChange={(e)=>setMetadata({...metadata,version:e.target.value})}/></Field><Field label="Etiquetas (separadas por coma)"><input className="field" value={metadata.tags} onChange={(e)=>setMetadata({...metadata,tags:e.target.value})}/></Field></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label="Biblioteca o carpeta"><select className="field" value={metadata.folder_id} onChange={(e)=>setMetadata({...metadata,folder_id:e.target.value})}><option value="">Raíz del Cerebro</option>{folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></Field><Field label="División"><select className="field" value={metadata.division_id} onChange={(e)=>setMetadata({...metadata,division_id:e.target.value})}><option value="">General</option>{divisions.map((division)=><option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><Field label="Tipo"><select className="field" value={metadata.document_type} onChange={(e)=>setMetadata({...metadata,document_type:e.target.value})}>{Object.entries(typeLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Estado"><select className="field" value={metadata.status} onChange={(e)=>setMetadata({...metadata,status:e.target.value})}>{Object.entries(statusLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Categoría"><input className="field" value={metadata.category} onChange={(e)=>setMetadata({...metadata,category:e.target.value})}/></Field><Field label="Versión"><input className="field" min="1" type="number" value={metadata.version} onChange={(e)=>setMetadata({...metadata,version:e.target.value})}/></Field><Field label="Etiquetas (separadas por coma)"><input className="field" value={metadata.tags} onChange={(e)=>setMetadata({...metadata,tags:e.target.value})}/></Field></div>
       {!!queue.length && <div className="mt-5 max-h-52 space-y-2 overflow-y-auto">{queue.map((item)=><div key={item.id} className="rounded-xl bg-zinc-900 p-3"><div className="flex justify-between gap-3 text-xs"><span className="truncate text-zinc-300">{item.file.name}</span><span className="text-zinc-500">{item.state} · {item.progress}%</span></div><div className="mt-2 h-1.5 rounded bg-zinc-800"><div className="h-full rounded bg-white" style={{width:`${item.progress}%`}}/></div>{item.error&&<p className="mt-1 text-xs text-red-400">{item.error}</p>}</div>)}</div>}
       <div className="mt-6 flex justify-end gap-3">{uploading&&<button onClick={cancelUploads} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm"><Pause size={16}/> Cancelar</button>}<button disabled={uploading||!files.length} onClick={startUpload} className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50">{uploading?"Procesando lote…":"Subir lote"}</button></div>
     </Card></div>}
+    {editingDocument && editForm && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3"><Card hover={false} className="w-full max-w-2xl" contentClassName="max-h-[92vh] overflow-y-auto p-5"><div className="flex items-start justify-between"><div><h2 className="text-xl font-semibold text-white">Editar documento</h2><p className="mt-1 text-sm text-zinc-400">Actualiza su información sin reemplazar el archivo.</p></div><button onClick={()=>{setEditingDocument(null);setEditForm(null);}} className="calendar-icon-button"><X size={18}/></button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Título"><input className="field" value={editForm.title} onChange={(e)=>setEditForm({...editForm,title:e.target.value})}/></Field><Field label="Carpeta"><select className="field" value={editForm.folder_id} onChange={(e)=>setEditForm({...editForm,folder_id:e.target.value})}><option value="">Raíz del Cerebro</option>{folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></Field><div className="sm:col-span-2"><Field label="Descripción"><textarea rows="3" className="field resize-none" value={editForm.description} onChange={(e)=>setEditForm({...editForm,description:e.target.value})}/></Field></div><Field label="División"><select className="field" value={editForm.division_id} onChange={(e)=>setEditForm({...editForm,division_id:e.target.value})}><option value="">General</option>{divisions.map((division)=><option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><Field label="Tipo"><select className="field" value={editForm.document_type} onChange={(e)=>setEditForm({...editForm,document_type:e.target.value})}>{Object.entries(typeLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Estado"><select className="field" value={editForm.status} onChange={(e)=>setEditForm({...editForm,status:e.target.value})}>{Object.entries(statusLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></Field><Field label="Categoría"><input className="field" value={editForm.category} onChange={(e)=>setEditForm({...editForm,category:e.target.value})}/></Field><Field label="Versión"><input className="field" type="number" min="1" value={editForm.version} onChange={(e)=>setEditForm({...editForm,version:e.target.value})}/></Field><Field label="Etiquetas"><input className="field" value={editForm.tags} onChange={(e)=>setEditForm({...editForm,tags:e.target.value})}/></Field></div><div className="mt-6 flex justify-end gap-3"><button onClick={()=>{setEditingDocument(null);setEditForm(null);}} className="rounded-xl border border-zinc-700 px-5 py-3 text-sm text-zinc-200">Cancelar</button><button onClick={saveDocument} className="rounded-xl bg-white px-5 py-3 font-medium text-black">Guardar cambios</button></div></Card></div>}
   </Page>;
 }
 
