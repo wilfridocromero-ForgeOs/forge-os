@@ -20,14 +20,17 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`
+          flex
           w-full
           ${sizes[size]}
+          max-h-[90vh]
+          flex-col
           rounded-3xl
           border
           border-zinc-800
@@ -36,11 +39,10 @@ export default function Modal({
           overflow-hidden
         `}
       >
-        <header className="flex items-start justify-between border-b border-zinc-800 px-8 py-6">
-
+        {/* Encabezado */}
+        <header className="flex items-start justify-between border-b border-zinc-800 px-8 py-6 shrink-0">
           <div>
-
-            <h2 className="text-2xl font-semibold">
+            <h2 className="text-2xl font-semibold text-white">
               {title}
             </h2>
 
@@ -49,41 +51,28 @@ export default function Modal({
                 {subtitle}
               </p>
             )}
-
           </div>
 
           <button
             onClick={onClose}
-            className="
-              rounded-xl
-              p-2
-              hover:bg-zinc-800
-              transition
-            "
+            className="rounded-xl p-2 transition hover:bg-zinc-800"
           >
             <X size={18} />
           </button>
-
         </header>
 
-        <div className="p-8">
-
+        {/* Contenido con scroll */}
+        <div className="flex-1 overflow-y-auto p-8">
           {children}
-
         </div>
 
+        {/* Footer opcional */}
         {footer && (
-
-          <footer className="flex justify-end gap-3 border-t border-zinc-800 p-6">
-
+          <footer className="shrink-0 flex justify-end gap-3 border-t border-zinc-800 p-6">
             {footer}
-
           </footer>
-
         )}
-
       </div>
-
     </div>
   );
 }
