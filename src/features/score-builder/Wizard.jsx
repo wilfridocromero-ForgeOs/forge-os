@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import StartChoice from "./components/StartChoice";
-import StepIndicator from "./components/StepIndicator";
-
+import StepIndicator from "./components/StepIndicator.jsx";
 import StepInformation from "./steps/StepInformation";
 import StepCategories from "./steps/StepCategories";
 import StepImportQuestion from "./steps/StepImportQuestion";
