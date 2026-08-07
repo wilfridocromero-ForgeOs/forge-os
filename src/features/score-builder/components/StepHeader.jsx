@@ -1,31 +1,30 @@
 export default function StepHeader({
 
-    step,
-    totalSteps,
     title,
-    description,
 
-}) {
+    subtitle,
 
-    return (
+}){
 
-        <div className="mb-12">
+    return(
 
-            <span className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+        <div className="mb-8">
 
-                Paso {step} de {totalSteps}
+            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
 
-            </span>
+                ORVESEN Score Builder
 
-            <h1 className="mt-3 text-4xl font-bold text-white">
+            </p>
+
+            <h1 className="mt-2 text-4xl font-bold text-white">
 
                 {title}
 
             </h1>
 
-            <p className="mt-3 max-w-3xl text-zinc-500 leading-7">
+            <p className="mt-3 max-w-3xl text-zinc-400">
 
-                {description}
+                {subtitle}
 
             </p>
 

@@ -1,174 +1,213 @@
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
-import CategoryCard from "../components/CategoryCard";
+import Card from "../components/Card";
+import Button from "../components/Button";
+import Input from "../components/Input";
+import SectionTitle from "../components/SectionTitle";
 
 export default function StepCategories({
 
     form,
 
-    setForm,
+    addCategory,
 
-    onNext,
+    updateCategory,
+
+    removeCategory,
 
     onBack,
 
-}){
+    onNext,
 
-    function addCategory(){
+}) {
 
-        setForm({
+    function createCategory() {
 
-            ...form,
+        addCategory({
 
-            categories:[
+            id: crypto.randomUUID(),
 
-                ...form.categories,
+            name: "Nueva categoría",
 
-                {
+            description: "",
 
-                    id:Date.now(),
+            weight: 20,
 
-                    name:"",
-
-                    description:"",
-
-                    weight:0,
-
-                    questions:[],
-
-                }
-
-            ]
+            questions: [],
 
         });
 
     }
 
-    function updateCategory(index,data){
+    return (
 
-        const categories=[...form.categories];
+        <div className="space-y-8">
 
-        categories[index]=data;
+            <SectionTitle
 
-        setForm({
+                title="Categorías"
 
-            ...form,
+                subtitle="Organiza la evaluación por áreas."
 
-            categories,
+            />
 
-        });
+            <div className="flex justify-end">
 
-    }
+                <Button
 
-    function removeCategory(index){
+                    onClick={createCategory}
 
-        const categories=[...form.categories];
+                >
 
-        categories.splice(index,1);
+                    <Plus size={18} />
 
-        setForm({
+                    Nueva categoría
 
-            ...form,
-
-            categories,
-
-        });
-
-    }
-
-    return(
-
-        <div className="mx-auto max-w-5xl">
-
-            <div className="mb-10">
-
-                <h1 className="text-4xl font-bold">
-
-                    Categorías
-
-                </h1>
-
-                <p className="mt-3 text-zinc-500">
-
-                    Divide la evaluación en áreas.
-
-                    Cada categoría tendrá sus propias preguntas.
-
-                </p>
+                </Button>
 
             </div>
 
             <div className="space-y-6">
 
-                {
+                {(form.categories || []).map((category) => (
 
-                    form.categories.map((category,index)=>(
+                    <Card key={category.id}>
 
-                        <CategoryCard
+                        <div className="space-y-5">
 
-                            key={category.id}
+                            <div className="flex items-center justify-between">
 
-                            category={category}
+                                <h2 className="text-xl font-semibold">
 
-                            onChange={(value)=>updateCategory(index,value)}
+                                    Categoría
 
-                            onDelete={()=>removeCategory(index)}
+                                </h2>
 
-                        />
+                                <button
 
-                    ))
+                                    onClick={() =>
+                                        removeCategory(category.id)
+                                    }
 
-                }
+                                    className="rounded-xl border border-red-700 p-2 text-red-500"
+
+                                >
+
+                                    <Trash2 size={18} />
+
+                                </button>
+
+                            </div>
+
+                            <div>
+
+                                <label className="mb-2 block text-sm text-zinc-400">
+
+                                    Nombre
+
+                                </label>
+
+                                <Input
+
+                                    value={category.name}
+
+                                    onChange={(e) =>
+                                        updateCategory(
+                                            category.id,
+                                            "name",
+                                            e.target.value
+                                        )
+                                    }
+
+                                />
+
+                            </div>
+
+                            <div>
+
+                                <label className="mb-2 block text-sm text-zinc-400">
+
+                                    Descripción
+
+                                </label>
+
+                                <textarea
+
+                                    rows={4}
+
+                                    value={category.description}
+
+                                    onChange={(e) =>
+                                        updateCategory(
+                                            category.id,
+                                            "description",
+                                            e.target.value
+                                        )
+                                    }
+
+                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+
+                                />
+
+                            </div>
+
+                            <div>
+
+                                <label className="mb-2 block text-sm text-zinc-400">
+
+                                    Peso
+
+                                </label>
+
+                                <Input
+
+                                    type="number"
+
+                                    value={category.weight}
+
+                                    onChange={(e) =>
+                                        updateCategory(
+                                            category.id,
+                                            "weight",
+                                            Number(e.target.value)
+                                        )
+                                    }
+
+                                />
+
+                            </div>
+
+                        </div>
+
+                    </Card>
+
+                ))}
 
             </div>
 
-            <button
+            <div className="flex justify-between">
 
-                onClick={addCategory}
+                <Button
 
-                className="mt-8 flex items-center rounded-2xl border border-zinc-700 px-6 py-4"
-
-            >
-
-                <Plus
-
-                    size={18}
-
-                    className="mr-2"
-
-                />
-
-                Añadir categoría
-
-            </button>
-
-            <div className="mt-12 flex justify-between">
-
-                <button
+                    variant="secondary"
 
                     onClick={onBack}
-
-                    className="rounded-xl border border-zinc-700 px-7 py-3"
 
                 >
 
                     Atrás
 
-                </button>
+                </Button>
 
-                <button
-
-                    disabled={!form.categories.length}
+                <Button
 
                     onClick={onNext}
-
-                    className="rounded-xl bg-white px-8 py-3 font-semibold text-black disabled:opacity-40"
 
                 >
 
                     Continuar
 
-                </button>
+                </Button>
 
             </div>
 

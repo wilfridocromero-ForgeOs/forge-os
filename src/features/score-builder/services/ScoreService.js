@@ -1,120 +1,108 @@
 import { supabase } from "../../../lib/supabase";
 
-/*
-|--------------------------------------------------------------------------
-| SCORE TEMPLATES
-|--------------------------------------------------------------------------
-*/
+export async function createScore(data) {
 
-export async function loadTemplates() {
-  return supabase
-    .from("score_templates")
-    .select(`
-      *,
-      divisions(name),
-      score_categories(
-        *,
-        score_questions(*)
-      )
-    `)
-    .order("updated_at", { ascending: false });
+    const result = await supabase
+        .from("score_templates")
+        .insert(data)
+        .select()
+        .single();
+
+    return result;
+
 }
 
-export async function loadOfficialLibrary() {
-  return supabase
-    .from("score_library_categories")
-    .select(`
-      *,
-      score_library_questions(*)
-    `)
-    .eq("is_official", true)
-    .order("position");
+export async function updateScore(id, data) {
+
+    const result = await supabase
+        .from("score_templates")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+    return result;
+
 }
 
-export async function createTemplate(data) {
-  return supabase
-    .from("score_templates")
-    .insert(data)
-    .select()
-    .single();
+export async function deleteScore(id) {
+
+    return await supabase
+        .from("score_templates")
+        .delete()
+        .eq("id", id);
+
 }
 
-export async function updateTemplate(id, data) {
-  return supabase
-    .from("score_templates")
-    .update(data)
-    .eq("id", id);
+export async function loadScore(id) {
+
+    return await supabase
+        .from("score_templates")
+        .select(`
+            *,
+            score_categories(
+                *,
+                score_questions(*)
+            )
+        `)
+        .eq("id", id)
+        .single();
+
 }
 
-export async function deleteTemplate(id) {
-  return supabase
-    .from("score_templates")
-    .delete()
-    .eq("id", id);
+export async function listScores() {
+
+    return await supabase
+        .from("score_templates")
+        .select("*")
+        .order("updated_at", {
+            ascending: false,
+        });
+
 }
 
-export async function publishTemplate(id) {
-  return supabase
-    .from("score_templates")
-    .update({
-      status: "published",
-      published_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+export async function duplicateScore(id, name) {
+
+    const { data, error } = await loadScore(id);
+
+    if (error) return { error };
+
+    const copy = {
+
+        ...data,
+
+        id: undefined,
+
+        name,
+
+        created_at: undefined,
+
+        updated_at: undefined,
+
+    };
+
+    return createScore(copy);
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| CATEGORIES
-|--------------------------------------------------------------------------
-*/
+export async function publishScore(id) {
 
-export async function createCategory(data) {
-  return supabase
-    .from("score_categories")
-    .insert(data)
-    .select()
-    .single();
+    return await updateScore(id, {
+
+        status: "published",
+
+        published_at: new Date().toISOString(),
+
+    });
+
 }
 
-export async function updateCategory(id, data) {
-  return supabase
-    .from("score_categories")
-    .update(data)
-    .eq("id", id);
-}
+export async function archiveScore(id) {
 
-export async function deleteCategory(id) {
-  return supabase
-    .from("score_categories")
-    .delete()
-    .eq("id", id);
-}
+    return await updateScore(id, {
 
-/*
-|--------------------------------------------------------------------------
-| QUESTIONS
-|--------------------------------------------------------------------------
-*/
+        status: "archived",
 
-export async function createQuestion(data) {
-  return supabase
-    .from("score_questions")
-    .insert(data)
-    .select()
-    .single();
-}
+    });
 
-export async function updateQuestion(id, data) {
-  return supabase
-    .from("score_questions")
-    .update(data)
-    .eq("id", id);
-}
-
-export async function deleteQuestion(id) {
-  return supabase
-    .from("score_questions")
-    .delete()
-    .eq("id", id);
 }

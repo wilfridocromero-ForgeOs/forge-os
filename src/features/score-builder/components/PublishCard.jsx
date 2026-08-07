@@ -1,130 +1,99 @@
-import {
-
-    CheckCircle2,
-
-    ClipboardList,
-
-    Layers3,
-
-    Scale,
-
-} from "lucide-react";
+import { CheckCircle, Save, Upload } from "lucide-react";
 
 export default function PublishCard({
 
     form,
 
+    onSave,
+
     onPublish,
 
-    publishing,
+}){
 
-}) {
+    const totalCategories=form.categories.length;
 
-    const totalQuestions = form.categories.reduce(
+    const totalQuestions=form.categories.reduce(
 
-        (sum, category) =>
-
-            sum + category.questions.length,
+        (sum,c)=>sum+c.questions.length,
 
         0
 
     );
 
-    return (
+    return(
 
-        <div className="rounded-3xl border border-zinc-800 bg-[#111113] p-8">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-8">
 
-            <div className="mb-10">
+            <div className="flex items-center gap-3">
 
-                <div className="flex items-center gap-3">
+                <CheckCircle
+                    className="text-emerald-500"
+                    size={28}
+                />
 
-                    <CheckCircle2 size={28}/>
+                <h2 className="text-2xl font-bold">
 
-                    <h2 className="text-3xl font-bold">
+                    Listo para publicar
 
-                        Listo para publicar
-
-                    </h2>
-
-                </div>
-
-                <p className="mt-4 text-zinc-500">
-
-                    Revisa el resumen antes de publicar el Score.
-
-                </p>
+                </h2>
 
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="mt-8 grid gap-4 md:grid-cols-4">
 
                 <Info
-
-                    icon={<ClipboardList size={20}/>}
-
-                    title="Evaluación"
-
-                    value={form.name}
-
-                />
-
-                <Info
-
-                    icon={<Layers3 size={20}/>}
-
                     title="Categorías"
-
-                    value={form.categories.length}
-
+                    value={totalCategories}
                 />
 
                 <Info
-
-                    icon={<ClipboardList size={20}/>}
-
                     title="Preguntas"
-
                     value={totalQuestions}
-
                 />
 
                 <Info
-
-                    icon={<Scale size={20}/>}
-
                     title="Escala"
-
                     value={form.scale}
+                />
 
+                <Info
+                    title="División"
+                    value={form.division}
                 />
 
             </div>
 
-            <button
+            <div className="mt-10 flex gap-4">
 
-                onClick={onPublish}
+                <button
 
-                disabled={publishing}
+                    onClick={onSave}
 
-                className="mt-10 w-full rounded-2xl bg-white py-4 text-lg font-semibold text-black transition hover:opacity-90"
+                    className="flex items-center gap-2 rounded-xl border border-zinc-700 px-6 py-3"
 
-            >
+                >
 
-                {
+                    <Save size={18}/>
 
-                    publishing
+                    Guardar borrador
 
-                    ?
+                </button>
 
-                    "Publicando..."
+                <button
 
-                    :
+                    onClick={onPublish}
 
-                    "Publicar Evaluación"
+                    className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-black"
 
-                }
+                >
 
-            </button>
+                    <Upload size={18}/>
+
+                    Publicar evaluación
+
+                </button>
+
+            </div>
 
         </div>
 
@@ -134,8 +103,6 @@ export default function PublishCard({
 
 function Info({
 
-    icon,
-
     title,
 
     value,
@@ -144,21 +111,19 @@ function Info({
 
     return(
 
-        <div className="rounded-2xl border border-zinc-800 bg-[#09090B] p-5">
+        <div className="rounded-xl bg-zinc-900 p-5">
 
-            <div className="mb-3 flex items-center gap-2 text-zinc-400">
-
-                {icon}
+            <p className="text-sm text-zinc-500">
 
                 {title}
 
-            </div>
+            </p>
 
-            <div className="text-2xl font-bold text-white">
+            <h3 className="mt-2 text-2xl font-bold">
 
                 {value}
 
-            </div>
+            </h3>
 
         </div>
 

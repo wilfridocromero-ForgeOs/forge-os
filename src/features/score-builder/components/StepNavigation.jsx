@@ -1,48 +1,34 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 export default function StepNavigation({
+    canBack = true,
+    canNext = true,
+    backLabel = "Anterior",
+    nextLabel = "Continuar",
     onBack,
     onNext,
-    backLabel = "Atrás",
-    nextLabel = "Continuar",
-    disableNext = false,
-    disableBack = false,
 }) {
 
     return (
 
-        <div className="mt-12 flex items-center justify-between">
+        <div className="mt-10 flex items-center justify-between border-t border-zinc-800 pt-6">
 
             <button
-                type="button"
-                disabled={disableBack}
                 onClick={onBack}
-                className="flex items-center rounded-2xl border border-zinc-800 px-6 py-3 transition hover:bg-zinc-900 disabled:opacity-40"
+                disabled={!canBack}
+                className="flex items-center gap-2 rounded-xl border border-zinc-700 px-5 py-3 text-zinc-300 disabled:opacity-40"
             >
-
-                <ArrowLeft
-                    size={18}
-                    className="mr-2"
-                />
-
+                <ArrowLeft size={18}/>
                 {backLabel}
-
             </button>
 
             <button
-                type="button"
-                disabled={disableNext}
                 onClick={onNext}
-                className="flex items-center rounded-2xl bg-white px-7 py-3 font-semibold text-black transition hover:opacity-90 disabled:opacity-40"
+                disabled={!canNext}
+                className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-black disabled:opacity-40"
             >
-
                 {nextLabel}
-
-                <ArrowRight
-                    size={18}
-                    className="ml-2"
-                />
-
+                <ArrowRight size={18}/>
             </button>
 
         </div>

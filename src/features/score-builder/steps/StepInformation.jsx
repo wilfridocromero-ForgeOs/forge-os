@@ -1,153 +1,212 @@
-import { ChevronRight } from "lucide-react";
-import Button from "../../../components/ui/Button";
+import Card from "../components/Card";
+import Button from "../components/Button";
+import Input from "../components/Input";
+import Textarea from "../components/Textarea";
+import SectionTitle from "../components/SectionTitle";
+
+const divisions = [
+    "ORVESEN Digital",
+    "ORVESEN Studio",
+    "ORVESEN Media",
+    "ORVESEN Academy",
+    "ORVESEN OS",
+    "General",
+];
 
 export default function StepInformation({
-  form,
-  setForm,
-  onNext,
+
+    form,
+
+    setForm,
+
+    onNext,
+
 }) {
-  function update(field, value) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
 
-  return (
-    <div className="mx-auto w-full max-w-3xl">
+    function update(field, value) {
 
-      {/* Encabezado */}
+        setForm({
 
-      <div className="mb-10">
+            ...form,
 
-        <span className="text-sm uppercase tracking-[0.25em] text-zinc-500">
-          Paso 1 de 6
-        </span>
+            [field]: value,
 
-        <h1 className="mt-3 text-4xl font-bold text-white">
-          Información de la evaluación
-        </h1>
+        });
 
-        <p className="mt-3 text-zinc-500">
-          Define la información principal de esta evaluación.
-          Más adelante podrás añadir categorías, preguntas y configurar
-          el cálculo del score.
-        </p>
+    }
 
-      </div>
+    function continueStep() {
 
-      <div className="rounded-3xl border border-zinc-800 bg-[#111113] p-8">
+        if (!form.name?.trim()) {
 
-        <div className="mb-6">
+            alert("Escribe el nombre del Score.");
 
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
-            Nombre
-          </label>
+            return;
 
-          <input
-            type="text"
-            value={form.name || ""}
-            onChange={(e) => update("name", e.target.value)}
-            placeholder="Ej. ORVESEN Digital 360"
-            className="w-full rounded-2xl border border-zinc-800 bg-[#09090B] px-5 py-4 text-white outline-none transition focus:border-zinc-600"
-          />
+        }
 
-        </div>
+        if (!form.division) {
 
-        <div className="mb-6">
+            alert("Selecciona una división.");
 
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
-            Descripción
-          </label>
+            return;
 
-          <textarea
-            rows={5}
-            value={form.description || ""}
-            onChange={(e) => update("description", e.target.value)}
-            placeholder="Describe el propósito de esta evaluación..."
-            className="w-full rounded-2xl border border-zinc-800 bg-[#09090B] px-5 py-4 text-white outline-none transition focus:border-zinc-600"
-          />
+        }
 
-        </div>
+        onNext();
 
-        <div className="mb-8">
+    }
 
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
-            División
-          </label>
+    return (
 
-          <select
-            value={form.division || "ORVESEN Digital"}
-            onChange={(e) => update("division", e.target.value)}
-            className="w-full rounded-2xl border border-zinc-800 bg-[#09090B] px-5 py-4 text-white outline-none transition focus:border-zinc-600"
-          >
-            <option>ORVESEN Digital</option>
-            <option>ORVESEN Studio</option>
-            <option>ORVESEN Media</option>
-            <option>ORVESEN Academy</option>
-            <option>ORVESEN OS</option>
-          </select>
+        <div className="space-y-8">
 
-        </div>
+            <SectionTitle
 
-        <div className="mb-8">
+                title="Información general"
 
-          <label className="mb-3 block text-sm font-medium text-zinc-300">
-            Escala del Score
-          </label>
+                subtitle="Define la información principal de la evaluación."
 
-          <div className="flex gap-4">
-
-            {[100, 500, 1000].map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => update("scale", value)}
-                                className={`flex-1 rounded-2xl border px-5 py-4 transition ${
-                  form.scale === value
-                    ? "border-white bg-white text-black"
-                    : "border-zinc-800 bg-[#09090B] text-zinc-400 hover:border-zinc-600"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
-
-          </div>
-
-        </div>
-
-        <div className="mb-10">
-
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
-            Estado
-          </label>
-
-          <div className="inline-flex rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-300">
-            Borrador
-          </div>
-
-        </div>
-
-        <div className="flex justify-end">
-
-          <Button
-            type="button"
-            onClick={onNext}
-          >
-            Continuar
-
-            <ChevronRight
-              size={18}
-              className="ml-2"
             />
 
-          </Button>
+            <Card>
+
+                <div className="grid gap-6">
+
+                    <div>
+
+                        <label className="mb-2 block text-sm text-zinc-400">
+
+                            Nombre
+
+                        </label>
+
+                        <Input
+
+                            value={form.name}
+
+                            placeholder="Ej: Auditoría SEO"
+
+                            onChange={(e) =>
+                                update("name", e.target.value)
+                            }
+
+                        />
+
+                    </div>
+
+                    <div>
+
+                        <label className="mb-2 block text-sm text-zinc-400">
+
+                            Descripción
+
+                        </label>
+
+                        <Textarea
+
+                            rows={5}
+
+                            value={form.description}
+
+                            placeholder="Describe el propósito del Score..."
+
+                            onChange={(e) =>
+                                update("description", e.target.value)
+                            }
+
+                        />
+
+                    </div>
+
+                    <div>
+
+                        <label className="mb-2 block text-sm text-zinc-400">
+
+                            División
+
+                        </label>
+
+                        <select
+
+                            value={form.division}
+
+                            onChange={(e) =>
+                                update("division", e.target.value)
+                            }
+
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
+
+                        >
+
+                            <option value="">
+
+                                Selecciona una división
+
+                            </option>
+
+                            {divisions.map((division) => (
+
+                                <option
+
+                                    key={division}
+
+                                    value={division}
+
+                                >
+
+                                    {division}
+
+                                </option>
+
+                            ))}
+
+                        </select>
+
+                    </div>
+
+                    <div>
+
+                        <label className="mb-2 block text-sm text-zinc-400">
+
+                            Score Máximo
+
+                        </label>
+
+                        <Input
+
+                            type="number"
+
+                            value={form.scale}
+
+                            onChange={(e) =>
+                                update("scale", Number(e.target.value))
+                            }
+
+                        />
+
+                    </div>
+
+                </div>
+
+            </Card>
+
+            <div className="flex justify-end">
+
+                <Button
+
+                    onClick={continueStep}
+
+                >
+
+                    Continuar
+
+                </Button>
+
+            </div>
 
         </div>
 
-      </div>
+    );
 
-    </div>
-  );
 }

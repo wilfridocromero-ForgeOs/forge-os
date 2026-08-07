@@ -1,87 +1,247 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-const blankTemplate = {
-  name: "",
-  division_id: "",
-  description: "",
+const initialForm = {
+    name: "",
+    description: "",
+    division: "",
+    scale: 1000,
+    categories: [],
 };
 
 export default function useScoreBuilder() {
-  const [templates, setTemplates] = useState([]);
-  const [selectedId, setSelectedId] = useState("");
 
-  const [draft, setDraft] = useState(blankTemplate);
+    const [step, setStep] = useState(0);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+    const [mode, setMode] = useState("");
 
-  const [library, setLibrary] = useState([]);
-  const [favorites, setFavorites] = useState([]);
+    const [form, setForm] = useState(initialForm);
 
-  const [librarySearch, setLibrarySearch] = useState("");
-  const [libraryCategory, setLibraryCategory] = useState("all");
+    function next() {
+        setStep((s) => s + 1);
+    }
 
-  const [view, setView] = useState("builder");
+    function back() {
+        setStep((s) => Math.max(s - 1, 0));
+    }
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("success");
+    function reset() {
+        setStep(0);
+        setMode("");
+        setForm(initialForm);
+    }
 
-  function notify(text, type = "success") {
-    setMessage(text);
-    setMessageType(type);
-  }
+    function addCategory() {
 
-  const selected = useMemo(
-    () => templates.find((item) => item.id === selectedId),
-    [templates, selectedId]
-  );
+        setForm((current) => ({
 
-  function updateSelected(changes) {
-    setTemplates((current) =>
-      current.map((item) =>
-        item.id === selectedId
-          ? { ...item, ...changes }
-          : item
-      )
-    );
-  }
+            ...current,
 
-  return {
-    templates,
-    setTemplates,
+            categories: [
 
-    selected,
-    selectedId,
-    setSelectedId,
+                ...current.categories,
 
-    draft,
-    setDraft,
+                {
 
-    loading,
-    setLoading,
+                    id: crypto.randomUUID(),
 
-    saving,
-    setSaving,
+                    name: "",
 
-    library,
-    setLibrary,
+                    description: "",
 
-    favorites,
-    setFavorites,
+                    weight: 0,
 
-    librarySearch,
-    setLibrarySearch,
+                    questions: [],
 
-    libraryCategory,
-    setLibraryCategory,
+                }
 
-    view,
-    setView,
+            ]
 
-    message,
-    messageType,
-    notify,
+        }));
 
-    updateSelected,
-  };
+    }
+
+    function updateCategory(id, changes) {
+
+        setForm((current)=>({
+
+            ...current,
+
+            categories: current.categories.map((category)=>
+
+                category.id===id
+
+                    ? {...category,...changes}
+
+                    : category
+
+            )
+
+        }));
+
+    }
+
+    function removeCategory(id){
+
+        setForm((current)=>({
+
+            ...current,
+
+            categories: current.categories.filter(
+
+                (category)=>category.id!==id
+
+            )
+
+        }));
+
+    }
+
+    function addQuestion(categoryId){
+
+        setForm((current)=>({
+
+            ...current,
+
+            categories: current.categories.map((category)=>{
+
+                if(category.id!==categoryId){
+
+                    return category;
+
+                }
+
+                return{
+
+                    ...category,
+
+                    questions:[
+
+                        ...category.questions,
+
+                        {
+
+                            id:crypto.randomUUID(),
+
+                            title:"",
+
+                            description:"",
+
+                            type:"yes_no",
+
+                            weight:0,
+
+                            required:true,
+
+                        }
+
+                    ]
+
+                };
+
+            })
+
+        }));
+
+    }
+
+    function updateQuestion(categoryId,questionId,changes){
+
+        setForm((current)=>({
+
+            ...current,
+
+            categories: current.categories.map((category)=>{
+
+                if(category.id!==categoryId){
+
+                    return category;
+
+                }
+
+                return{
+
+                    ...category,
+
+                    questions: category.questions.map((question)=>
+
+                        question.id===questionId
+
+                            ? {...question,...changes}
+
+                            : question
+
+                    )
+
+                };
+
+            })
+
+        }));
+
+    }
+
+    function removeQuestion(categoryId,questionId){
+
+        setForm((current)=>({
+
+            ...current,
+
+            categories: current.categories.map((category)=>{
+
+                if(category.id!==categoryId){
+
+                    return category;
+
+                }
+
+                return{
+
+                    ...category,
+
+                    questions: category.questions.filter(
+
+                        (question)=>question.id!==questionId
+
+                    )
+
+                };
+
+            })
+
+        }));
+
+    }
+
+    return{
+
+        step,
+
+        next,
+
+        back,
+
+        reset,
+
+        mode,
+
+        setMode,
+
+        form,
+
+        setForm,
+
+        addCategory,
+
+        updateCategory,
+
+        removeCategory,
+
+        addQuestion,
+
+        updateQuestion,
+
+        removeQuestion,
+
+    };
+
 }

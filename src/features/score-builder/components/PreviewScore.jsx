@@ -1,94 +1,86 @@
 export default function PreviewScore({
 
-    total,
-    scale,
+    form,
 
 }){
 
     return(
 
-        <div className="sticky top-6 rounded-3xl border border-zinc-800 bg-[#111113] p-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-8">
 
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-3xl font-bold">
 
-                Vista previa
+                {form.name || "Nueva Evaluación"}
 
             </h2>
 
-            <div className="mt-8 flex justify-center">
+            <p className="mt-3 text-zinc-400">
 
-                <div className="relative">
+                {form.description || "Sin descripción"}
 
-                    <svg width="220" height="220">
+            </p>
 
-                        <circle
+            <div className="mt-8 grid gap-4 md:grid-cols-4">
 
-                            cx="110"
+                <Card
+                    title="División"
+                    value={form.division || "-"}
+                />
 
-                            cy="110"
+                <Card
+                    title="Escala"
+                    value={form.scale}
+                />
 
-                            r="90"
+                <Card
+                    title="Categorías"
+                    value={form.categories.length}
+                />
 
-                            stroke="#27272A"
-
-                            strokeWidth="14"
-
-                            fill="none"
-
-                        />
-
-                    </svg>
-
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-
-                        <div className="text-5xl font-bold">
-
-                            {scale}
-
-                        </div>
-
-                        <div className="mt-2 text-sm text-zinc-500">
-
-                            Score Máximo
-
-                        </div>
-
-                    </div>
-
-                </div>
+                <Card
+                    title="Preguntas"
+                    value={
+                        form.categories.reduce(
+                            (sum,c)=>sum+c.questions.length,
+                            0
+                        )
+                    }
+                />
 
             </div>
-
-            <div className="mt-8 rounded-2xl bg-[#09090B] p-5">
-
-                <div className="flex justify-between">
-
-                    <span>Peso Total</span>
-
-                    <span>
-
-                        {total}%
-
-                    </span>
-
-                </div>
-
-            </div>
-
-            {
-
-                total!==100 &&
-
-                <p className="mt-4 text-sm text-red-400">
-
-                    Debe sumar exactamente 100%.
-
-                </p>
-
-            }
 
         </div>
 
-    )
+    );
+
+}
+
+function Card({
+
+    title,
+
+    value,
+
+}){
+
+    return(
+
+        <div className="rounded-xl bg-zinc-900 p-5">
+
+            <p className="text-sm text-zinc-500">
+
+                {title}
+
+            </p>
+
+            <h3 className="mt-3 text-2xl font-bold">
+
+                {value}
+
+            </h3>
+
+        </div>
+
+    );
 
 }

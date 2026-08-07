@@ -1,72 +1,83 @@
-import { Trash2 } from "lucide-react";
+export default function PreviewScore({
 
-export default function CategoryCard({
-    category,
-    onChange,
-    onDelete,
-}) {
+    form,
 
-    return (
+}){
 
-        <div className="rounded-3xl border border-zinc-800 bg-[#111113] p-6">
+    return(
 
-            <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-8">
 
-                <div className="flex-1">
+            <h2 className="text-3xl font-bold">
 
-                    <label className="mb-2 block text-sm text-zinc-500">
-                        Nombre
-                    </label>
+                {form.name || "Nueva Evaluación"}
 
-                    <input
-                        value={category.name}
-                        onChange={(e)=>onChange({
-                            ...category,
-                            name:e.target.value,
-                        })}
-                        className="w-full rounded-2xl border border-zinc-800 bg-[#09090B] px-5 py-4 outline-none"
-                    />
+            </h2>
 
-                </div>
+            <p className="mt-3 text-zinc-400">
 
-                <button
-                    onClick={onDelete}
-                    className="ml-5 rounded-xl border border-zinc-800 p-3 hover:bg-zinc-900"
-                >
+                {form.description || "Sin descripción"}
 
-                    <Trash2 size={18}/>
+            </p>
 
-                </button>
+            <div className="mt-8 grid gap-4 md:grid-cols-4">
 
-            </div>
+                <Card
+                    title="División"
+                    value={form.division || "-"}
+                />
 
-            <div className="mt-6">
+                <Card
+                    title="Escala"
+                    value={form.scale}
+                />
 
-                <label className="mb-2 block text-sm text-zinc-500">
+                <Card
+                    title="Categorías"
+                    value={form.categories.length}
+                />
 
-                    Descripción
-
-                </label>
-
-                <textarea
-
-                    rows={3}
-
-                    value={category.description}
-
-                    onChange={(e)=>onChange({
-
-                        ...category,
-
-                        description:e.target.value,
-
-                    })}
-
-                    className="w-full rounded-2xl border border-zinc-800 bg-[#09090B] px-5 py-4 outline-none"
-
+                <Card
+                    title="Preguntas"
+                    value={
+                        form.categories.reduce(
+                            (sum,c)=>sum+c.questions.length,
+                            0
+                        )
+                    }
                 />
 
             </div>
+
+        </div>
+
+    );
+
+}
+
+function Card({
+
+    title,
+
+    value,
+
+}){
+
+    return(
+
+        <div className="rounded-xl bg-zinc-900 p-5">
+
+            <p className="text-sm text-zinc-500">
+
+                {title}
+
+            </p>
+
+            <h3 className="mt-3 text-2xl font-bold">
+
+                {value}
+
+            </h3>
 
         </div>
 
