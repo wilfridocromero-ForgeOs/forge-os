@@ -1,33 +1,18 @@
 export default function SectionTitle({
-
-    title,
-
-    subtitle,
-
+  title,
+  subtitle,
 }) {
+  return (
+    <div className="space-y-2">
+      <h1 className="text-3xl font-bold text-zinc-950 dark:text-white">
+        {title}
+      </h1>
 
-    return (
-
-        <div className="space-y-2">
-
-            <h1 className="text-3xl font-bold text-white">
-
-                {title}
-
-            </h1>
-
-            {subtitle && (
-
-                <p className="text-zinc-400">
-
-                    {subtitle}
-
-                </p>
-
-            )}
-
-        </div>
-
-    );
-
+      {subtitle && (
+        <p className="text-zinc-600 dark:text-zinc-400">
+          {subtitle}
+        </p>
+      )}
+    </div>
+  );
 }

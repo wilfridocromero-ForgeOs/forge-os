@@ -13,7 +13,6 @@ export default function StepCategories({
     onBack,
     onNext,
 }) {
-
     function createCategory() {
         addCategory();
     }
@@ -84,7 +83,7 @@ export default function StepCategories({
 
                                 <div className="min-w-0">
 
-                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-600">
 
                                         Categoría {
                                             index + 1
@@ -92,7 +91,7 @@ export default function StepCategories({
 
                                     </p>
 
-                                    <h2 className="mt-1 truncate text-lg font-semibold sm:text-xl">
+                                    <h2 className="mt-1 truncate text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
 
                                         {
                                             category.name ||
@@ -113,7 +112,7 @@ export default function StepCategories({
                                         )
                                     }
 
-                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-700 text-red-500 transition hover:bg-red-950"
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-300 text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:text-red-500 dark:hover:bg-red-950"
                                 >
 
                                     <Trash2 size={18} />
@@ -127,7 +126,7 @@ export default function StepCategories({
 
                             <div>
 
-                                <label className="mb-2 block text-sm text-zinc-400">
+                                <label className="mb-2 block text-sm text-zinc-600 dark:text-zinc-400">
 
                                     Nombre
 
@@ -160,7 +159,7 @@ export default function StepCategories({
 
                             <div>
 
-                                <label className="mb-2 block text-sm text-zinc-400">
+                                <label className="mb-2 block text-sm text-zinc-600 dark:text-zinc-400">
 
                                     Descripción
 
@@ -187,7 +186,7 @@ export default function StepCategories({
 
                                     placeholder="Describe qué evalúa esta categoría."
 
-                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base text-white placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+                                    className="w-full rounded-xl border border-zinc-300 bg-white p-4 text-base text-zinc-950 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:placeholder:text-zinc-600 dark:focus:border-zinc-600"
                                 />
 
                             </div>
@@ -197,7 +196,7 @@ export default function StepCategories({
 
                             <div>
 
-                                <label className="mb-2 block text-sm text-zinc-400">
+                                <label className="mb-2 block text-sm text-zinc-600 dark:text-zinc-400">
 
                                     Peso
 
@@ -270,7 +269,7 @@ export default function StepCategories({
                     form.categories.length === 0
                 ) && (
 
-                    <div className="rounded-2xl border border-dashed border-zinc-800 p-6 text-center sm:p-8">
+                    <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center dark:border-zinc-800 dark:bg-transparent sm:p-8">
 
                         <p className="text-sm text-zinc-500">
 
@@ -278,7 +277,7 @@ export default function StepCategories({
 
                         </p>
 
-                        <p className="mt-1 text-xs text-zinc-600">
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-600">
 
                             Crea al menos una categoría para continuar.
 

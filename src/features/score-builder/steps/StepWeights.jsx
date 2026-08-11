@@ -61,14 +61,14 @@ export default function StepWeights({
 
             <div>
 
-                <h1 className="text-3xl font-bold sm:text-4xl">
+                <h1 className="text-3xl font-bold text-zinc-950 dark:text-white sm:text-4xl">
 
                     Distribución de pesos
 
                 </h1>
 
 
-                <p className="mt-2 text-sm leading-6 text-zinc-500 sm:text-base">
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-500 sm:text-base">
 
                     Cada categoría aporta un porcentaje al Score Final.
 
@@ -97,7 +97,7 @@ export default function StepWeights({
                                 category.id
                             }
 
-                            className="rounded-2xl border border-zinc-800 bg-[#111113] p-4 sm:rounded-3xl sm:p-6"
+                            className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#111113] sm:rounded-3xl sm:p-6"
                         >
 
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -107,7 +107,7 @@ export default function StepWeights({
 
                                 <div className="min-w-0">
 
-                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-600">
 
                                         Categoría {
                                             index + 1
@@ -116,7 +116,7 @@ export default function StepWeights({
                                     </p>
 
 
-                                    <h2 className="mt-1 truncate text-base font-semibold sm:text-lg">
+                                    <h2 className="mt-1 truncate text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">
 
                                         {
                                             category.name ||
@@ -164,7 +164,7 @@ export default function StepWeights({
                                                 )
                                             }
 
-                                            className="w-full rounded-xl border border-zinc-800 bg-[#09090B] px-4 py-3 pr-9 text-base text-white outline-none focus:border-zinc-600"
+                                            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 pr-9 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-[#09090B] dark:text-white dark:focus:border-zinc-600"
                                         />
 
 
@@ -196,12 +196,12 @@ export default function StepWeights({
                     />
 
 
-                    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+                    <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
 
 
                         <div className="flex items-center justify-between gap-4">
 
-                            <span className="text-sm text-zinc-400">
+                            <span className="text-sm text-zinc-600 dark:text-zinc-400">
 
                                 Peso total
 
@@ -211,8 +211,8 @@ export default function StepWeights({
                             <span
                                 className={
                                     total === 100
-                                        ? "text-lg font-semibold text-emerald-400"
-                                        : "text-lg font-semibold text-white"
+                                        ? "text-lg font-semibold text-emerald-600 dark:text-emerald-400"
+                                        : "text-lg font-semibold text-zinc-950 dark:text-white"
                                 }
                             >
 
@@ -223,10 +223,9 @@ export default function StepWeights({
                         </div>
 
 
-                        {total ===
-                        100 ? (
+                        {total === 100 ? (
 
-                            <p className="mt-2 text-sm text-emerald-500">
+                            <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-500">
 
                                 La distribución está completa.
 
@@ -234,7 +233,7 @@ export default function StepWeights({
 
                         ) : (
 
-                            <p className="mt-2 text-sm leading-6 text-amber-500">
+                            <p className="mt-2 text-sm leading-6 text-amber-600 dark:text-amber-500">
 
                                 Las categorías deben sumar exactamente 100%.
 
@@ -260,7 +259,7 @@ export default function StepWeights({
                         onBack
                     }
 
-                    className="w-full rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-900 sm:w-auto sm:px-6"
+                    className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900 sm:w-auto sm:px-6"
                 >
 
                     Atrás
@@ -280,7 +279,7 @@ export default function StepWeights({
                         onNext
                     }
 
-                    className="w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:px-8"
+                    className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:w-auto sm:px-8"
                 >
 
                     Continuar

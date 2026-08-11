@@ -16,9 +16,7 @@ export default function StepIndicator({
     return (
         <div className="mb-8 sm:mb-12">
 
-            {/* =================================
-                MÓVIL
-            ================================= */}
+            {/* MÓVIL */}
 
             <div className="sm:hidden">
 
@@ -26,13 +24,13 @@ export default function StepIndicator({
 
                     <div>
 
-                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-600">
 
                             Paso {current + 1} de {steps.length}
 
                         </p>
 
-                        <h3 className="mt-1 text-base font-semibold text-white">
+                        <h3 className="mt-1 text-base font-semibold text-zinc-950 dark:text-white">
 
                             {currentStep}
 
@@ -41,7 +39,7 @@ export default function StepIndicator({
                     </div>
 
 
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white text-sm font-semibold text-white">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-950 text-sm font-semibold text-zinc-950 dark:border-white dark:text-white">
 
                         {current + 1}
 
@@ -50,10 +48,10 @@ export default function StepIndicator({
                 </div>
 
 
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
 
                     <div
-                        className="h-full rounded-full bg-white transition-all duration-300"
+                        className="h-full rounded-full bg-zinc-950 transition-all duration-300 dark:bg-white"
                         style={{
                             width: `${
                                 ((current + 1) /
@@ -68,9 +66,7 @@ export default function StepIndicator({
             </div>
 
 
-            {/* =================================
-                TABLET / DESKTOP
-            ================================= */}
+            {/* TABLET / DESKTOP */}
 
             <div className="hidden sm:block">
 
@@ -104,10 +100,10 @@ export default function StepIndicator({
                                     lg:w-11
                                     ${
                                         current > index
-                                            ? "border-white bg-white text-black"
+                                            ? "border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-black"
                                             : current === index
-                                                ? "border-white text-white"
-                                                : "border-zinc-700 text-zinc-600"
+                                                ? "border-zinc-950 text-zinc-950 dark:border-white dark:text-white"
+                                                : "border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
                                     }
                                 `}
                             >
@@ -130,8 +126,8 @@ export default function StepIndicator({
                                         ${
                                             current >
                                             index
-                                                ? "bg-white"
-                                                : "bg-zinc-800"
+                                                ? "bg-zinc-950 dark:bg-white"
+                                                : "bg-zinc-200 dark:bg-zinc-800"
                                         }
                                     `}
                                 />

@@ -148,9 +148,7 @@ export default function StepPublish({
 
 
         setPublishing(true);
-
         setStatus("");
-
         setErrorMessage("");
 
 
@@ -714,14 +712,14 @@ export default function StepPublish({
 
             <div>
 
-                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                <h1 className="text-3xl font-bold text-zinc-950 dark:text-white sm:text-4xl">
 
                     Publicar Score
 
                 </h1>
 
 
-                <p className="mt-2 text-sm leading-6 text-zinc-400 sm:text-base">
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400 sm:text-base">
 
                     Revisa el resumen antes de publicar la evaluación.
 
@@ -789,7 +787,7 @@ export default function StepPublish({
 
                     <div>
 
-                        <h2 className="text-lg font-semibold text-white sm:text-xl">
+                        <h2 className="text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
 
                             Validación
 
@@ -837,9 +835,9 @@ export default function StepPublish({
                         />
 
 
-                        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 p-4">
+                        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
 
-                            <span className="text-sm text-zinc-300 sm:text-base">
+                            <span className="text-sm text-zinc-700 dark:text-zinc-300 sm:text-base">
 
                                 Peso total
 
@@ -849,8 +847,8 @@ export default function StepPublish({
                             <span
                                 className={
                                     totalWeight === 100
-                                        ? "shrink-0 font-semibold text-emerald-400"
-                                        : "shrink-0 font-semibold text-amber-400"
+                                        ? "shrink-0 font-semibold text-emerald-600 dark:text-emerald-400"
+                                        : "shrink-0 font-semibold text-amber-600 dark:text-amber-400"
                                 }
                             >
 
@@ -878,7 +876,7 @@ export default function StepPublish({
 
                     <div>
 
-                        <h2 className="text-lg font-semibold text-white sm:text-xl">
+                        <h2 className="text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
 
                             Estado de la evaluación
 
@@ -922,7 +920,7 @@ export default function StepPublish({
                         />
 
 
-                        <div className="col-span-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:col-span-1 sm:p-5">
+                        <div className="col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950 md:col-span-1 sm:p-5">
 
                             <p className="text-xs text-zinc-500 sm:text-sm">
 
@@ -931,7 +929,7 @@ export default function StepPublish({
                             </p>
 
 
-                            <h3 className="mt-2 text-lg font-semibold text-white">
+                            <h3 className="mt-2 text-lg font-semibold text-zinc-950 dark:text-white">
 
                                 1000
 
@@ -948,16 +946,16 @@ export default function StepPublish({
                         status ===
                         "published" && (
 
-                        <div className="rounded-xl border border-emerald-700 bg-emerald-950/30 p-4 sm:p-5">
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-700 dark:bg-emerald-950/30 sm:p-5">
 
-                            <h3 className="text-sm font-semibold text-emerald-400 sm:text-base">
+                            <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 sm:text-base">
 
                                 ✓ Evaluación publicada correctamente
 
                             </h3>
 
 
-                            <p className="mt-2 text-sm leading-6 text-zinc-300">
+                            <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
 
                                 El Score, sus categorías y sus preguntas fueron guardados en ORVESEN.
 
@@ -974,16 +972,16 @@ export default function StepPublish({
                         status ===
                         "error" && (
 
-                        <div className="rounded-xl border border-red-700 bg-red-950/30 p-4 sm:p-5">
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/30 sm:p-5">
 
-                            <h3 className="text-sm font-semibold text-red-400 sm:text-base">
+                            <h3 className="text-sm font-semibold text-red-700 dark:text-red-400 sm:text-base">
 
                                 Error al publicar
 
                             </h3>
 
 
-                            <p className="mt-2 break-words text-sm leading-6 text-zinc-300">
+                            <p className="mt-2 break-words text-sm leading-6 text-zinc-700 dark:text-zinc-300">
 
                                 {
                                     errorMessage ||
@@ -1073,7 +1071,7 @@ function SummaryBox({
 
     return (
 
-        <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+        <div className="min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
 
             <p className="text-xs text-zinc-500 sm:text-sm">
 
@@ -1082,7 +1080,7 @@ function SummaryBox({
             </p>
 
 
-            <h3 className="mt-2 break-words text-base font-semibold text-white sm:text-lg">
+            <h3 className="mt-2 break-words text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">
 
                 {value}
 
@@ -1108,7 +1106,7 @@ function StatusBox({
 
     return (
 
-        <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+        <div className="min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
 
             <p className="text-xs text-zinc-500 sm:text-sm">
 
@@ -1117,7 +1115,7 @@ function StatusBox({
             </p>
 
 
-            <h3 className="mt-2 break-words text-base font-semibold text-white sm:text-lg">
+            <h3 className="mt-2 break-words text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">
 
                 {value}
 
@@ -1143,9 +1141,9 @@ function ValidationRow({
 
     return (
 
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 p-4">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
 
-            <span className="text-sm text-zinc-300 sm:text-base">
+            <span className="text-sm text-zinc-700 dark:text-zinc-300 sm:text-base">
 
                 {title}
 
@@ -1155,8 +1153,8 @@ function ValidationRow({
             <span
                 className={
                     valid
-                        ? "shrink-0 font-semibold text-emerald-400"
-                        : "shrink-0 font-semibold text-red-400"
+                        ? "shrink-0 font-semibold text-emerald-600 dark:text-emerald-400"
+                        : "shrink-0 font-semibold text-red-600 dark:text-red-400"
                 }
             >
 

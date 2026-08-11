@@ -10,13 +10,13 @@ export default function StepPreview({
 
             <div>
 
-                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                <h1 className="text-3xl font-bold text-zinc-950 dark:text-white sm:text-4xl">
 
                     Vista previa
 
                 </h1>
 
-                <p className="mt-2 text-sm leading-6 text-zinc-400 sm:text-base">
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400 sm:text-base">
 
                     Así verá esta evaluación el usuario final.
 
@@ -27,7 +27,7 @@ export default function StepPreview({
 
             {/* PREVIEW */}
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6 lg:p-8">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-6 lg:p-8">
 
                 <div className="space-y-6 sm:space-y-8">
 
@@ -36,7 +36,7 @@ export default function StepPreview({
 
                     <div>
 
-                        <h2 className="break-words text-xl font-semibold text-white sm:text-2xl">
+                        <h2 className="break-words text-xl font-semibold text-zinc-950 dark:text-white sm:text-2xl">
 
                             {
                                 form.name ||
@@ -45,7 +45,7 @@ export default function StepPreview({
 
                         </h2>
 
-                        <p className="mt-2 break-words text-sm leading-6 text-zinc-400 sm:text-base">
+                        <p className="mt-2 break-words text-sm leading-6 text-zinc-600 dark:text-zinc-400 sm:text-base">
 
                             {
                                 form.description ||
@@ -67,10 +67,10 @@ export default function StepPreview({
 
                         <div
                             key={category.id}
-                            className="rounded-xl border border-zinc-800 p-4 sm:p-6"
+                            className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800 sm:p-6"
                         >
 
-                            <p className="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-600">
 
                                 Categoría {
                                     categoryIndex + 1
@@ -78,7 +78,7 @@ export default function StepPreview({
 
                             </p>
 
-                            <h3 className="mt-1 break-words text-lg font-semibold text-white sm:text-xl">
+                            <h3 className="mt-1 break-words text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
 
                                 {
                                     category.name ||
@@ -112,10 +112,10 @@ export default function StepPreview({
 
                                     <div
                                         key={question.id}
-                                        className="rounded-xl bg-zinc-900/30 p-4"
+                                        className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-900/30"
                                     >
 
-                                        <p className="text-xs text-zinc-600">
+                                        <p className="text-xs text-zinc-500 dark:text-zinc-600">
 
                                             Pregunta {
                                                 questionIndex + 1
@@ -123,7 +123,7 @@ export default function StepPreview({
 
                                         </p>
 
-                                        <p className="mt-1 break-words font-medium text-white">
+                                        <p className="mt-1 break-words font-medium text-zinc-950 dark:text-white">
 
                                             {
                                                 question.prompt ||
@@ -142,7 +142,7 @@ export default function StepPreview({
 
                                                 <button
                                                     type="button"
-                                                    className="w-full rounded-lg border border-zinc-700 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-900 sm:w-auto"
+                                                    className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900 sm:w-auto"
                                                 >
 
                                                     Sí
@@ -151,7 +151,7 @@ export default function StepPreview({
 
                                                 <button
                                                     type="button"
-                                                    className="w-full rounded-lg border border-zinc-700 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-900 sm:w-auto"
+                                                    className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900 sm:w-auto"
                                                 >
 
                                                     No
@@ -187,7 +187,7 @@ export default function StepPreview({
                                                     className="w-full"
                                                 />
 
-                                                <div className="mt-1 flex justify-between text-xs text-zinc-600">
+                                                <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-600">
 
                                                     <span>
                                                         {
@@ -219,7 +219,7 @@ export default function StepPreview({
                                                 type="number"
                                                 disabled
                                                 placeholder="Respuesta numérica"
-                                                className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base text-zinc-500"
+                                                className="mt-3 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950"
                                             />
 
                                         )}
@@ -234,7 +234,7 @@ export default function StepPreview({
                                                 rows={3}
                                                 disabled
                                                 placeholder="Respuesta del usuario"
-                                                className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base text-zinc-500"
+                                                className="mt-3 w-full rounded-xl border border-zinc-300 bg-white p-4 text-base text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950"
                                             />
 
                                         )}
@@ -245,7 +245,7 @@ export default function StepPreview({
                                         {question.response_type ===
                                             "multiple_choice" && (
 
-                                            <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-500">
+                                            <div className="mt-3 rounded-xl border border-zinc-300 bg-white p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
 
                                                 Selección múltiple
 
@@ -275,7 +275,7 @@ export default function StepPreview({
                 <button
                     type="button"
                     onClick={onBack}
-                    className="w-full rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-900 sm:w-auto sm:px-6"
+                    className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900 sm:w-auto sm:px-6"
                 >
 
                     Atrás
@@ -285,7 +285,7 @@ export default function StepPreview({
                 <button
                     type="button"
                     onClick={onNext}
-                    className="w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 sm:w-auto sm:px-6"
+                    className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:w-auto sm:px-6"
                 >
 
                     Continuar

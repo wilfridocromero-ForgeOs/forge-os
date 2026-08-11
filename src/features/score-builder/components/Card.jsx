@@ -1,29 +1,27 @@
 export default function Card({
-
-    children,
-
-    className = "",
-
+  children,
+  className = "",
 }) {
+  return (
+    <div
+      className={`
+        rounded-2xl
+        border
+        border-zinc-200
+        bg-white
+        p-6
+        text-zinc-950
+        shadow-sm
+        transition-colors
 
-    return (
+        dark:border-zinc-800
+        dark:bg-zinc-950
+        dark:text-white
 
-        <div
-            className={`
-                rounded-2xl
-                border
-                border-zinc-800
-                bg-zinc-950
-                p-6
-                shadow-sm
-                ${className}
-            `}
-        >
-
-            {children}
-
-        </div>
-
-    );
-
+        ${className}
+      `}
+    >
+      {children}
+    </div>
+  );
 }

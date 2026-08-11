@@ -299,8 +299,8 @@ export default function StepQuestions({
                                             ${
                                                 selectedCategory ===
                                                 category.id
-                                                    ? "bg-white text-black"
-                                                    : "bg-zinc-900 text-white hover:bg-zinc-800"
+                                                    ? "bg-zinc-950 text-white dark:bg-white dark:text-black"
+                                                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
                                             }
                                         `}
                                     >
@@ -470,7 +470,7 @@ export default function StepQuestions({
                                                     )
                                                 }
 
-                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-700 px-4 py-2.5 text-sm text-red-500 transition hover:bg-red-950 sm:w-auto"
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:text-red-500 dark:hover:bg-red-950 sm:w-auto"
                                             >
 
                                                 <Trash2
@@ -550,7 +550,7 @@ export default function StepQuestions({
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base outline-none focus:border-zinc-600"
+                                                className="w-full rounded-xl border border-zinc-300 bg-white p-4 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:focus:border-zinc-600"
                                             />
 
                                         </div>
@@ -587,7 +587,7 @@ export default function StepQuestions({
                                                         )
                                                     }
 
-                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base"
+                                                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:focus:border-zinc-600"
                                                 >
 
                                                     <option value="yes_no">
@@ -699,7 +699,7 @@ export default function StepQuestions({
                                                         )
                                                     }
 
-                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base"
+                                                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:focus:border-zinc-600"
                                                 >
 
                                                     <option value="low">
@@ -801,7 +801,7 @@ export default function StepQuestions({
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base"
+                                                className="w-full rounded-xl border border-zinc-300 bg-white p-4 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:focus:border-zinc-600"
                                             />
 
                                         </div>
@@ -944,7 +944,7 @@ export default function StepQuestions({
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base"
+                                                className="w-full rounded-xl border border-zinc-300 bg-white p-4 text-base text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:focus:border-zinc-600"
                                             />
 
                                         </div>
@@ -952,7 +952,7 @@ export default function StepQuestions({
 
                                         {/* AUTOMATIZACIÓN */}
 
-                                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-5">
+                                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-5">
 
                                             <label className="flex items-start gap-3">
 
@@ -1027,7 +1027,7 @@ export default function StepQuestions({
                                 </div>
 
 
-                                <span className="w-fit rounded-full bg-zinc-900 px-3 py-2 text-sm">
+                                <span className="w-fit rounded-full bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
 
                                     {
                                         filteredLibrary.length
@@ -1041,7 +1041,7 @@ export default function StepQuestions({
                             {filteredLibrary.length ===
                                 0 && (
 
-                                <div className="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-500 sm:p-10">
+                                <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700 sm:p-10">
 
                                     No hay preguntas disponibles.
 
@@ -1068,7 +1068,7 @@ export default function StepQuestions({
                                                 item.id
                                             }
 
-                                            className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5"
+                                            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5"
                                         >
 
                                             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -1095,7 +1095,7 @@ export default function StepQuestions({
 
                                                     <div className="mt-4 flex flex-wrap gap-2">
 
-                                                        <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+                                                        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
 
                                                             {
                                                                 item.response_type ||
@@ -1105,7 +1105,7 @@ export default function StepQuestions({
                                                         </span>
 
 
-                                                        <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+                                                        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
 
                                                             Peso {
                                                                 displayedWeight
@@ -1116,7 +1116,7 @@ export default function StepQuestions({
 
                                                         {item.priority && (
 
-                                                            <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+                                                            <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
 
                                                                 {
                                                                     item.priority

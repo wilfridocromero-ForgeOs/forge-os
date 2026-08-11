@@ -1091,7 +1091,7 @@ export default function ScoreEditor({
 
       {/* HEADER */}
 
-      <div className="sticky top-0 z-30 rounded-2xl border border-zinc-800 bg-[#0c0c0e]/95 p-3 backdrop-blur sm:p-4">
+      <div className="sticky top-0 z-30 rounded-2xl border border-zinc-200 bg-white/95 dark:border-zinc-800 dark:bg-[#0c0c0e]/95 p-3 backdrop-blur sm:p-4">
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 
@@ -1100,7 +1100,7 @@ export default function ScoreEditor({
             <button
               type="button"
               onClick={onBack}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-300 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-white"
               title="Volver a Mis Scores"
             >
               <ArrowLeft size={18} />
@@ -1110,7 +1110,7 @@ export default function ScoreEditor({
 
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
 
-                <h2 className="truncate text-lg font-semibold text-white sm:text-xl">
+                <h2 className="truncate text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
                   {draft.name}
                 </h2>
 
@@ -1127,7 +1127,7 @@ export default function ScoreEditor({
 
               </div>
 
-              <p className="mt-1 text-xs leading-5 text-zinc-500 sm:text-sm">
+              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-500 sm:text-sm">
                 {totalCategories} categorías
                 {" · "}
                 {totalQuestions} preguntas
@@ -1150,7 +1150,7 @@ export default function ScoreEditor({
                 duplicating ||
                 saving
               }
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-3 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-4"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-4"
             >
               {duplicating ? (
                 <Loader2
@@ -1175,7 +1175,7 @@ export default function ScoreEditor({
                 saving ||
                 duplicating
               }
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
             >
               {saving ? (
                 <Loader2
@@ -1200,7 +1200,7 @@ export default function ScoreEditor({
       {/* ERROR */}
 
       {error && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-900 bg-red-950/20 p-4 text-sm text-red-400">
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-400">
 
           <AlertCircle
             size={18}
@@ -1214,15 +1214,15 @@ export default function ScoreEditor({
 
       {/* EDITOR DOS PANELES */}
 
-      <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-zinc-800 bg-[#0c0c0e] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#0c0c0e] lg:grid-cols-[320px_minmax(0,1fr)]">
 
         {/* PANEL IZQUIERDO */}
 
-        <aside className="max-h-[380px] overflow-hidden border-b border-zinc-800 bg-[#101012] lg:max-h-none lg:border-b-0 lg:border-r">
+        <aside className="max-h-[380px] overflow-hidden border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-[#101012] lg:max-h-none lg:border-b-0 lg:border-r">
 
-          <div className="border-b border-zinc-800 p-4 sm:p-5">
+          <div className="border-b border-zinc-200 p-4 dark:border-zinc-800 sm:p-5">
 
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-600">
               Estructura
             </p>
 
@@ -1262,7 +1262,7 @@ export default function ScoreEditor({
 
                 <div
                   key={category.id}
-                  className="overflow-hidden rounded-xl border border-zinc-800"
+                  className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
                 >
 
                   <button
@@ -1285,8 +1285,8 @@ export default function ScoreEditor({
                         "category" &&
                       selectedCategoryId ===
                         category.id
-                        ? "flex w-full items-center justify-between bg-zinc-800 px-4 py-3 text-left text-sm font-medium text-white"
-                        : "flex w-full items-center justify-between bg-[#151517] px-4 py-3 text-left text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
+                        ? "flex w-full items-center justify-between bg-zinc-200 px-4 py-3 text-left text-sm font-medium text-zinc-950 dark:bg-zinc-800 dark:text-white"
+                        : "flex w-full items-center justify-between bg-white px-4 py-3 text-left text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:bg-[#151517] dark:text-zinc-300 dark:hover:bg-zinc-900"
                     }
                   >
 
@@ -1301,7 +1301,7 @@ export default function ScoreEditor({
 
                   </button>
 
-                  <div className="space-y-1 border-t border-zinc-800 p-2">
+                  <div className="space-y-1 border-t border-zinc-200 p-2 dark:border-zinc-800">
 
                     {category.questions.map(
                       (
@@ -1330,12 +1330,12 @@ export default function ScoreEditor({
                             "question" &&
                           selectedQuestionId ===
                             question.id
-                            ? "flex w-full items-center gap-3 rounded-lg bg-zinc-800 px-3 py-2.5 text-left text-sm text-white"
-                            : "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-300"
+                            ? "flex w-full items-center gap-3 rounded-lg bg-zinc-200 px-3 py-2.5 text-left text-sm text-zinc-950 dark:bg-zinc-800 dark:text-white"
+                            : "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-500 dark:hover:bg-zinc-900 dark:hover:text-zinc-300"
                         }
                       >
 
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-xs">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-300 text-xs dark:border-zinc-700">
                           {questionIndex + 1}
                         </span>
 
@@ -1355,7 +1355,7 @@ export default function ScoreEditor({
                           category.id
                         )
                       }
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-500 transition hover:bg-zinc-900 hover:text-white"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-500 dark:hover:bg-zinc-900 dark:hover:text-white"
                     >
                       <Plus size={15} />
                       Añadir pregunta
@@ -1372,7 +1372,7 @@ export default function ScoreEditor({
             <button
               type="button"
               onClick={addCategory}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-700 px-4 py-3 text-sm text-zinc-400 transition hover:border-zinc-500 hover:text-white"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-600 transition hover:border-zinc-500 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-white"
             >
               <Plus size={16} />
               Añadir categoría
@@ -1543,7 +1543,7 @@ function GeneralEditor({
       </div>
 
       {totalCategoryWeight !== 100 && (
-        <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-4 text-sm text-amber-400">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-400">
 
           El peso total de las categorías es{" "}
           {totalCategoryWeight}%.
@@ -1553,9 +1553,9 @@ function GeneralEditor({
         </div>
       )}
 
-      <div className="border-t border-zinc-800 pt-8">
+      <div className="border-t border-zinc-200 pt-8 dark:border-zinc-800">
 
-        <p className="text-sm font-medium text-white">
+        <p className="text-sm font-medium text-zinc-950 dark:text-white">
           Zona de peligro
         </p>
 
@@ -1568,7 +1568,7 @@ function GeneralEditor({
           type="button"
           onClick={deleteScore}
           disabled={deleting}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 disabled:opacity-50 sm:w-auto"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50 sm:w-auto"
         >
           {deleting ? (
             <Loader2
@@ -1673,7 +1673,7 @@ function CategoryEditor({
           onClick={() =>
             addQuestion(category.id)
           }
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 sm:w-auto"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:w-auto"
         >
           <Plus size={16} />
           Añadir pregunta
@@ -1684,7 +1684,7 @@ function CategoryEditor({
           onClick={() =>
             deleteCategory(category)
           }
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 sm:w-auto"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30 sm:w-auto"
         >
           <Trash2 size={16} />
           Eliminar categoría
@@ -1891,7 +1891,7 @@ function QuestionEditor({
 
         )}
 
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
 
           <input
             type="checkbox"
@@ -1912,7 +1912,7 @@ function QuestionEditor({
 
           <div>
 
-            <p className="text-sm font-medium text-white">
+            <p className="text-sm font-medium text-zinc-950 dark:text-white">
               Pregunta obligatoria
             </p>
 
@@ -1936,7 +1936,7 @@ function QuestionEditor({
               question
             )
           }
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 sm:w-auto"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30 sm:w-auto"
         >
           <Trash2 size={16} />
           Eliminar pregunta
@@ -1966,8 +1966,8 @@ function NavigationButton({
       onClick={onClick}
       className={
         active
-          ? "flex w-full items-center justify-between rounded-xl bg-zinc-800 px-4 py-3 text-left text-sm font-medium text-white"
-          : "flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
+          ? "flex w-full items-center justify-between rounded-xl bg-zinc-200 px-4 py-3 text-left text-sm font-medium text-zinc-950 dark:bg-zinc-800 dark:text-white"
+          : "flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
       }
     >
       {children}
@@ -1985,7 +1985,7 @@ function EditorHeader({
   return (
     <div>
 
-      <h3 className="text-xl font-semibold text-white sm:text-2xl">
+      <h3 className="text-xl font-semibold text-zinc-950 dark:text-white sm:text-2xl">
         {title}
       </h3>
 
@@ -2005,7 +2005,7 @@ function Field({
   return (
     <div>
 
-      <label className="mb-2 block text-sm font-medium text-zinc-400">
+      <label className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-400">
         {label}
       </label>
 
@@ -2022,7 +2022,7 @@ function Metric({
   warning = false,
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
 
       <p className="text-xs text-zinc-500">
         {label}
@@ -2032,7 +2032,7 @@ function Metric({
         className={
           warning
             ? "mt-2 text-xl font-semibold text-amber-400"
-            : "mt-2 text-xl font-semibold text-white"
+            : "mt-2 text-xl font-semibold text-zinc-950 dark:text-white"
         }
       >
         {value}
@@ -2054,7 +2054,7 @@ function StatusBadge({
       className={
         published
           ? "rounded-full border border-emerald-900 bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-400"
-          : "rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-medium text-zinc-400"
+          : "rounded-full border border-zinc-300 bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400"
       }
     >
       {published
@@ -2066,4 +2066,4 @@ function StatusBadge({
 
 
 const inputClass =
-  "w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-700 focus:border-zinc-600";
+  "w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:placeholder:text-zinc-700 dark:focus:border-zinc-600";
