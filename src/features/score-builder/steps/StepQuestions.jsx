@@ -6,6 +6,22 @@ import Button from "../components/Button";
 import Input from "../components/Input";
 import SectionTitle from "../components/SectionTitle";
 
+
+function normalizeWeight(value, fallback = 10) {
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return fallback;
+    }
+
+    return Math.min(
+        100,
+        Math.max(0, number)
+    );
+}
+
+
 export default function StepQuestions({
 
     form,
@@ -24,99 +40,239 @@ export default function StepQuestions({
 
 }) {
 
-    const [selectedCategory, setSelectedCategory] = useState(
+    const [selectedCategory, setSelectedCategory] =
+        useState(
+            form.categories?.[0]?.id || ""
+        );
 
-        form.categories?.[0]?.id || ""
+    const [search, setSearch] =
+        useState("");
 
-    );
 
-    const [search, setSearch] = useState("");
+    /*
+    ==========================================
+    CATEGORÍA ACTUAL
+    ==========================================
+    */
 
     const currentCategory = useMemo(() => {
 
         return (form.categories || []).find(
-
-            category => category.id === selectedCategory
-
+            (category) =>
+                category.id === selectedCategory
         );
 
     }, [
-
         form.categories,
-
         selectedCategory,
-
     ]);
+
+
+    /*
+    ==========================================
+    BIBLIOTECA FILTRADA
+    ==========================================
+    */
 
     const filteredLibrary = useMemo(() => {
 
         const questions = library || [];
 
         if (!search.trim()) {
-
             return questions;
-
         }
 
-        return questions.filter(question => {
+        const normalizedSearch =
+            search.toLowerCase().trim();
 
-            const text = `${question.title || ""} ${question.description || ""}`
+        return questions.filter(
+            (question) => {
 
-                .toLowerCase();
+                const text = `
+                    ${question.title || ""}
+                    ${question.description || ""}
+                `.toLowerCase();
 
-            return text.includes(
-
-                search.toLowerCase()
-
-            );
-
-        });
+                return text.includes(
+                    normalizedSearch
+                );
+            }
+        );
 
     }, [
-
         library,
-
         search,
-
     ]);
+
+
+    /*
+    ==========================================
+    CREAR PREGUNTA
+    ==========================================
+    */
 
     function createQuestion() {
 
-        if (!currentCategory) return;
+        if (!currentCategory) {
+            return;
+        }
 
-        addQuestion(currentCategory.id, {
+        addQuestion(
+            currentCategory.id,
+            {
+                prompt: "",
 
-            id: crypto.randomUUID(),
+                description: "",
 
-            prompt: "",
+                help_text: "",
 
-            description: "",
+                response_type:
+                    "yes_no",
 
-            response_type: "yes_no",
+                weight: 10,
 
-            weight: 10,
+                priority:
+                    "medium",
 
-            priority: "medium",
+                required: true,
 
-            required: true,
+                recommendation: "",
 
-            recommendation: "",
+                sop: "",
 
-            sop: "",
+                playbook: "",
 
-            playbook: "",
+                document: "",
 
-            document: "",
+                ai_prompt: "",
 
-            ai_prompt: "",
+                tags: [],
 
-            tags: [],
+                auto_project: false,
 
-            auto_project: false,
+                scale_min: 1,
 
-        });
+                scale_max: 5,
 
+                options: [],
+
+                scoring_config: {},
+            }
+        );
     }
+
+
+    /*
+    ==========================================
+    IMPORTAR PREGUNTA
+    ==========================================
+    */
+
+    function importQuestion(item) {
+
+        if (!currentCategory) {
+            return;
+        }
+
+        const safeWeight =
+            normalizeWeight(
+                item.recommended_weight,
+                10
+            );
+
+        console.log(
+            "Importando pregunta ORVESEN:",
+            {
+                title: item.title,
+                original_weight:
+                    item.recommended_weight,
+                safe_weight:
+                    safeWeight,
+            }
+        );
+
+        addQuestion(
+            currentCategory.id,
+            {
+                prompt:
+                    item.title || "",
+
+                description:
+                    item.description || "",
+
+                help_text:
+                    item.description || "",
+
+                response_type:
+                    item.response_type ||
+                    "yes_no",
+
+                weight:
+                    safeWeight,
+
+                priority:
+                    item.priority ||
+                    "medium",
+
+                recommendation:
+                    item.recommendation ||
+                    "",
+
+                sop:
+                    item.sop || "",
+
+                playbook:
+                    item.playbook || "",
+
+                document:
+                    item.document || "",
+
+                ai_prompt:
+                    item.ai_prompt || "",
+
+                tags:
+                    Array.isArray(
+                        item.tags
+                    )
+                        ? item.tags
+                        : [],
+
+                auto_project:
+                    false,
+
+                required:
+                    true,
+
+                scale_min:
+                    Number(
+                        item.scale_min || 1
+                    ),
+
+                scale_max:
+                    Number(
+                        item.scale_max || 5
+                    ),
+
+                options:
+                    Array.isArray(
+                        item.options
+                    )
+                        ? item.options
+                        : [],
+
+                scoring_config:
+                    item.scoring_config &&
+                    typeof item.scoring_config ===
+                        "object" &&
+                    !Array.isArray(
+                        item.scoring_config
+                    )
+                        ? item.scoring_config
+                        : {},
+            }
+        );
+    }
+
 
     return (
 
@@ -130,11 +286,13 @@ export default function StepQuestions({
 
             />
 
+
             <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
 
-                {/* ============================
+
+                {/* =================================
                     SIDEBAR
-                ============================ */}
+                ================================= */}
 
                 <Card>
 
@@ -146,7 +304,9 @@ export default function StepQuestions({
 
                         </h3>
 
-                        {(form.categories || []).length === 0 && (
+
+                        {(form.categories || [])
+                            .length === 0 && (
 
                             <p className="text-sm text-zinc-500">
 
@@ -156,71 +316,80 @@ export default function StepQuestions({
 
                         )}
 
-                        {(form.categories || []).map((category) => (
 
-                            <button
+                        {(form.categories || [])
+                            .map(
+                                (category) => (
 
-                                key={category.id}
+                                <button
 
-                                onClick={() =>
-
-                                    setSelectedCategory(category.id)
-
-                                }
-
-                                className={`
-
-                                    w-full
-
-                                    rounded-xl
-
-                                    px-4
-
-                                    py-3
-
-                                    text-left
-
-                                    transition
-
-                                    ${
-
-                                        selectedCategory === category.id
-
-                                            ? "bg-white text-black"
-
-                                            : "bg-zinc-900 text-white hover:bg-zinc-800"
-
+                                    key={
+                                        category.id
                                     }
 
-                                `}
+                                    type="button"
 
-                            >
+                                    onClick={() =>
+                                        setSelectedCategory(
+                                            category.id
+                                        )
+                                    }
 
-                                <div className="font-medium">
+                                    className={`
+                                        w-full
+                                        rounded-xl
+                                        px-4
+                                        py-3
+                                        text-left
+                                        transition
+                                        ${
+                                            selectedCategory ===
+                                            category.id
+                                                ? "bg-white text-black"
+                                                : "bg-zinc-900 text-white hover:bg-zinc-800"
+                                        }
+                                    `}
 
-                                    {category.name}
+                                >
 
-                                </div>
+                                    <div className="font-medium">
 
-                                <div className="mt-1 text-xs opacity-70">
+                                        {
+                                            category.name ||
+                                            "Categoría sin nombre"
+                                        }
 
-                                    {(category.questions || []).length} preguntas
+                                    </div>
 
-                                </div>
 
-                            </button>
+                                    <div className="mt-1 text-xs opacity-70">
 
-                        ))}
+                                        {
+                                            (
+                                                category.questions ||
+                                                []
+                                            ).length
+                                        } preguntas
+
+                                    </div>
+
+                                </button>
+
+                            ))}
 
                     </div>
 
                 </Card>
 
-                {/* ============================
+
+                {/* =================================
                     CONTENIDO
-                ============================ */}
+                ================================= */}
 
                 <div className="space-y-6">
+
+
+                    {/* BUSCADOR */}
 
                     <Card className="sticky top-0 z-20">
 
@@ -236,6 +405,7 @@ export default function StepQuestions({
 
                                 />
 
+
                                 <Input
 
                                     value={search}
@@ -245,16 +415,21 @@ export default function StepQuestions({
                                     className="pl-11"
 
                                     onChange={(e) =>
-
-                                        setSearch(e.target.value)
-
+                                        setSearch(
+                                            e.target.value
+                                        )
                                     }
 
                                 />
 
                             </div>
 
-                            <Button onClick={createQuestion}>
+
+                            <Button
+                                onClick={
+                                    createQuestion
+                                }
+                            >
 
                                 <Plus size={18} />
 
@@ -265,6 +440,9 @@ export default function StepQuestions({
                         </div>
 
                     </Card>
+
+
+                    {/* SIN CATEGORÍA */}
 
                     {!currentCategory && (
 
@@ -280,730 +458,865 @@ export default function StepQuestions({
 
                     )}
 
+
+                    {/* =================================
+                        PREGUNTAS
+                    ================================= */}
+
                     {currentCategory && (
 
                         <div className="space-y-5">
-                            {(currentCategory.questions || []).map((question, index) => (
 
-    <Card key={question.id}>
+                            {(
+                                currentCategory.questions ||
+                                []
+                            ).map(
+                                (
+                                    question,
+                                    index
+                                ) => (
 
-        <div className="space-y-6">
+                                <Card
+                                    key={
+                                        question.id
+                                    }
+                                >
 
-            <div className="flex items-center justify-between">
+                                    <div className="space-y-6">
 
-                <div>
 
-                    <h3 className="text-lg font-semibold">
+                                        {/* HEADER */}
 
-                        Pregunta {index + 1}
+                                        <div className="flex items-center justify-between">
 
-                    </h3>
+                                            <div>
 
-                    <p className="text-sm text-zinc-500">
+                                                <h3 className="text-lg font-semibold">
 
-                        Configura esta pregunta.
+                                                    Pregunta {
+                                                        index +
+                                                        1
+                                                    }
 
-                    </p>
+                                                </h3>
 
-                </div>
+                                                <p className="text-sm text-zinc-500">
 
-                <button
+                                                    Configura esta pregunta.
 
-                    onClick={() =>
-                        removeQuestion(
-                            currentCategory.id,
-                            question.id
-                        )
-                    }
+                                                </p>
 
-                    className="flex items-center gap-2 rounded-xl border border-red-700 px-4 py-2 text-red-500 hover:bg-red-950 transition"
+                                            </div>
 
-                >
 
-                    <Trash2 size={16} />
+                                            <button
 
-                    Eliminar
+                                                type="button"
 
-                </button>
+                                                onClick={() =>
+                                                    removeQuestion(
+                                                        currentCategory.id,
+                                                        question.id
+                                                    )
+                                                }
 
-            </div>
+                                                className="flex items-center gap-2 rounded-xl border border-red-700 px-4 py-2 text-red-500 transition hover:bg-red-950"
 
-            {/* Pregunta */}
+                                            >
 
-            <div>
+                                                <Trash2
+                                                    size={
+                                                        16
+                                                    }
+                                                />
 
-                <label className="mb-2 block text-sm">
+                                                Eliminar
 
-                    Pregunta
+                                            </button>
 
-                </label>
+                                        </div>
 
-                <Input
 
-                    value={question.prompt}
+                                        {/* PREGUNTA */}
 
-                    placeholder="Ej. ¿Tiene Pixel de Meta instalado?"
+                                        <div>
 
-                    onChange={(e)=>
+                                            <label className="mb-2 block text-sm">
 
-                        updateQuestion(
+                                                Pregunta
 
-                            currentCategory.id,
+                                            </label>
 
-                            question.id,
 
-                            "prompt",
+                                            <Input
 
-                            e.target.value
+                                                value={
+                                                    question.prompt ||
+                                                    ""
+                                                }
 
-                        )
+                                                placeholder="Ej. ¿Tiene Pixel de Meta instalado?"
 
-                    }
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    updateQuestion(
+                                                        currentCategory.id,
+                                                        question.id,
+                                                        "prompt",
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
 
-                />
+                                            />
 
-            </div>
+                                        </div>
 
-            {/* Descripción */}
 
-            <div>
+                                        {/* DESCRIPCIÓN */}
 
-                <label className="mb-2 block text-sm">
+                                        <div>
 
-                    Descripción
+                                            <label className="mb-2 block text-sm">
 
-                </label>
+                                                Descripción
 
-                <textarea
+                                            </label>
 
-                    rows={3}
 
-                    value={question.description || ""}
+                                            <textarea
 
-                    onChange={(e)=>
+                                                rows={
+                                                    3
+                                                }
 
-                        updateQuestion(
+                                                value={
+                                                    question.description ||
+                                                    ""
+                                                }
 
-                            currentCategory.id,
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    updateQuestion(
+                                                        currentCategory.id,
+                                                        question.id,
+                                                        "description",
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
 
-                            question.id,
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 outline-none focus:border-zinc-600"
 
-                            "description",
+                                            />
 
-                            e.target.value
+                                        </div>
 
-                        )
 
-                    }
+                                        <div className="grid gap-5 md:grid-cols-2">
 
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 outline-none"
 
-                />
+                                            {/* TIPO */}
 
-            </div>
+                                            <div>
 
-            <div className="grid gap-5 md:grid-cols-2">
+                                                <label className="mb-2 block text-sm">
 
-                {/* Tipo */}
+                                                    Tipo de respuesta
 
-                <div>
+                                                </label>
 
-                    <label className="mb-2 block text-sm">
 
-                        Tipo de respuesta
+                                                <select
 
-                    </label>
+                                                    value={
+                                                        question.response_type ||
+                                                        "yes_no"
+                                                    }
 
-                    <select
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "response_type",
+                                                            e
+                                                                .target
+                                                                .value
+                                                        )
+                                                    }
 
-                        value={question.response_type}
+                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
 
-                        onChange={(e)=>
+                                                >
 
-                            updateQuestion(
+                                                    <option value="yes_no">
 
-                                currentCategory.id,
+                                                        Sí / No
 
-                                question.id,
+                                                    </option>
 
-                                "response_type",
+                                                    <option value="scale">
 
-                                e.target.value
+                                                        Escala
 
-                            )
+                                                    </option>
 
-                        }
+                                                    <option value="number">
 
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
+                                                        Número
 
-                    >
+                                                    </option>
 
-                        <option value="yes_no">
+                                                    <option value="text">
 
-                            Sí / No
+                                                        Texto
 
-                        </option>
+                                                    </option>
 
-                        <option value="scale">
+                                                    <option value="multiple_choice">
 
-                            Escala
+                                                        Selección múltiple
 
-                        </option>
+                                                    </option>
 
-                        <option value="number">
+                                                </select>
 
-                            Número
+                                            </div>
 
-                        </option>
 
-                        <option value="text">
+                                            {/* PESO */}
 
-                            Texto
+                                            <div>
 
-                        </option>
+                                                <label className="mb-2 block text-sm">
 
-                        <option value="multiple_choice">
+                                                    Peso de la pregunta
 
-                            Selección múltiple
+                                                </label>
 
-                        </option>
 
-                    </select>
+                                                <Input
 
-                </div>
+                                                    type="number"
 
-                {/* Peso */}
+                                                    min="0"
 
-                <div>
+                                                    max="100"
 
-                    <label className="mb-2 block text-sm">
+                                                    step="1"
 
-                        Peso
+                                                    value={
+                                                        question.weight ??
+                                                        10
+                                                    }
 
-                    </label>
+                                                    onChange={(
+                                                        e
+                                                    ) => {
 
-                    <Input
+                                                        const value =
+                                                            normalizeWeight(
+                                                                e
+                                                                    .target
+                                                                    .value,
+                                                                0
+                                                            );
 
-                        type="number"
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "weight",
+                                                            value
+                                                        );
 
-                        value={question.weight}
+                                                    }}
 
-                        onChange={(e)=>
+                                                />
 
-                            updateQuestion(
 
-                                currentCategory.id,
+                                                <p className="mt-2 text-xs text-zinc-500">
 
-                                question.id,
+                                                    Valor permitido: 0–100.
 
-                                "weight",
+                                                </p>
 
-                                Number(e.target.value)
+                                            </div>
 
-                            )
+                                        </div>
 
-                        }
 
-                    />
+                                        <div className="grid gap-5 md:grid-cols-2">
 
-                </div>
 
-            </div>
-                        <div className="grid gap-5 md:grid-cols-2">
+                                            {/* PRIORIDAD */}
 
-                {/* Prioridad */}
+                                            <div>
 
-                <div>
+                                                <label className="mb-2 block text-sm">
 
-                    <label className="mb-2 block text-sm">
+                                                    Prioridad
 
-                        Prioridad
+                                                </label>
 
-                    </label>
 
-                    <select
+                                                <select
 
-                        value={question.priority || "medium"}
+                                                    value={
+                                                        question.priority ||
+                                                        "medium"
+                                                    }
 
-                        onChange={(e)=>
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "priority",
+                                                            e
+                                                                .target
+                                                                .value
+                                                        )
+                                                    }
 
-                            updateQuestion(
+                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
 
-                                currentCategory.id,
+                                                >
 
-                                question.id,
+                                                    <option value="low">
 
-                                "priority",
+                                                        Baja
 
-                                e.target.value
+                                                    </option>
 
-                            )
+                                                    <option value="medium">
 
-                        }
+                                                        Media
 
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
+                                                    </option>
 
-                    >
+                                                    <option value="high">
 
-                        <option value="low">
+                                                        Alta
 
-                            Baja
+                                                    </option>
 
-                        </option>
+                                                    <option value="critical">
 
-                        <option value="medium">
+                                                        Crítica
 
-                            Media
+                                                    </option>
 
-                        </option>
+                                                </select>
 
-                        <option value="high">
+                                            </div>
 
-                            Alta
 
-                        </option>
+                                            {/* TAGS */}
 
-                        <option value="critical">
+                                            <div>
 
-                            Crítica
+                                                <label className="mb-2 block text-sm">
 
-                        </option>
+                                                    Tags
 
-                    </select>
+                                                </label>
 
-                </div>
 
-                {/* Tags */}
+                                                <Input
 
-                <div>
+                                                    value={(
+                                                        question.tags ||
+                                                        []
+                                                    ).join(
+                                                        ", "
+                                                    )}
 
-                    <label className="mb-2 block text-sm">
+                                                    placeholder="seo, ventas, branding"
 
-                        Tags
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "tags",
+                                                            e
+                                                                .target
+                                                                .value
+                                                                .split(
+                                                                    ","
+                                                                )
+                                                                .map(
+                                                                    (
+                                                                        tag
+                                                                    ) =>
+                                                                        tag.trim()
+                                                                )
+                                                                .filter(
+                                                                    Boolean
+                                                                )
+                                                        )
+                                                    }
 
-                    </label>
+                                                />
 
-                    <Input
+                                            </div>
 
-                        value={(question.tags || []).join(", ")}
+                                        </div>
 
-                        placeholder="seo, ventas, branding"
 
-                        onChange={(e)=>
+                                        {/* RECOMENDACIÓN */}
 
-                            updateQuestion(
+                                        <div>
 
-                                currentCategory.id,
+                                            <label className="mb-2 block text-sm">
 
-                                question.id,
+                                                Recomendación
 
-                                "tags",
+                                            </label>
 
-                                e.target.value
 
-                                    .split(",")
+                                            <textarea
 
-                                    .map(tag => tag.trim())
+                                                rows={
+                                                    3
+                                                }
 
-                                    .filter(Boolean)
+                                                value={
+                                                    question.recommendation ||
+                                                    ""
+                                                }
 
-                            )
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    updateQuestion(
+                                                        currentCategory.id,
+                                                        question.id,
+                                                        "recommendation",
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
 
-                        }
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
 
-                    />
+                                            />
 
-                </div>
+                                        </div>
 
-            </div>
 
-            {/* Recomendación */}
+                                        <div className="grid gap-5 md:grid-cols-2">
 
-            <div>
 
-                <label className="mb-2 block text-sm">
+                                            {/* SOP */}
 
-                    Recomendación
+                                            <div>
 
-                </label>
+                                                <label className="mb-2 block text-sm">
 
-                <textarea
+                                                    SOP relacionado
 
-                    rows={3}
+                                                </label>
 
-                    value={question.recommendation || ""}
 
-                    onChange={(e)=>
+                                                <Input
 
-                        updateQuestion(
+                                                    value={
+                                                        question.sop ||
+                                                        ""
+                                                    }
 
-                            currentCategory.id,
+                                                    placeholder="SOP-SEO-001"
 
-                            question.id,
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "sop",
+                                                            e
+                                                                .target
+                                                                .value
+                                                        )
+                                                    }
 
-                            "recommendation",
+                                                />
 
-                            e.target.value
+                                            </div>
 
-                        )
 
-                    }
+                                            {/* PLAYBOOK */}
 
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+                                            <div>
 
-                />
+                                                <label className="mb-2 block text-sm">
 
-            </div>
+                                                    Playbook
 
-            <div className="grid gap-5 md:grid-cols-2">
+                                                </label>
 
-                {/* SOP */}
 
-                <div>
+                                                <Input
 
-                    <label className="mb-2 block text-sm">
+                                                    value={
+                                                        question.playbook ||
+                                                        ""
+                                                    }
 
-                        SOP relacionado
+                                                    placeholder="Playbook SEO"
 
-                    </label>
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "playbook",
+                                                            e
+                                                                .target
+                                                                .value
+                                                        )
+                                                    }
 
-                    <Input
+                                                />
 
-                        value={question.sop || ""}
+                                            </div>
 
-                        placeholder="SOP-SEO-001"
+                                        </div>
 
-                        onChange={(e)=>
 
-                            updateQuestion(
+                                        {/* DOCUMENTO */}
 
-                                currentCategory.id,
+                                        <div>
 
-                                question.id,
+                                            <label className="mb-2 block text-sm">
 
-                                "sop",
+                                                Documento del Cerebro
 
-                                e.target.value
+                                            </label>
 
-                            )
 
-                        }
+                                            <Input
 
-                    />
+                                                value={
+                                                    question.document ||
+                                                    ""
+                                                }
 
-                </div>
+                                                placeholder="Documento relacionado"
 
-                {/* Playbook */}
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    updateQuestion(
+                                                        currentCategory.id,
+                                                        question.id,
+                                                        "document",
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
 
-                <div>
+                                            />
 
-                    <label className="mb-2 block text-sm">
+                                        </div>
 
-                        Playbook
 
-                    </label>
+                                        {/* PROMPT IA */}
 
-                    <Input
+                                        <div>
 
-                        value={question.playbook || ""}
+                                            <label className="mb-2 block text-sm">
 
-                        placeholder="Playbook SEO"
+                                                Prompt IA
 
-                        onChange={(e)=>
+                                            </label>
 
-                            updateQuestion(
 
-                                currentCategory.id,
+                                            <textarea
 
-                                question.id,
+                                                rows={
+                                                    4
+                                                }
 
-                                "playbook",
+                                                value={
+                                                    question.ai_prompt ||
+                                                    ""
+                                                }
 
-                                e.target.value
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    updateQuestion(
+                                                        currentCategory.id,
+                                                        question.id,
+                                                        "ai_prompt",
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
 
-                            )
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
 
-                        }
+                                            />
 
-                    />
+                                        </div>
 
-                </div>
 
-            </div>
+                                        {/* AUTOMATIZACIÓN */}
 
-            {/* Documento */}
+                                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
 
-            <div>
+                                            <label className="flex items-center gap-3">
 
-                <label className="mb-2 block text-sm">
+                                                <input
 
-                    Documento del Cerebro
+                                                    type="checkbox"
 
-                </label>
+                                                    checked={
+                                                        question.auto_project ||
+                                                        false
+                                                    }
 
-                <Input
+                                                    onChange={(
+                                                        e
+                                                    ) =>
+                                                        updateQuestion(
+                                                            currentCategory.id,
+                                                            question.id,
+                                                            "auto_project",
+                                                            e
+                                                                .target
+                                                                .checked
+                                                        )
+                                                    }
 
-                    value={question.document || ""}
+                                                />
 
-                    placeholder="Documento relacionado"
 
-                    onChange={(e)=>
+                                                <span>
 
-                        updateQuestion(
+                                                    Crear proyecto automáticamente cuando esta pregunta falle.
 
-                            currentCategory.id,
+                                                </span>
 
-                            question.id,
+                                            </label>
 
-                            "document",
+                                        </div>
 
-                            e.target.value
+                                    </div>
 
-                        )
+                                </Card>
 
-                    }
+                            ))}
 
-                />
+                        </div>
 
-            </div>
+                    )}
 
-            {/* Prompt IA */}
 
-            <div>
+                    {/* =================================
+                        BIBLIOTECA OFICIAL ORVESEN
+                    ================================= */}
 
-                <label className="mb-2 block text-sm">
+                    <Card>
 
-                    Prompt IA
+                        <div className="space-y-6">
 
-                </label>
+                            <div className="flex items-center justify-between">
 
-                <textarea
+                                <div>
 
-                    rows={4}
+                                    <h2 className="text-xl font-semibold">
 
-                    value={question.ai_prompt || ""}
+                                        Biblioteca Oficial ORVESEN
 
-                    onChange={(e)=>
+                                    </h2>
 
-                        updateQuestion(
+                                    <p className="mt-1 text-sm text-zinc-500">
 
-                            currentCategory.id,
+                                        Importa preguntas existentes sin tener que volver a escribirlas.
 
-                            question.id,
+                                    </p>
 
-                            "ai_prompt",
+                                </div>
 
-                            e.target.value
 
-                        )
+                                <span className="rounded-full bg-zinc-900 px-3 py-2 text-sm">
 
-                    }
-
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
-
-                />
-
-            </div>
-
-            {/* Automatización */}
-
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-
-                <label className="flex items-center gap-3">
-
-                    <input
-
-                        type="checkbox"
-
-                        checked={question.auto_project || false}
-
-                        onChange={(e)=>
-
-                            updateQuestion(
-
-                                currentCategory.id,
-
-                                question.id,
-
-                                "auto_project",
-
-                                e.target.checked
-
-                            )
-
-                        }
-
-                    />
-
-                    <span>
-
-                        Crear proyecto automáticamente cuando esta pregunta falle.
-
-                    </span>
-
-                </label>
-
-            </div>
-
-        </div>
-
-    </Card>
-
-))}
-
-</div>
-
-)} 
-
-{/* ===========================================
-    BIBLIOTECA OFICIAL ORVESEN
-=========================================== */}
-
-<Card>
-
-    <div className="space-y-6">
-
-        <div className="flex items-center justify-between">
-
-            <div>
-
-                <h2 className="text-xl font-semibold">
-
-                    Biblioteca Oficial ORVESEN
-
-                </h2>
-
-                <p className="mt-1 text-sm text-zinc-500">
-
-                    Importa preguntas existentes sin tener que volver a escribirlas.
-
-                </p>
-
-            </div>
-
-            <span className="rounded-full bg-zinc-900 px-3 py-2 text-sm">
-
-                {filteredLibrary.length} preguntas
-
-            </span>
-
-        </div>
-
-        {filteredLibrary.length === 0 && (
-
-            <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
-
-                No hay preguntas disponibles.
-
-            </div>
-
-        )}
-
-        <div className="space-y-4">
-
-            {filteredLibrary.map((item) => (
-
-                <div
-
-                    key={item.id}
-
-                    className="rounded-xl border border-zinc-800 bg-zinc-950 p-5"
-
-                >
-
-                    <div className="flex items-start justify-between gap-6">
-
-                        <div className="flex-1">
-
-                            <h3 className="font-semibold">
-
-                                {item.title}
-
-                            </h3>
-
-                            <p className="mt-2 text-sm text-zinc-500">
-
-                                {item.description}
-
-                            </p>
-
-                            <div className="mt-4 flex flex-wrap gap-2">
-
-                                <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
-
-                                    {item.response_type}
+                                    {
+                                        filteredLibrary.length
+                                    } preguntas
 
                                 </span>
 
-                                <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+                            </div>
 
-                                    Peso {item.recommended_weight}
 
-                                </span>
+                            {filteredLibrary.length ===
+                                0 && (
 
-                                {item.priority && (
+                                <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
 
-                                    <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+                                    No hay preguntas disponibles.
 
-                                        {item.priority}
+                                </div>
 
-                                    </span>
+                            )}
 
-                                )}
+
+                            <div className="space-y-4">
+
+                                {filteredLibrary.map(
+                                    (item) => {
+
+                                    const displayedWeight =
+                                        normalizeWeight(
+                                            item.recommended_weight,
+                                            10
+                                        );
+
+                                    return (
+
+                                        <div
+
+                                            key={
+                                                item.id
+                                            }
+
+                                            className="rounded-xl border border-zinc-800 bg-zinc-950 p-5"
+
+                                        >
+
+                                            <div className="flex items-start justify-between gap-6">
+
+                                                <div className="flex-1">
+
+                                                    <h3 className="font-semibold">
+
+                                                        {
+                                                            item.title
+                                                        }
+
+                                                    </h3>
+
+
+                                                    <p className="mt-2 text-sm text-zinc-500">
+
+                                                        {
+                                                            item.description
+                                                        }
+
+                                                    </p>
+
+
+                                                    <div className="mt-4 flex flex-wrap gap-2">
+
+                                                        <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+
+                                                            {
+                                                                item.response_type ||
+                                                                "yes_no"
+                                                            }
+
+                                                        </span>
+
+
+                                                        <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+
+                                                            Peso {
+                                                                displayedWeight
+                                                            }
+
+                                                        </span>
+
+
+                                                        {item.priority && (
+
+                                                            <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs">
+
+                                                                {
+                                                                    item.priority
+                                                                }
+
+                                                            </span>
+
+                                                        )}
+
+                                                    </div>
+
+                                                </div>
+
+
+                                                <Button
+                                                    onClick={() =>
+                                                        importQuestion(
+                                                            item
+                                                        )
+                                                    }
+                                                >
+
+                                                    Importar
+
+                                                </Button>
+
+                                            </div>
+
+                                        </div>
+
+                                    );
+
+                                })}
 
                             </div>
 
                         </div>
 
+                    </Card>
+
+
+                    {/* =================================
+                        BOTONES
+                    ================================= */}
+
+                    <div className="flex items-center justify-between">
+
                         <Button
 
-                            onClick={() => {
+                            variant="secondary"
 
-                                if (!currentCategory) return;
-
-                                addQuestion(
-
-                                    currentCategory.id,
-
-                                    {
-
-                                        id: crypto.randomUUID(),
-
-                                        prompt: item.title,
-
-                                        description: item.description,
-
-                                        response_type: item.response_type,
-
-                                        weight: item.recommended_weight || 10,
-
-                                        priority: item.priority || "medium",
-
-                                        recommendation: item.recommendation || "",
-
-                                        sop: item.sop || "",
-
-                                        playbook: item.playbook || "",
-
-                                        document: item.document || "",
-
-                                        ai_prompt: item.ai_prompt || "",
-
-                                        tags: item.tags || [],
-
-                                        auto_project: false,
-
-                                        required: true,
-
-                                    }
-
-                                );
-
-                            }}
+                            onClick={
+                                onBack
+                            }
 
                         >
 
-                            Importar
+                            Atrás
+
+                        </Button>
+
+
+                        <Button
+
+                            onClick={
+                                onNext
+                            }
+
+                        >
+
+                            Continuar
 
                         </Button>
 
@@ -1011,50 +1324,9 @@ export default function StepQuestions({
 
                 </div>
 
-            ))}
+            </div>
 
         </div>
 
-    </div>
-
-</Card>
-
-{/* ===========================================
-    BOTONES
-=========================================== */}
-
-<div className="flex items-center justify-between">
-
-    <Button
-
-        variant="secondary"
-
-        onClick={onBack}
-
-    >
-
-        Atrás
-
-    </Button>
-
-    <Button
-
-        onClick={onNext}
-
-    >
-
-        Continuar
-
-   </Button>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-);
-
+    );
 }

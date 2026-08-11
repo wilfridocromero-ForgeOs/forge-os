@@ -1,5 +1,9 @@
 import { supabase } from "../../../lib/supabase";
 
+/* ===========================
+   CARGAR SCORE BUILDER
+=========================== */
+
 export async function fetchTemplates(userId) {
   return Promise.all([
     supabase
@@ -83,4 +87,44 @@ export async function fetchTemplates(userId) {
       .select("template_id")
       .eq("user_id", userId),
   ]);
+}
+
+/* ===========================
+   GUARDAR BORRADOR
+=========================== */
+
+export async function saveTemplate(templateId, data) {
+  return supabase
+    .from("score_templates")
+    .update({
+      ...data,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", templateId);
+}
+
+/* ===========================
+   PUBLICAR
+=========================== */
+
+export async function publishTemplate(templateId) {
+  return supabase
+    .from("score_templates")
+    .update({
+      status: "published",
+      published_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", templateId);
+}
+
+/* ===========================
+   ELIMINAR
+=========================== */
+
+export async function deleteTemplate(templateId) {
+  return supabase
+    .from("score_templates")
+    .delete()
+    .eq("id", templateId);
 }
