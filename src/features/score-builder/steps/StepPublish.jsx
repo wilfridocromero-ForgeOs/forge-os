@@ -22,14 +22,16 @@ export default function StepPublish({
     const [errorMessage, setErrorMessage] = useState("");
 
 
-    const totalCategories = form.categories?.length || 0;
+    const totalCategories =
+        form.categories?.length || 0;
 
 
     const totalQuestions = useMemo(() => {
 
         return (form.categories || []).reduce(
             (total, category) =>
-                total + (category.questions?.length || 0),
+                total +
+                (category.questions?.length || 0),
             0
         );
 
@@ -40,7 +42,8 @@ export default function StepPublish({
 
         return (form.categories || []).reduce(
             (total, category) =>
-                total + Number(category.weight || 0),
+                total +
+                Number(category.weight || 0),
             0
         );
 
@@ -49,7 +52,9 @@ export default function StepPublish({
 
     async function publishScore() {
 
-        if (publishing) return;
+        if (publishing) {
+            return;
+        }
 
 
         /*
@@ -61,6 +66,7 @@ export default function StepPublish({
         if (!organization?.id) {
 
             setStatus("error");
+
             setErrorMessage(
                 "No se encontró una organización activa."
             );
@@ -72,6 +78,7 @@ export default function StepPublish({
         if (!user?.id) {
 
             setStatus("error");
+
             setErrorMessage(
                 "No se encontró el usuario autenticado."
             );
@@ -83,6 +90,7 @@ export default function StepPublish({
         if (!form.name?.trim()) {
 
             setStatus("error");
+
             setErrorMessage(
                 "El Score necesita un nombre."
             );
@@ -94,6 +102,7 @@ export default function StepPublish({
         if (!form.division_id) {
 
             setStatus("error");
+
             setErrorMessage(
                 "Debes seleccionar una división."
             );
@@ -105,6 +114,7 @@ export default function StepPublish({
         if (totalCategories === 0) {
 
             setStatus("error");
+
             setErrorMessage(
                 "El Score necesita al menos una categoría."
             );
@@ -116,6 +126,7 @@ export default function StepPublish({
         if (totalQuestions === 0) {
 
             setStatus("error");
+
             setErrorMessage(
                 "El Score necesita al menos una pregunta."
             );
@@ -127,6 +138,7 @@ export default function StepPublish({
         if (totalWeight !== 100) {
 
             setStatus("error");
+
             setErrorMessage(
                 "El peso total de las categorías debe ser exactamente 100%."
             );
@@ -136,7 +148,9 @@ export default function StepPublish({
 
 
         setPublishing(true);
+
         setStatus("");
+
         setErrorMessage("");
 
 
@@ -439,12 +453,15 @@ export default function StepPublish({
 
             for (
                 let categoryIndex = 0;
-                categoryIndex < form.categories.length;
+                categoryIndex <
+                form.categories.length;
                 categoryIndex++
             ) {
 
                 const category =
-                    form.categories[categoryIndex];
+                    form.categories[
+                        categoryIndex
+                    ];
 
 
                 const categoryPayload = {
@@ -457,10 +474,13 @@ export default function StepPublish({
                         `Categoría ${categoryIndex + 1}`,
 
                     description:
-                        category.description?.trim() || "",
+                        category.description?.trim() ||
+                        "",
 
                     weight:
-                        Number(category.weight || 0),
+                        Number(
+                            category.weight || 0
+                        ),
 
                     position:
                         categoryIndex,
@@ -517,12 +537,27 @@ export default function StepPublish({
 
                 for (
                     let questionIndex = 0;
-                    questionIndex < questions.length;
+                    questionIndex <
+                    questions.length;
                     questionIndex++
                 ) {
 
                     const question =
-                        questions[questionIndex];
+                        questions[
+                            questionIndex
+                        ];
+
+
+                    const safeQuestionWeight =
+                        Math.min(
+                            100,
+                            Math.max(
+                                0,
+                                Number(
+                                    question.weight || 0
+                                )
+                            )
+                        );
 
 
                     const questionPayload = {
@@ -544,12 +579,11 @@ export default function StepPublish({
                             "scale",
 
                         weight:
-                            Number(
-                                question.weight || 0
-                            ),
+                            safeQuestionWeight,
 
                         required:
-                            question.required !== false,
+                            question.required !==
+                            false,
 
                         position:
                             questionIndex,
@@ -588,7 +622,9 @@ export default function StepPublish({
                         error: questionError,
                     } = await supabase
                         .from("score_questions")
-                        .insert(questionPayload);
+                        .insert(
+                            questionPayload
+                        );
 
 
                     if (questionError) {
@@ -605,7 +641,9 @@ export default function StepPublish({
 
                         throw questionError;
                     }
+
                 }
+
             }
 
 
@@ -615,7 +653,9 @@ export default function StepPublish({
             =========================================
             */
 
-            setStatus("published");
+            setStatus(
+                "published"
+            );
 
 
             console.log(
@@ -643,7 +683,9 @@ export default function StepPublish({
             );
 
 
-            setStatus("error");
+            setStatus(
+                "error"
+            );
 
 
             setErrorMessage(
@@ -657,156 +699,163 @@ export default function StepPublish({
             setPublishing(false);
 
         }
+
     }
 
 
     return (
 
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
 
 
-            {/* TÍTULO */}
+            {/* =================================
+                TÍTULO
+            ================================= */}
 
             <div>
 
-                <h1 className="text-3xl font-bold">
+                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+
                     Publicar Score
+
                 </h1>
 
-                <p className="mt-2 text-zinc-400">
+
+                <p className="mt-2 text-sm leading-6 text-zinc-400 sm:text-base">
+
                     Revisa el resumen antes de publicar la evaluación.
+
                 </p>
 
             </div>
 
 
-            {/* RESUMEN */}
+            {/* =================================
+                RESUMEN
+            ================================= */}
 
             <Card>
 
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
 
 
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                        <p className="text-sm text-zinc-500">
-                            Nombre
-                        </p>
-
-                        <h3 className="mt-2 text-xl font-semibold">
-                            {form.name || "Sin nombre"}
-                        </h3>
-
-                    </div>
+                    <SummaryBox
+                        label="Nombre"
+                        value={
+                            form.name ||
+                            "Sin nombre"
+                        }
+                    />
 
 
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                        <p className="text-sm text-zinc-500">
-                            División
-                        </p>
-
-                        <h3 className="mt-2 text-xl font-semibold">
-
-                            {
-                                form.division_name ||
-                                form.division ||
-                                "-"
-                            }
-
-                        </h3>
-
-                    </div>
+                    <SummaryBox
+                        label="División"
+                        value={
+                            form.division_name ||
+                            form.division ||
+                            "-"
+                        }
+                    />
 
 
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                        <p className="text-sm text-zinc-500">
-                            Categorías
-                        </p>
-
-                        <h3 className="mt-2 text-xl font-semibold">
-                            {totalCategories}
-                        </h3>
-
-                    </div>
+                    <SummaryBox
+                        label="Categorías"
+                        value={
+                            totalCategories
+                        }
+                    />
 
 
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                        <p className="text-sm text-zinc-500">
-                            Preguntas
-                        </p>
-
-                        <h3 className="mt-2 text-xl font-semibold">
-                            {totalQuestions}
-                        </h3>
-
-                    </div>
+                    <SummaryBox
+                        label="Preguntas"
+                        value={
+                            totalQuestions
+                        }
+                    />
 
                 </div>
 
             </Card>
 
 
-            {/* VALIDACIÓN */}
+            {/* =================================
+                VALIDACIÓN
+            ================================= */}
 
             <Card>
 
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6">
 
 
                     <div>
 
-                        <h2 className="text-xl font-semibold">
+                        <h2 className="text-lg font-semibold text-white sm:text-xl">
+
                             Validación
+
                         </h2>
 
-                        <p className="mt-2 text-zinc-500">
+
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
+
                             Antes de publicar ORVESEN verificará la estructura de la evaluación.
+
                         </p>
 
                     </div>
 
 
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
 
 
                         <ValidationRow
                             title="Información general"
                             valid={
-                                Boolean(form.name?.trim()) &&
-                                Boolean(form.division_id)
+                                Boolean(
+                                    form.name?.trim()
+                                ) &&
+                                Boolean(
+                                    form.division_id
+                                )
                             }
                         />
 
 
                         <ValidationRow
                             title="Categorías"
-                            valid={totalCategories > 0}
+                            valid={
+                                totalCategories > 0
+                            }
                         />
 
 
                         <ValidationRow
                             title="Preguntas"
-                            valid={totalQuestions > 0}
+                            valid={
+                                totalQuestions > 0
+                            }
                         />
 
 
-                        <div className="flex items-center justify-between rounded-xl border border-zinc-800 p-4">
+                        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 p-4">
 
-                            <span>
+                            <span className="text-sm text-zinc-300 sm:text-base">
+
                                 Peso total
+
                             </span>
+
 
                             <span
                                 className={
                                     totalWeight === 100
-                                        ? "text-emerald-400"
-                                        : "text-yellow-400"
+                                        ? "shrink-0 font-semibold text-emerald-400"
+                                        : "shrink-0 font-semibold text-amber-400"
                                 }
                             >
+
                                 {totalWeight}%
+
                             </span>
 
                         </div>
@@ -818,23 +867,29 @@ export default function StepPublish({
             </Card>
 
 
-            {/* ESTADO */}
+            {/* =================================
+                ESTADO
+            ================================= */}
 
             <Card>
 
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6">
 
 
                     <div>
 
-                        <h2 className="text-xl font-semibold">
+                        <h2 className="text-lg font-semibold text-white sm:text-xl">
+
                             Estado de la evaluación
+
                         </h2>
 
-                        <p className="mt-2 text-zinc-500">
+
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
 
                             {
-                                status === "published"
+                                status ===
+                                "published"
                                     ? "La evaluación fue publicada correctamente."
                                     : "Esta evaluación todavía no ha sido publicada."
                             }
@@ -844,49 +899,42 @@ export default function StepPublish({
                     </div>
 
 
-                    <div className="grid gap-5 md:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
 
 
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                            <p className="text-sm text-zinc-500">
-                                Estado
-                            </p>
-
-                            <h3 className="mt-2 text-lg font-semibold">
-
-                                {
-                                    status === "published"
-                                        ? "Publicada"
-                                        : "Borrador"
-                                }
-
-                            </h3>
-
-                        </div>
+                        <StatusBox
+                            label="Estado"
+                            value={
+                                status ===
+                                "published"
+                                    ? "Publicada"
+                                    : "Borrador"
+                            }
+                        />
 
 
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-
-                            <p className="text-sm text-zinc-500">
-                                Tipo
-                            </p>
-
-                            <h3 className="mt-2 text-lg font-semibold">
-                                {mode || "Nuevo"}
-                            </h3>
-
-                        </div>
+                        <StatusBox
+                            label="Tipo"
+                            value={
+                                mode ||
+                                "Nuevo"
+                            }
+                        />
 
 
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                        <div className="col-span-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:col-span-1 sm:p-5">
 
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-xs text-zinc-500 sm:text-sm">
+
                                 Escala
+
                             </p>
 
-                            <h3 className="mt-2 text-lg font-semibold">
+
+                            <h3 className="mt-2 text-lg font-semibold text-white">
+
                                 1000
+
                             </h3>
 
                         </div>
@@ -897,64 +945,83 @@ export default function StepPublish({
                     {/* ÉXITO */}
 
                     {
-                        status === "published" && (
+                        status ===
+                        "published" && (
 
-                            <div className="rounded-xl border border-emerald-700 bg-emerald-950/30 p-5">
+                        <div className="rounded-xl border border-emerald-700 bg-emerald-950/30 p-4 sm:p-5">
 
-                                <h3 className="font-semibold text-emerald-400">
-                                    ✓ Evaluación publicada correctamente
-                                </h3>
+                            <h3 className="text-sm font-semibold text-emerald-400 sm:text-base">
 
-                                <p className="mt-2 text-sm text-zinc-300">
-                                    El Score, sus categorías y sus preguntas fueron guardados en ORVESEN.
-                                </p>
+                                ✓ Evaluación publicada correctamente
 
-                            </div>
+                            </h3>
 
-                        )
-                    }
+
+                            <p className="mt-2 text-sm leading-6 text-zinc-300">
+
+                                El Score, sus categorías y sus preguntas fueron guardados en ORVESEN.
+
+                            </p>
+
+                        </div>
+
+                    )}
 
 
                     {/* ERROR */}
 
                     {
-                        status === "error" && (
+                        status ===
+                        "error" && (
 
-                            <div className="rounded-xl border border-red-700 bg-red-950/30 p-5">
+                        <div className="rounded-xl border border-red-700 bg-red-950/30 p-4 sm:p-5">
 
-                                <h3 className="font-semibold text-red-400">
-                                    Error al publicar
-                                </h3>
+                            <h3 className="text-sm font-semibold text-red-400 sm:text-base">
 
-                                <p className="mt-2 break-words text-sm text-zinc-300">
+                                Error al publicar
 
-                                    {
-                                        errorMessage ||
-                                        "Ocurrió un problema durante la publicación."
-                                    }
+                            </h3>
 
-                                </p>
 
-                            </div>
+                            <p className="mt-2 break-words text-sm leading-6 text-zinc-300">
 
-                        )
-                    }
+                                {
+                                    errorMessage ||
+                                    "Ocurrió un problema durante la publicación."
+                                }
+
+                            </p>
+
+                        </div>
+
+                    )}
 
                 </div>
 
             </Card>
 
 
-            {/* BOTONES */}
+            {/* =================================
+                BOTONES
+            ================================= */}
 
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:justify-between">
+
 
                 <Button
                     variant="secondary"
-                    onClick={onBack}
-                    disabled={publishing}
+
+                    onClick={
+                        onBack
+                    }
+
+                    disabled={
+                        publishing
+                    }
                 >
+
                     Atrás
+
                 </Button>
 
 
@@ -963,15 +1030,21 @@ export default function StepPublish({
                         publishing ||
                         totalCategories === 0 ||
                         totalQuestions === 0 ||
-                        totalWeight !== 100
+                        totalWeight !== 100 ||
+                        status ===
+                            "published"
                     }
-                    onClick={publishScore}
+
+                    onClick={
+                        publishScore
+                    }
                 >
 
                     {
                         publishing
                             ? "Publicando..."
-                            : status === "published"
+                            : status ===
+                              "published"
                                 ? "Evaluación Publicada"
                                 : "Publicar Evaluación"
                     }
@@ -983,9 +1056,85 @@ export default function StepPublish({
         </div>
 
     );
+
 }
 
 
+/*
+=========================================
+RESUMEN
+=========================================
+*/
+
+function SummaryBox({
+    label,
+    value,
+}) {
+
+    return (
+
+        <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+
+            <p className="text-xs text-zinc-500 sm:text-sm">
+
+                {label}
+
+            </p>
+
+
+            <h3 className="mt-2 break-words text-base font-semibold text-white sm:text-lg">
+
+                {value}
+
+            </h3>
+
+        </div>
+
+    );
+
+}
+
+
+/*
+=========================================
+ESTADO
+=========================================
+*/
+
+function StatusBox({
+    label,
+    value,
+}) {
+
+    return (
+
+        <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+
+            <p className="text-xs text-zinc-500 sm:text-sm">
+
+                {label}
+
+            </p>
+
+
+            <h3 className="mt-2 break-words text-base font-semibold text-white sm:text-lg">
+
+                {value}
+
+            </h3>
+
+        </div>
+
+    );
+
+}
+
+
+/*
+=========================================
+VALIDACIÓN
+=========================================
+*/
 
 function ValidationRow({
     title,
@@ -994,23 +1143,33 @@ function ValidationRow({
 
     return (
 
-        <div className="flex items-center justify-between rounded-xl border border-zinc-800 p-4">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 p-4">
 
-            <span>
+            <span className="text-sm text-zinc-300 sm:text-base">
+
                 {title}
+
             </span>
+
 
             <span
                 className={
                     valid
-                        ? "text-emerald-400"
-                        : "text-red-400"
+                        ? "shrink-0 font-semibold text-emerald-400"
+                        : "shrink-0 font-semibold text-red-400"
                 }
             >
-                {valid ? "✓" : "✕"}
+
+                {
+                    valid
+                        ? "✓"
+                        : "✕"
+                }
+
             </span>
 
         </div>
 
     );
+
 }

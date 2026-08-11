@@ -1,4 +1,9 @@
-import { FilePlus2, Library, Copy } from "lucide-react";
+import {
+  FilePlus2,
+  Library,
+  Copy,
+} from "lucide-react";
+
 
 const options = [
   {
@@ -24,63 +29,87 @@ const options = [
   },
 ];
 
+
 export default function StartChoice({
   selected,
   onSelect,
   onContinue,
 }) {
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl">
 
-      <div className="mb-12 text-center">
+      {/* HEADER */}
 
-        <h1 className="text-5xl font-bold text-white">
+      <div className="mb-8 text-center sm:mb-12">
+
+        <h1 className="text-3xl font-bold text-white sm:text-4xl lg:text-5xl">
           Nuevo Score
         </h1>
 
-        <p className="mt-4 text-lg text-zinc-500">
+        <p className="mt-3 text-sm text-zinc-500 sm:mt-4 sm:text-base lg:text-lg">
           ¿Cómo deseas comenzar?
         </p>
 
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+
+      {/* OPCIONES */}
+
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-3 lg:gap-6">
 
         {options.map((option) => {
 
-          const Icon = option.icon;
+          const Icon =
+            option.icon;
 
-          const active = selected === option.id;
+          const active =
+            selected === option.id;
 
           return (
 
             <button
               key={option.id}
-              onClick={() => onSelect(option.id)}
+              type="button"
+              onClick={() =>
+                onSelect(
+                  option.id
+                )
+              }
               className={`
-                rounded-3xl
+                w-full
+                rounded-2xl
                 border
-                p-8
+                p-5
                 text-left
                 transition-all
                 duration-300
+                sm:rounded-3xl
+                sm:p-6
+                lg:p-8
 
                 ${
                   active
                     ? "border-white bg-white text-black shadow-2xl"
-                    : "border-zinc-800 bg-[#111113] text-white hover:border-zinc-600 hover:-translate-y-1"
+                    : "border-zinc-800 bg-[#111113] text-white hover:border-zinc-600 lg:hover:-translate-y-1"
                 }
               `}
             >
 
+              {/* ICONO */}
+
               <div
                 className={`
                   flex
-                  h-16
-                  w-16
+                  h-12
+                  w-12
                   items-center
                   justify-center
-                  rounded-2xl
+                  rounded-xl
+                  sm:h-14
+                  sm:w-14
+                  sm:rounded-2xl
+                  lg:h-16
+                  lg:w-16
 
                   ${
                     active
@@ -90,20 +119,31 @@ export default function StartChoice({
                 `}
               >
 
-                <Icon size={30} />
+                <Icon
+                  size={26}
+                  className="sm:h-[28px] sm:w-[28px] lg:h-[30px] lg:w-[30px]"
+                />
 
               </div>
 
-              <h2 className="mt-8 text-2xl font-semibold">
+
+              {/* TEXTO */}
+
+              <h2 className="mt-5 text-xl font-semibold sm:mt-6 sm:text-2xl lg:mt-8">
 
                 {option.title}
 
               </h2>
 
+
               <p
                 className={`
-                  mt-4
-                  leading-7
+                  mt-3
+                  text-sm
+                  leading-6
+                  sm:mt-4
+                  sm:text-base
+                  sm:leading-7
 
                   ${
                     active
@@ -125,23 +165,33 @@ export default function StartChoice({
 
       </div>
 
-      <div className="mt-14 flex justify-center">
+
+      {/* CONTINUAR */}
+
+      <div className="mt-8 flex justify-center sm:mt-10 lg:mt-14">
 
         <button
+          type="button"
           disabled={!selected}
           onClick={onContinue}
           className="
-            rounded-2xl
+            w-full
+            rounded-xl
             bg-white
-            px-10
-            py-4
-            text-lg
+            px-6
+            py-3.5
+            text-base
             font-semibold
             text-black
             transition
-            hover:scale-105
+            hover:bg-zinc-200
+            disabled:cursor-not-allowed
             disabled:opacity-40
-            disabled:hover:scale-100
+            sm:w-auto
+            sm:rounded-2xl
+            sm:px-10
+            sm:py-4
+            sm:text-lg
           "
         >
 

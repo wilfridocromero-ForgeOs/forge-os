@@ -67,11 +67,6 @@ export default function ScoreEditor({
         _new: false,
       })
     );
-console.log("SCORE RECIBIDO:", score);
-console.log("organization_id recibido:", score?.organization_id);
-console.log("division_id recibido:", score?.division_id);
-console.log("created_by recibido:", score?.created_by);
-
     setDraft({
       ...score,
       categories,
@@ -777,7 +772,7 @@ console.log("created_by recibido:", score?.created_by);
     setDuplicating(true);
     setError("");
 
-        try {
+    try {
       const {
         data: { user },
         error: userError,
@@ -792,12 +787,6 @@ console.log("created_by recibido:", score?.created_by);
           "No se encontró el usuario autenticado."
         );
       }
-console.log("===== DUPLICAR SCORE =====");
-console.log("DRAFT:", draft);
-console.log("organization_id:", draft.organization_id);
-console.log("division_id:", draft.division_id);
-console.log("created_by:", draft.created_by);
-
       if (!draft.organization_id) {
         throw new Error(
           "El Score no tiene una organización válida."
@@ -840,7 +829,8 @@ console.log("created_by:", draft.created_by);
 
           max_score:
             draft.max_score || 1000,
-                      created_by:
+
+          created_by:
             user.id,
 
           template_kind:
@@ -939,7 +929,7 @@ console.log("created_by:", draft.created_by);
                 question.response_type ||
                 "scale",
 
-                           weight:
+              weight:
                 Math.min(
                   100,
                   Math.max(
@@ -1101,11 +1091,11 @@ console.log("created_by:", draft.created_by);
 
       {/* HEADER */}
 
-      <div className="sticky top-0 z-30 rounded-2xl border border-zinc-800 bg-[#0c0c0e]/95 p-4 backdrop-blur">
+      <div className="sticky top-0 z-30 rounded-2xl border border-zinc-800 bg-[#0c0c0e]/95 p-3 backdrop-blur sm:p-4">
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 
-          <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
 
             <button
               type="button"
@@ -1118,9 +1108,9 @@ console.log("created_by:", draft.created_by);
 
             <div className="min-w-0">
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
 
-                <h2 className="truncate text-xl font-semibold text-white">
+                <h2 className="truncate text-lg font-semibold text-white sm:text-xl">
                   {draft.name}
                 </h2>
 
@@ -1137,7 +1127,7 @@ console.log("created_by:", draft.created_by);
 
               </div>
 
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-xs leading-5 text-zinc-500 sm:text-sm">
                 {totalCategories} categorías
                 {" · "}
                 {totalQuestions} preguntas
@@ -1160,7 +1150,7 @@ console.log("created_by:", draft.created_by);
                 duplicating ||
                 saving
               }
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-3 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-4"
             >
               {duplicating ? (
                 <Loader2
@@ -1185,7 +1175,7 @@ console.log("created_by:", draft.created_by);
                 saving ||
                 duplicating
               }
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
             >
               {saving ? (
                 <Loader2
@@ -1228,9 +1218,9 @@ console.log("created_by:", draft.created_by);
 
         {/* PANEL IZQUIERDO */}
 
-        <aside className="border-b border-zinc-800 bg-[#101012] lg:border-b-0 lg:border-r">
+        <aside className="max-h-[380px] overflow-hidden border-b border-zinc-800 bg-[#101012] lg:max-h-none lg:border-b-0 lg:border-r">
 
-          <div className="border-b border-zinc-800 p-5">
+          <div className="border-b border-zinc-800 p-4 sm:p-5">
 
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600">
               Estructura
@@ -1238,7 +1228,7 @@ console.log("created_by:", draft.created_by);
 
           </div>
 
-          <div className="max-h-[700px] overflow-y-auto p-3">
+          <div className="max-h-[320px] overflow-y-auto p-3 lg:max-h-[700px]">
 
             <NavigationButton
               active={
@@ -1394,7 +1384,7 @@ console.log("created_by:", draft.created_by);
 
         {/* PANEL DERECHO */}
 
-        <main className="min-w-0 p-6 lg:p-8">
+        <main className="min-w-0 p-4 sm:p-6 lg:p-8">
 
           {selectedType ===
             "general" && (
@@ -1489,7 +1479,7 @@ function GeneralEditor({
   deleteScore,
 }) {
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
 
       <EditorHeader
         title="Información general"
@@ -1578,7 +1568,7 @@ function GeneralEditor({
           type="button"
           onClick={deleteScore}
           disabled={deleting}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 disabled:opacity-50"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 disabled:opacity-50 sm:w-auto"
         >
           {deleting ? (
             <Loader2
@@ -1612,7 +1602,7 @@ function CategoryEditor({
   deleteCategory,
 }) {
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
 
       <EditorHeader
         title={category.name}
@@ -1683,7 +1673,7 @@ function CategoryEditor({
           onClick={() =>
             addQuestion(category.id)
           }
-          className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 sm:w-auto"
         >
           <Plus size={16} />
           Añadir pregunta
@@ -1694,7 +1684,7 @@ function CategoryEditor({
           onClick={() =>
             deleteCategory(category)
           }
-          className="inline-flex items-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 sm:w-auto"
         >
           <Trash2 size={16} />
           Eliminar categoría
@@ -1720,7 +1710,7 @@ function QuestionEditor({
   deleteQuestion,
 }) {
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
 
       <EditorHeader
         title="Editar pregunta"
@@ -1946,7 +1936,7 @@ function QuestionEditor({
               question
             )
           }
-          className="inline-flex items-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-900 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/30 sm:w-auto"
         >
           <Trash2 size={16} />
           Eliminar pregunta
@@ -1995,7 +1985,7 @@ function EditorHeader({
   return (
     <div>
 
-      <h3 className="text-2xl font-semibold text-white">
+      <h3 className="text-xl font-semibold text-white sm:text-2xl">
         {title}
       </h3>
 
@@ -2076,4 +2066,4 @@ function StatusBadge({
 
 
 const inputClass =
-  "w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition placeholder:text-zinc-700 focus:border-zinc-600";
+  "w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-700 focus:border-zinc-600";

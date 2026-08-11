@@ -10,47 +10,47 @@ import StepPublish from "./steps/StepPublish";
 
 import useScoreBuilder from "./hooks/useScoreBuilder";
 
-export default function Wizard({ library = [] }) {
+
+export default function Wizard({
+    library = [],
+}) {
 
     const {
-
         step,
-
         next,
-
         back,
 
         mode,
-
         setMode,
 
         form,
-
         setForm,
 
         addCategory,
-
         updateCategory,
-
         removeCategory,
 
         addQuestion,
-
         updateQuestion,
-
         removeQuestion,
-
     } = useScoreBuilder();
 
-    return (
 
-        <div className="mx-auto max-w-7xl">
+    return (
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-1 sm:px-0">
+
+            {/* INDICADOR */}
 
             {step > 0 && (
 
-                <StepIndicator current={step - 1} />
+                <StepIndicator
+                    current={step - 1}
+                />
 
             )}
+
+
+            {/* INICIO */}
 
             {step === 0 && (
 
@@ -62,6 +62,9 @@ export default function Wizard({ library = [] }) {
 
             )}
 
+
+            {/* INFORMACIÓN */}
+
             {step === 1 && (
 
                 <StepInformation
@@ -71,6 +74,9 @@ export default function Wizard({ library = [] }) {
                 />
 
             )}
+
+
+            {/* CATEGORÍAS */}
 
             {step === 2 && (
 
@@ -85,6 +91,9 @@ export default function Wizard({ library = [] }) {
                 />
 
             )}
+
+
+            {/* PREGUNTAS */}
 
             {step === 3 && (
 
@@ -101,6 +110,9 @@ export default function Wizard({ library = [] }) {
 
             )}
 
+
+            {/* PESOS */}
+
             {step === 4 && (
 
                 <StepWeights
@@ -112,6 +124,9 @@ export default function Wizard({ library = [] }) {
 
             )}
 
+
+            {/* VISTA PREVIA */}
+
             {step === 5 && (
 
                 <StepPreview
@@ -121,6 +136,9 @@ export default function Wizard({ library = [] }) {
                 />
 
             )}
+
+
+            {/* PUBLICAR */}
 
             {step === 6 && (
 
@@ -133,7 +151,5 @@ export default function Wizard({ library = [] }) {
             )}
 
         </div>
-
     );
-
 }

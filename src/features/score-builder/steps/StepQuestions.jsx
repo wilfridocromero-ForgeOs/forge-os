@@ -8,7 +8,6 @@ import SectionTitle from "../components/SectionTitle";
 
 
 function normalizeWeight(value, fallback = 10) {
-
     const number = Number(value);
 
     if (!Number.isFinite(number)) {
@@ -23,23 +22,14 @@ function normalizeWeight(value, fallback = 10) {
 
 
 export default function StepQuestions({
-
     form,
-
     library = [],
-
     addQuestion,
-
     updateQuestion,
-
     removeQuestion,
-
     onBack,
-
     onNext,
-
 }) {
-
     const [selectedCategory, setSelectedCategory] =
         useState(
             form.categories?.[0]?.id || ""
@@ -56,12 +46,10 @@ export default function StepQuestions({
     */
 
     const currentCategory = useMemo(() => {
-
         return (form.categories || []).find(
             (category) =>
                 category.id === selectedCategory
         );
-
     }, [
         form.categories,
         selectedCategory,
@@ -75,7 +63,6 @@ export default function StepQuestions({
     */
 
     const filteredLibrary = useMemo(() => {
-
         const questions = library || [];
 
         if (!search.trim()) {
@@ -87,7 +74,6 @@ export default function StepQuestions({
 
         return questions.filter(
             (question) => {
-
                 const text = `
                     ${question.title || ""}
                     ${question.description || ""}
@@ -98,7 +84,6 @@ export default function StepQuestions({
                 );
             }
         );
-
     }, [
         library,
         search,
@@ -112,7 +97,6 @@ export default function StepQuestions({
     */
 
     function createQuestion() {
-
         if (!currentCategory) {
             return;
         }
@@ -121,41 +105,24 @@ export default function StepQuestions({
             currentCategory.id,
             {
                 prompt: "",
-
                 description: "",
-
                 help_text: "",
-
                 response_type:
                     "yes_no",
-
                 weight: 10,
-
                 priority:
                     "medium",
-
                 required: true,
-
                 recommendation: "",
-
                 sop: "",
-
                 playbook: "",
-
                 document: "",
-
                 ai_prompt: "",
-
                 tags: [],
-
                 auto_project: false,
-
                 scale_min: 1,
-
                 scale_max: 5,
-
                 options: [],
-
                 scoring_config: {},
             }
         );
@@ -169,7 +136,6 @@ export default function StepQuestions({
     */
 
     function importQuestion(item) {
-
         if (!currentCategory) {
             return;
         }
@@ -179,17 +145,6 @@ export default function StepQuestions({
                 item.recommended_weight,
                 10
             );
-
-        console.log(
-            "Importando pregunta ORVESEN:",
-            {
-                title: item.title,
-                original_weight:
-                    item.recommended_weight,
-                safe_weight:
-                    safeWeight,
-            }
-        );
 
         addQuestion(
             currentCategory.id,
@@ -275,30 +230,26 @@ export default function StepQuestions({
 
 
     return (
-
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
 
             <SectionTitle
-
                 title="Preguntas"
-
                 subtitle="Construye la evaluación creando preguntas propias o importándolas desde la Biblioteca Oficial ORVESEN."
-
             />
 
 
-            <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
+            <div className="grid gap-5 xl:grid-cols-[280px_1fr] xl:gap-6">
 
 
                 {/* =================================
-                    SIDEBAR
+                    CATEGORÍAS
                 ================================= */}
 
                 <Card>
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
 
-                        <h3 className="mb-4 text-lg font-semibold">
+                        <h3 className="text-base font-semibold sm:text-lg">
 
                             Categorías
 
@@ -317,65 +268,69 @@ export default function StepQuestions({
                         )}
 
 
-                        {(form.categories || [])
-                            .map(
-                                (category) => (
+                        <div className="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible">
 
-                                <button
+                            {(form.categories || [])
+                                .map(
+                                    (category) => (
 
-                                    key={
-                                        category.id
-                                    }
-
-                                    type="button"
-
-                                    onClick={() =>
-                                        setSelectedCategory(
+                                    <button
+                                        key={
                                             category.id
-                                        )
-                                    }
-
-                                    className={`
-                                        w-full
-                                        rounded-xl
-                                        px-4
-                                        py-3
-                                        text-left
-                                        transition
-                                        ${
-                                            selectedCategory ===
-                                            category.id
-                                                ? "bg-white text-black"
-                                                : "bg-zinc-900 text-white hover:bg-zinc-800"
-                                        }
-                                    `}
-
-                                >
-
-                                    <div className="font-medium">
-
-                                        {
-                                            category.name ||
-                                            "Categoría sin nombre"
                                         }
 
-                                    </div>
+                                        type="button"
+
+                                        onClick={() =>
+                                            setSelectedCategory(
+                                                category.id
+                                            )
+                                        }
+
+                                        className={`
+                                            min-w-[180px]
+                                            shrink-0
+                                            rounded-xl
+                                            px-4
+                                            py-3
+                                            text-left
+                                            transition
+                                            xl:w-full
+                                            ${
+                                                selectedCategory ===
+                                                category.id
+                                                    ? "bg-white text-black"
+                                                    : "bg-zinc-900 text-white hover:bg-zinc-800"
+                                            }
+                                        `}
+                                    >
+
+                                        <div className="truncate font-medium">
+
+                                            {
+                                                category.name ||
+                                                "Categoría sin nombre"
+                                            }
+
+                                        </div>
 
 
-                                    <div className="mt-1 text-xs opacity-70">
+                                        <div className="mt-1 text-xs opacity-70">
 
-                                        {
-                                            (
-                                                category.questions ||
-                                                []
-                                            ).length
-                                        } preguntas
+                                            {
+                                                (
+                                                    category.questions ||
+                                                    []
+                                                ).length
+                                            } preguntas
 
-                                    </div>
+                                        </div>
 
-                                </button>
+                                    </button>
 
-                            ))}
+                                ))}
+
+                        </div>
 
                     </div>
 
@@ -386,56 +341,52 @@ export default function StepQuestions({
                     CONTENIDO
                 ================================= */}
 
-                <div className="space-y-6">
+                <div className="min-w-0 space-y-5 sm:space-y-6">
 
 
                     {/* BUSCADOR */}
 
                     <Card className="sticky top-0 z-20">
 
-                        <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 
-                            <div className="relative flex-1">
+                            <div className="relative min-w-0 flex-1">
 
                                 <Search
-
                                     size={18}
-
-                                    className="absolute left-4 top-4 text-zinc-500"
-
+                                    className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
                                 />
 
 
                                 <Input
-
                                     value={search}
-
                                     placeholder="Buscar en la biblioteca..."
-
                                     className="pl-11"
-
                                     onChange={(e) =>
                                         setSearch(
                                             e.target.value
                                         )
                                     }
-
                                 />
 
                             </div>
 
 
-                            <Button
-                                onClick={
-                                    createQuestion
-                                }
-                            >
+                            <div className="w-full sm:w-auto">
 
-                                <Plus size={18} />
+                                <Button
+                                    onClick={
+                                        createQuestion
+                                    }
+                                >
 
-                                Nueva pregunta
+                                    <Plus size={18} />
 
-                            </Button>
+                                    Nueva pregunta
+
+                                </Button>
+
+                            </div>
 
                         </div>
 
@@ -448,7 +399,7 @@ export default function StepQuestions({
 
                         <Card>
 
-                            <div className="py-12 text-center text-zinc-500">
+                            <div className="py-10 text-center text-sm text-zinc-500 sm:py-12">
 
                                 Selecciona una categoría para comenzar.
 
@@ -465,7 +416,7 @@ export default function StepQuestions({
 
                     {currentCategory && (
 
-                        <div className="space-y-5">
+                        <div className="space-y-4 sm:space-y-5">
 
                             {(
                                 currentCategory.questions ||
@@ -482,16 +433,16 @@ export default function StepQuestions({
                                     }
                                 >
 
-                                    <div className="space-y-6">
+                                    <div className="space-y-5 sm:space-y-6">
 
 
                                         {/* HEADER */}
 
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-                                            <div>
+                                            <div className="min-w-0">
 
-                                                <h3 className="text-lg font-semibold">
+                                                <h3 className="text-base font-semibold sm:text-lg">
 
                                                     Pregunta {
                                                         index +
@@ -500,7 +451,7 @@ export default function StepQuestions({
 
                                                 </h3>
 
-                                                <p className="text-sm text-zinc-500">
+                                                <p className="mt-1 text-sm text-zinc-500">
 
                                                     Configura esta pregunta.
 
@@ -510,7 +461,6 @@ export default function StepQuestions({
 
 
                                             <button
-
                                                 type="button"
 
                                                 onClick={() =>
@@ -520,8 +470,7 @@ export default function StepQuestions({
                                                     )
                                                 }
 
-                                                className="flex items-center gap-2 rounded-xl border border-red-700 px-4 py-2 text-red-500 transition hover:bg-red-950"
-
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-700 px-4 py-2.5 text-sm text-red-500 transition hover:bg-red-950 sm:w-auto"
                                             >
 
                                                 <Trash2
@@ -549,7 +498,6 @@ export default function StepQuestions({
 
 
                                             <Input
-
                                                 value={
                                                     question.prompt ||
                                                     ""
@@ -564,12 +512,9 @@ export default function StepQuestions({
                                                         currentCategory.id,
                                                         question.id,
                                                         "prompt",
-                                                        e
-                                                            .target
-                                                            .value
+                                                        e.target.value
                                                     )
                                                 }
-
                                             />
 
                                         </div>
@@ -587,10 +532,7 @@ export default function StepQuestions({
 
 
                                             <textarea
-
-                                                rows={
-                                                    3
-                                                }
+                                                rows={3}
 
                                                 value={
                                                     question.description ||
@@ -604,20 +546,17 @@ export default function StepQuestions({
                                                         currentCategory.id,
                                                         question.id,
                                                         "description",
-                                                        e
-                                                            .target
-                                                            .value
+                                                        e.target.value
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 outline-none focus:border-zinc-600"
-
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base outline-none focus:border-zinc-600"
                                             />
 
                                         </div>
 
 
-                                        <div className="grid gap-5 md:grid-cols-2">
+                                        <div className="grid gap-4 md:grid-cols-2 md:gap-5">
 
 
                                             {/* TIPO */}
@@ -632,7 +571,6 @@ export default function StepQuestions({
 
 
                                                 <select
-
                                                     value={
                                                         question.response_type ||
                                                         "yes_no"
@@ -645,44 +583,31 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "response_type",
-                                                            e
-                                                                .target
-                                                                .value
+                                                            e.target.value
                                                         )
                                                     }
 
-                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
-
+                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base"
                                                 >
 
                                                     <option value="yes_no">
-
                                                         Sí / No
-
                                                     </option>
 
                                                     <option value="scale">
-
                                                         Escala
-
                                                     </option>
 
                                                     <option value="number">
-
                                                         Número
-
                                                     </option>
 
                                                     <option value="text">
-
                                                         Texto
-
                                                     </option>
 
                                                     <option value="multiple_choice">
-
                                                         Selección múltiple
-
                                                     </option>
 
                                                 </select>
@@ -702,13 +627,9 @@ export default function StepQuestions({
 
 
                                                 <Input
-
                                                     type="number"
-
                                                     min="0"
-
                                                     max="100"
-
                                                     step="1"
 
                                                     value={
@@ -722,9 +643,7 @@ export default function StepQuestions({
 
                                                         const value =
                                                             normalizeWeight(
-                                                                e
-                                                                    .target
-                                                                    .value,
+                                                                e.target.value,
                                                                 0
                                                             );
 
@@ -734,9 +653,7 @@ export default function StepQuestions({
                                                             "weight",
                                                             value
                                                         );
-
                                                     }}
-
                                                 />
 
 
@@ -751,7 +668,7 @@ export default function StepQuestions({
                                         </div>
 
 
-                                        <div className="grid gap-5 md:grid-cols-2">
+                                        <div className="grid gap-4 md:grid-cols-2 md:gap-5">
 
 
                                             {/* PRIORIDAD */}
@@ -766,7 +683,6 @@ export default function StepQuestions({
 
 
                                                 <select
-
                                                     value={
                                                         question.priority ||
                                                         "medium"
@@ -779,38 +695,27 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "priority",
-                                                            e
-                                                                .target
-                                                                .value
+                                                            e.target.value
                                                         )
                                                     }
 
-                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
-
+                                                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base"
                                                 >
 
                                                     <option value="low">
-
                                                         Baja
-
                                                     </option>
 
                                                     <option value="medium">
-
                                                         Media
-
                                                     </option>
 
                                                     <option value="high">
-
                                                         Alta
-
                                                     </option>
 
                                                     <option value="critical">
-
                                                         Crítica
-
                                                     </option>
 
                                                 </select>
@@ -830,7 +735,6 @@ export default function StepQuestions({
 
 
                                                 <Input
-
                                                     value={(
                                                         question.tags ||
                                                         []
@@ -847,12 +751,8 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "tags",
-                                                            e
-                                                                .target
-                                                                .value
-                                                                .split(
-                                                                    ","
-                                                                )
+                                                            e.target.value
+                                                                .split(",")
                                                                 .map(
                                                                     (
                                                                         tag
@@ -864,7 +764,6 @@ export default function StepQuestions({
                                                                 )
                                                         )
                                                     }
-
                                                 />
 
                                             </div>
@@ -884,10 +783,7 @@ export default function StepQuestions({
 
 
                                             <textarea
-
-                                                rows={
-                                                    3
-                                                }
+                                                rows={3}
 
                                                 value={
                                                     question.recommendation ||
@@ -901,20 +797,17 @@ export default function StepQuestions({
                                                         currentCategory.id,
                                                         question.id,
                                                         "recommendation",
-                                                        e
-                                                            .target
-                                                            .value
+                                                        e.target.value
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
-
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base"
                                             />
 
                                         </div>
 
 
-                                        <div className="grid gap-5 md:grid-cols-2">
+                                        <div className="grid gap-4 md:grid-cols-2 md:gap-5">
 
 
                                             {/* SOP */}
@@ -929,7 +822,6 @@ export default function StepQuestions({
 
 
                                                 <Input
-
                                                     value={
                                                         question.sop ||
                                                         ""
@@ -944,12 +836,9 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "sop",
-                                                            e
-                                                                .target
-                                                                .value
+                                                            e.target.value
                                                         )
                                                     }
-
                                                 />
 
                                             </div>
@@ -967,7 +856,6 @@ export default function StepQuestions({
 
 
                                                 <Input
-
                                                     value={
                                                         question.playbook ||
                                                         ""
@@ -982,12 +870,9 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "playbook",
-                                                            e
-                                                                .target
-                                                                .value
+                                                            e.target.value
                                                         )
                                                     }
-
                                                 />
 
                                             </div>
@@ -1007,7 +892,6 @@ export default function StepQuestions({
 
 
                                             <Input
-
                                                 value={
                                                     question.document ||
                                                     ""
@@ -1022,12 +906,9 @@ export default function StepQuestions({
                                                         currentCategory.id,
                                                         question.id,
                                                         "document",
-                                                        e
-                                                            .target
-                                                            .value
+                                                        e.target.value
                                                     )
                                                 }
-
                                             />
 
                                         </div>
@@ -1045,10 +926,7 @@ export default function StepQuestions({
 
 
                                             <textarea
-
-                                                rows={
-                                                    4
-                                                }
+                                                rows={4}
 
                                                 value={
                                                     question.ai_prompt ||
@@ -1062,14 +940,11 @@ export default function StepQuestions({
                                                         currentCategory.id,
                                                         question.id,
                                                         "ai_prompt",
-                                                        e
-                                                            .target
-                                                            .value
+                                                        e.target.value
                                                     )
                                                 }
 
-                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4"
-
+                                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-base"
                                             />
 
                                         </div>
@@ -1077,12 +952,11 @@ export default function StepQuestions({
 
                                         {/* AUTOMATIZACIÓN */}
 
-                                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+                                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-5">
 
-                                            <label className="flex items-center gap-3">
+                                            <label className="flex items-start gap-3">
 
                                                 <input
-
                                                     type="checkbox"
 
                                                     checked={
@@ -1097,16 +971,15 @@ export default function StepQuestions({
                                                             currentCategory.id,
                                                             question.id,
                                                             "auto_project",
-                                                            e
-                                                                .target
-                                                                .checked
+                                                            e.target.checked
                                                         )
                                                     }
 
+                                                    className="mt-1 h-4 w-4 shrink-0"
                                                 />
 
 
-                                                <span>
+                                                <span className="text-sm leading-6 sm:text-base">
 
                                                     Crear proyecto automáticamente cuando esta pregunta falle.
 
@@ -1133,19 +1006,19 @@ export default function StepQuestions({
 
                     <Card>
 
-                        <div className="space-y-6">
+                        <div className="space-y-5 sm:space-y-6">
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-                                <div>
+                                <div className="min-w-0">
 
-                                    <h2 className="text-xl font-semibold">
+                                    <h2 className="text-lg font-semibold sm:text-xl">
 
                                         Biblioteca Oficial ORVESEN
 
                                     </h2>
 
-                                    <p className="mt-1 text-sm text-zinc-500">
+                                    <p className="mt-1 text-sm leading-6 text-zinc-500">
 
                                         Importa preguntas existentes sin tener que volver a escribirlas.
 
@@ -1154,7 +1027,7 @@ export default function StepQuestions({
                                 </div>
 
 
-                                <span className="rounded-full bg-zinc-900 px-3 py-2 text-sm">
+                                <span className="w-fit rounded-full bg-zinc-900 px-3 py-2 text-sm">
 
                                     {
                                         filteredLibrary.length
@@ -1168,7 +1041,7 @@ export default function StepQuestions({
                             {filteredLibrary.length ===
                                 0 && (
 
-                                <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
+                                <div className="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-500 sm:p-10">
 
                                     No hay preguntas disponibles.
 
@@ -1191,18 +1064,16 @@ export default function StepQuestions({
                                     return (
 
                                         <div
-
                                             key={
                                                 item.id
                                             }
 
-                                            className="rounded-xl border border-zinc-800 bg-zinc-950 p-5"
-
+                                            className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5"
                                         >
 
-                                            <div className="flex items-start justify-between gap-6">
+                                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
 
-                                                <div className="flex-1">
+                                                <div className="min-w-0 flex-1">
 
                                                     <h3 className="font-semibold">
 
@@ -1213,7 +1084,7 @@ export default function StepQuestions({
                                                     </h3>
 
 
-                                                    <p className="mt-2 text-sm text-zinc-500">
+                                                    <p className="mt-2 text-sm leading-6 text-zinc-500">
 
                                                         {
                                                             item.description
@@ -1260,17 +1131,21 @@ export default function StepQuestions({
                                                 </div>
 
 
-                                                <Button
-                                                    onClick={() =>
-                                                        importQuestion(
-                                                            item
-                                                        )
-                                                    }
-                                                >
+                                                <div className="w-full sm:w-auto">
 
-                                                    Importar
+                                                    <Button
+                                                        onClick={() =>
+                                                            importQuestion(
+                                                                item
+                                                            )
+                                                        }
+                                                    >
 
-                                                </Button>
+                                                        Importar
+
+                                                    </Button>
+
+                                                </div>
 
                                             </div>
 
@@ -1291,16 +1166,13 @@ export default function StepQuestions({
                         BOTONES
                     ================================= */}
 
-                    <div className="flex items-center justify-between">
+                    <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:justify-between">
 
                         <Button
-
                             variant="secondary"
-
                             onClick={
                                 onBack
                             }
-
                         >
 
                             Atrás
@@ -1309,11 +1181,9 @@ export default function StepQuestions({
 
 
                         <Button
-
                             onClick={
                                 onNext
                             }
-
                         >
 
                             Continuar
@@ -1327,6 +1197,5 @@ export default function StepQuestions({
             </div>
 
         </div>
-
     );
 }

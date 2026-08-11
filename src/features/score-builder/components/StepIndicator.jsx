@@ -1,165 +1,170 @@
 export default function StepIndicator({
-
     current,
-
 }) {
-
-    const steps=[
-
+    const steps = [
         "Información",
-
         "Categorías",
-
         "Biblioteca",
-
         "Pesos",
-
         "Vista previa",
-
         "Publicar",
-
     ];
 
-    return(
+    const currentStep =
+        steps[current] || "";
 
-        <div className="mb-12">
+    return (
+        <div className="mb-8 sm:mb-12">
 
-            <div className="flex items-center justify-between">
+            {/* =================================
+                MÓVIL
+            ================================= */}
 
-                {
+            <div className="sm:hidden">
 
-                    steps.map((item,index)=>(
+                <div className="flex items-center justify-between gap-3">
 
-                        <div
+                    <div>
 
-                            key={item}
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-600">
 
-                            className="flex flex-1 items-center"
+                            Paso {current + 1} de {steps.length}
 
-                        >
+                        </p>
 
-                            <div
+                        <h3 className="mt-1 text-base font-semibold text-white">
 
-                                className={`
+                            {currentStep}
 
-                                    flex
+                        </h3>
 
-                                    h-11
+                    </div>
 
-                                    w-11
 
-                                    items-center
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white text-sm font-semibold text-white">
 
-                                    justify-center
+                        {current + 1}
 
-                                    rounded-full
+                    </div>
 
-                                    border
+                </div>
 
-                                    text-sm
 
-                                    font-semibold
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
 
-                                    transition
+                    <div
+                        className="h-full rounded-full bg-white transition-all duration-300"
+                        style={{
+                            width: `${
+                                ((current + 1) /
+                                    steps.length) *
+                                100
+                            }%`,
+                        }}
+                    />
 
-                                    ${
-
-                                        current>index
-
-                                        ?
-
-                                        "border-white bg-white text-black"
-
-                                        :
-
-                                        current===index
-
-                                        ?
-
-                                        "border-white text-white"
-
-                                        :
-
-                                        "border-zinc-700 text-zinc-600"
-
-                                    }
-
-                                `}
-
-                            >
-
-                                {index+1}
-
-                            </div>
-
-                            {
-
-                                index<steps.length-1 &&
-
-                                <div
-
-                                    className={`
-
-                                        mx-3
-
-                                        h-[2px]
-
-                                        flex-1
-
-                                        ${
-
-                                            current>index
-
-                                            ?
-
-                                            "bg-white"
-
-                                            :
-
-                                            "bg-zinc-800"
-
-                                        }
-
-                                    `}
-
-                                />
-
-                            }
-
-                        </div>
-
-                    ))
-
-                }
+                </div>
 
             </div>
 
-            <div className="mt-5 flex justify-between text-xs text-zinc-500">
 
-                {
+            {/* =================================
+                TABLET / DESKTOP
+            ================================= */}
 
-                    steps.map(item=>(
+            <div className="hidden sm:block">
+
+                <div className="flex items-center justify-between">
+
+                    {steps.map(
+                        (
+                            item,
+                            index
+                        ) => (
 
                         <div
-
                             key={item}
+                            className="flex flex-1 items-center"
+                        >
 
-                            className="w-24 text-center"
+                            <div
+                                className={`
+                                    flex
+                                    h-10
+                                    w-10
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-full
+                                    border
+                                    text-sm
+                                    font-semibold
+                                    transition
+                                    lg:h-11
+                                    lg:w-11
+                                    ${
+                                        current > index
+                                            ? "border-white bg-white text-black"
+                                            : current === index
+                                                ? "border-white text-white"
+                                                : "border-zinc-700 text-zinc-600"
+                                    }
+                                `}
+                            >
 
+                                {index + 1}
+
+                            </div>
+
+
+                            {index <
+                                steps.length -
+                                    1 && (
+
+                                <div
+                                    className={`
+                                        mx-2
+                                        h-[2px]
+                                        flex-1
+                                        lg:mx-3
+                                        ${
+                                            current >
+                                            index
+                                                ? "bg-white"
+                                                : "bg-zinc-800"
+                                        }
+                                    `}
+                                />
+
+                            )}
+
+                        </div>
+
+                    ))}
+
+                </div>
+
+
+                <div className="mt-5 grid grid-cols-6 text-xs text-zinc-500">
+
+                    {steps.map(
+                        (item) => (
+
+                        <div
+                            key={item}
+                            className="px-1 text-center"
                         >
 
                             {item}
 
                         </div>
 
-                    ))
+                    ))}
 
-                }
+                </div>
 
             </div>
 
         </div>
-
     );
-
 }

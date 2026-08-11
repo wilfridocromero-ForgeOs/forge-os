@@ -77,22 +77,26 @@ export default function ScoreBuilder() {
                 "AUTH ERROR:",
                 error
             );
+
+
             const {
-    data: ownerTest,
-    error: ownerTestError,
-} = await supabase.rpc(
-    "is_platform_owner"
-);
+                data: ownerTest,
+                error: ownerTestError,
+            } = await supabase.rpc(
+                "is_platform_owner"
+            );
 
-console.log(
-    "IS PLATFORM OWNER:",
-    ownerTest
-);
 
-console.log(
-    "OWNER TEST ERROR:",
-    ownerTestError
-);
+            console.log(
+                "IS PLATFORM OWNER:",
+                ownerTest
+            );
+
+            console.log(
+                "OWNER TEST ERROR:",
+                ownerTestError
+            );
+
 
             console.log(
                 "===================================="
@@ -115,8 +119,11 @@ console.log(
     useEffect(() => {
 
         if (!organization?.id) {
+
             setLoading(false);
+
             return;
+
         }
 
         loadScores();
@@ -139,39 +146,41 @@ console.log(
         setLoading(true);
         setError("");
 
-       const {
-    data,
-    error,
-} = await supabase
-    .from("score_templates")
-    .select(`
-        id,
-        organization_id,
-        name,
-        description,
-        status,
-        version,
-        max_score,
-        created_by,
-        template_kind,
-        created_at,
-        updated_at,
-        division_id,
-        divisions (
-            id,
-            name
-        )
-    `)
-    .eq(
-        "organization_id",
-        organization.id
-    )
-    .order(
-        "updated_at",
-        {
-            ascending: false,
-        }
-    );
+
+        const {
+            data,
+            error,
+        } = await supabase
+            .from("score_templates")
+            .select(`
+                id,
+                organization_id,
+                name,
+                description,
+                status,
+                version,
+                max_score,
+                created_by,
+                template_kind,
+                created_at,
+                updated_at,
+                division_id,
+                divisions (
+                    id,
+                    name
+                )
+            `)
+            .eq(
+                "organization_id",
+                organization.id
+            )
+            .order(
+                "updated_at",
+                {
+                    ascending: false,
+                }
+            );
+
 
         if (error) {
 
@@ -189,11 +198,14 @@ console.log(
             setLoading(false);
 
             return;
+
         }
+
 
         setScores(data || []);
 
         setLoading(false);
+
     }
 
 
@@ -210,6 +222,7 @@ console.log(
         setScoreError("");
 
         setSelectedScore(null);
+
 
         try {
 
@@ -249,6 +262,7 @@ console.log(
                     }
                 );
 
+
             if (categoriesError) {
 
                 console.error(
@@ -257,6 +271,7 @@ console.log(
                 );
 
                 throw categoriesError;
+
             }
 
 
@@ -316,6 +331,7 @@ console.log(
                 error
             );
 
+
             setScoreError(
                 error?.message ||
                 "No se pudo cargar el Score."
@@ -326,6 +342,7 @@ console.log(
             setLoadingScore(false);
 
         }
+
     }
 
 
@@ -342,6 +359,7 @@ console.log(
         setScoreError("");
 
         setView("create");
+
     }
 
 
@@ -360,6 +378,7 @@ console.log(
         setView("list");
 
         loadScores();
+
     }
 
 
@@ -375,6 +394,7 @@ console.log(
             return;
         }
 
+
         setSelectedScore((current) => ({
 
             ...current,
@@ -388,7 +408,9 @@ console.log(
 
         }));
 
+
         loadScores();
+
     }
 
 
@@ -407,6 +429,7 @@ console.log(
         setView("list");
 
         loadScores();
+
     }
 
 
@@ -420,7 +443,7 @@ console.log(
 
         <Page className="space-y-6">
 
-            <div className="mx-auto max-w-7xl">
+            <div className="mx-auto w-full max-w-7xl px-1 sm:px-0">
 
 
                 {/* =================================
@@ -429,9 +452,9 @@ console.log(
 
                 {view !== "detail" && (
 
-                    <div className="mb-8">
+                    <div className="mb-6 sm:mb-8">
 
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500 sm:text-xs sm:tracking-[0.3em]">
 
                             ORVESEN Intelligence
 
@@ -441,16 +464,16 @@ console.log(
                         <div className="mt-2 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
 
 
-                            <div>
+                            <div className="min-w-0">
 
-                                <h1 className="text-4xl font-bold text-white">
+                                <h1 className="text-3xl font-bold text-white sm:text-4xl">
 
                                     Score Builder
 
                                 </h1>
 
 
-                                <p className="mt-3 max-w-3xl text-zinc-400">
+                                <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400 sm:text-base">
 
                                     Diseña, administra y publica
                                     sistemas de evaluación para las
@@ -466,7 +489,7 @@ console.log(
                                 <button
                                     type="button"
                                     onClick={startNewScore}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200 md:w-auto"
                                 >
 
                                     <Plus size={18} />
@@ -483,7 +506,7 @@ console.log(
                                 <button
                                     type="button"
                                     onClick={returnToScores}
-                                    className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
+                                    className="w-full rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900 md:w-auto"
                                 >
 
                                     Mis Scores
@@ -505,9 +528,9 @@ console.log(
 
                 {scoreError && (
 
-                    <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/20 p-5">
+                    <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/20 p-4 sm:p-5">
 
-                        <p className="text-sm text-red-400">
+                        <p className="break-words text-sm text-red-400">
 
                             {scoreError}
 
@@ -524,9 +547,9 @@ console.log(
 
                 {loadingScore && (
 
-                    <div className="flex min-h-52 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/40">
+                    <div className="flex min-h-52 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4">
 
-                        <div className="flex items-center gap-3 text-zinc-400">
+                        <div className="flex items-center gap-3 text-sm text-zinc-400 sm:text-base">
 
                             <Loader2
                                 size={20}
@@ -549,16 +572,17 @@ console.log(
                 {view === "list" &&
                     !loadingScore && (
 
-                    <div className="space-y-6">
+                    <div className="space-y-5 sm:space-y-6">
 
 
                         <div>
 
-                            <h2 className="text-xl font-semibold text-white">
+                            <h2 className="text-lg font-semibold text-white sm:text-xl">
 
                                 Mis Scores
 
                             </h2>
+
 
                             <p className="mt-1 text-sm text-zinc-500">
 
@@ -573,9 +597,9 @@ console.log(
 
                         {loading && (
 
-                            <div className="flex min-h-52 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/40">
+                            <div className="flex min-h-52 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4">
 
-                                <div className="flex items-center gap-3 text-zinc-400">
+                                <div className="flex items-center gap-3 text-sm text-zinc-400 sm:text-base">
 
                                     <Loader2
                                         size={20}
@@ -596,18 +620,19 @@ console.log(
                         {!loading &&
                             error && (
 
-                            <div className="rounded-2xl border border-red-900 bg-red-950/20 p-6">
+                            <div className="rounded-2xl border border-red-900 bg-red-950/20 p-5 sm:p-6">
 
-                                <p className="text-sm text-red-400">
+                                <p className="break-words text-sm text-red-400">
 
                                     {error}
 
                                 </p>
 
+
                                 <button
                                     type="button"
                                     onClick={loadScores}
-                                    className="mt-4 rounded-lg border border-red-900 px-4 py-2 text-sm text-red-300 transition hover:bg-red-950/30"
+                                    className="mt-4 w-full rounded-lg border border-red-900 px-4 py-2.5 text-sm text-red-300 transition hover:bg-red-950/30 sm:w-auto"
                                 >
 
                                     Intentar nuevamente
@@ -625,7 +650,7 @@ console.log(
                             !error &&
                             scores.length === 0 && (
 
-                            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/30 px-6 py-16 text-center">
+                            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/30 px-5 py-12 text-center sm:px-6 sm:py-16">
 
                                 <h3 className="text-lg font-semibold text-white">
 
@@ -633,7 +658,8 @@ console.log(
 
                                 </h3>
 
-                                <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-500">
+
+                                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
 
                                     Crea tu primer sistema de evaluación
                                     para comenzar a medir el desempeño
@@ -641,10 +667,11 @@ console.log(
 
                                 </p>
 
+
                                 <button
                                     type="button"
                                     onClick={startNewScore}
-                                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
+                                    className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200 sm:w-auto"
                                 >
 
                                     <Plus size={18} />
@@ -664,7 +691,7 @@ console.log(
                             !error &&
                             scores.length > 0 && (
 
-                            <div className="grid gap-4">
+                            <div className="grid gap-3 sm:gap-4">
 
                                 {scores.map(
                                     (score) => (
@@ -675,21 +702,22 @@ console.log(
                                         onClick={() =>
                                             openScore(score)
                                         }
-                                        className="w-full rounded-2xl border border-zinc-800 bg-[#111113] p-6 text-left transition hover:border-zinc-600 hover:bg-zinc-900/60"
+                                        className="w-full rounded-2xl border border-zinc-800 bg-[#111113] p-4 text-left transition hover:border-zinc-600 hover:bg-zinc-900/60 sm:p-6"
                                     >
 
-                                        <div className="flex items-center justify-between gap-5">
+                                        <div className="flex items-start justify-between gap-3 sm:items-center sm:gap-5">
 
 
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
 
-                                                <div className="flex flex-wrap items-center gap-3">
+                                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
 
-                                                    <h3 className="truncate text-lg font-semibold text-white">
+                                                    <h3 className="min-w-0 truncate text-base font-semibold text-white sm:text-lg">
 
                                                         {score.name}
 
                                                     </h3>
+
 
                                                     <StatusBadge
                                                         status={
@@ -700,7 +728,7 @@ console.log(
                                                 </div>
 
 
-                                                <p className="mt-2 text-sm text-zinc-500">
+                                                <p className="mt-2 text-xs leading-5 text-zinc-500 sm:text-sm">
 
                                                     {
                                                         score.divisions
@@ -708,7 +736,25 @@ console.log(
                                                         "Sin división"
                                                     }
 
-                                                    {" · "}
+                                                    <span className="hidden sm:inline">
+                                                        {" · "}
+                                                        Escala {
+                                                            score.max_score ||
+                                                            1000
+                                                        }
+
+                                                        {" · "}
+
+                                                        Versión {
+                                                            score.version ||
+                                                            1
+                                                        }
+                                                    </span>
+
+                                                </p>
+
+
+                                                <div className="mt-1 text-xs text-zinc-600 sm:hidden">
 
                                                     Escala {
                                                         score.max_score ||
@@ -722,12 +768,12 @@ console.log(
                                                         1
                                                     }
 
-                                                </p>
+                                                </div>
 
 
                                                 {score.description && (
 
-                                                    <p className="mt-3 line-clamp-2 max-w-3xl text-sm text-zinc-400">
+                                                    <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-5 text-zinc-400">
 
                                                         {
                                                             score.description
@@ -740,7 +786,7 @@ console.log(
                                             </div>
 
 
-                                            <div className="shrink-0 text-2xl text-zinc-500">
+                                            <div className="shrink-0 pt-1 text-xl text-zinc-500 sm:pt-0 sm:text-2xl">
 
                                                 ›
 
@@ -806,6 +852,7 @@ console.log(
         </Page>
 
     );
+
 }
 
 
@@ -822,13 +869,14 @@ function StatusBadge({
     const published =
         status === "published";
 
+
     return (
 
         <span
             className={
                 published
-                    ? "rounded-full border border-emerald-900 bg-emerald-950/40 px-3 py-1 text-xs font-medium text-emerald-400"
-                    : "rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs font-medium text-zinc-400"
+                    ? "shrink-0 rounded-full border border-emerald-900 bg-emerald-950/40 px-2.5 py-1 text-[11px] font-medium text-emerald-400 sm:px-3 sm:text-xs"
+                    : "shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-zinc-400 sm:px-3 sm:text-xs"
             }
         >
 
@@ -841,4 +889,5 @@ function StatusBadge({
         </span>
 
     );
+
 }
