@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArchiveRestore, Check, ChevronRight, ClipboardList, Copy, Heart,
-  Library, LoaderCircle, Plus, Save, Search, Trash2,
+  Library, LoaderCircle, MoreHorizontal, Plus, Save, Search, Trash2,
 } from "lucide-react";
 
 import Page from "../components/ui/Page";
@@ -175,6 +175,45 @@ export default function ScoreBuilder() {
       return result.data.id;
     }
     return null;
+  }
+
+  async function cloneCategory(category) {
+    setAction("duplicate-category");
+    setNotice(null);
+    try {
+      const created = await supabase.from("score_categories").insert({
+        template_id: selected.id, name: `${category.name} — Copia`,
+        description: category.description || "", weight: Number(category.weight || 0),
+        position: selected.score_categories.length,
+      }).select("id").single();
+      if (created.error) throw created.error;
+      if (category.score_questions.length) {
+        const copied = await supabase.from("score_questions").insert(category.score_questions.map((question, index) => ({
+          category_id: created.data.id, library_question_id: question.library_question_id || null,
+          prompt: question.prompt, help_text: question.help_text || "", response_type: question.response_type,
+          weight: Number(question.weight || 0), required: Boolean(question.required), position: index,
+          scale_min: Number(question.scale_min || 1), scale_max: Number(question.scale_max || 5),
+          options: question.options || [], scoring_config: question.scoring_config || {},
+        })));
+        if (copied.error) throw copied.error;
+      }
+      await loadBuilder(selected.id);
+      notify("Categoría duplicada correctamente.");
+    } catch (error) { notify(friendlyError(error, "No se pudo duplicar la categoría."), "error"); }
+    finally { setAction(""); }
+  }
+
+  async function cloneQuestion(category, question) {
+    const result = await runAction("duplicate-question", () => supabase.from("score_questions").insert({
+      category_id: category.id, library_question_id: question.library_question_id || null,
+      prompt: question.prompt, help_text: question.help_text || "", response_type: question.response_type,
+      weight: Number(question.weight || 0), required: Boolean(question.required),
+      position: category.score_questions.length, scale_min: Number(question.scale_min || 1),
+      scale_max: Number(question.scale_max || 5), options: question.options || [],
+      scoring_config: question.scoring_config || {},
+    }).select("id").single(), "Pregunta duplicada correctamente.");
+    if (result) await loadBuilder(selected.id);
+    return result?.data?.id || null;
   }
 
   async function addLibraryQuestion(category, question) {
@@ -377,11 +416,11 @@ export default function ScoreBuilder() {
       : <div className="sb-workspace">
         <ScoreList loading={loading} templates={visibleTemplates} selectedId={selectedId} view={view} onSelect={(id) => { setSelectedId(id); setActiveStep(0); setNotice(null); }}/>
         {selected ? <main className="min-w-0 space-y-5">
+          <ScoreContext template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/>
           <WizardNav activeStep={activeStep} setActiveStep={setActiveStep}/>
-          <div className="sb-actions-desktop"><BuilderActions template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/></div>
-          {activeStep === 0 && <InformationStep template={selected} divisions={divisions} update={updateSelected}/>} 
-          {activeStep === 1 && <CategoriesStep template={selected} updateCategory={updateCategory} addCategory={addCategory} removeCategory={removeCategory} busy={Boolean(action)}/>} 
-          {activeStep === 2 && <QuestionsStep template={selected} updateQuestion={updateQuestion} addQuestion={addQuestion} removeQuestion={removeQuestion} busy={Boolean(action)}/>} 
+          {activeStep === 0 && <InformationStep template={selected} divisions={divisions} update={updateSelected} onSave={() => persistTemplate(selected.status)} busy={Boolean(action)}/>} 
+          {activeStep === 1 && <CategoriesStep template={selected} updateCategory={updateCategory} addCategory={addCategory} cloneCategory={cloneCategory} removeCategory={removeCategory} busy={Boolean(action)}/>} 
+          {activeStep === 2 && <QuestionsStep template={selected} updateQuestion={updateQuestion} addQuestion={addQuestion} cloneQuestion={cloneQuestion} removeQuestion={removeQuestion} busy={Boolean(action)}/>} 
           {activeStep === 3 && <WeightsStep template={selected} updateCategory={updateCategory} updateQuestion={updateQuestion}/>} 
           {activeStep === 4 && <PreviewStep template={selected}/>} 
           {activeStep === 5 && <PublishStep template={selected} validation={validateTemplate()} onSave={() => persistTemplate(selected.status)} onPublish={() => persistTemplate("published")} onUnpublish={() => persistTemplate("draft")} busy={Boolean(action)}/>} 
@@ -403,7 +442,14 @@ function WizardNav({ activeStep, setActiveStep }) {
   return <nav className="sb-card sb-steps" aria-label="Pasos del Score Builder">{STEPS.map((step, index) => <button type="button" key={step} onClick={() => setActiveStep(index)} className={activeStep === index ? "active" : ""}><span>{index + 1}</span>{step}</button>)}</nav>;
 }
 
-function InformationStep({ template, divisions, update }) {
+function ScoreContext({ template, favorites, busy, onFavorite, onDuplicate, onTemplate, onDelete, onSave }) {
+  return <section className="sb-score-context">
+    <div className="min-w-0"><strong>{template.name}</strong><span>{template.divisions?.name || "Sin división"} · {template.status === "published" ? "Publicado" : "Borrador"} · /100</span></div>
+    <div className="sb-score-context-actions"><button type="button" disabled={busy} onClick={onSave} className="sb-button sb-button-primary"><Save size={16}/> Guardar</button><details className="sb-action-menu"><summary aria-label="Más acciones"><MoreHorizontal size={19}/></summary><div><button type="button" onClick={onFavorite}><Heart size={16} fill={favorites.includes(template.id) ? "currentColor" : "none"}/>{favorites.includes(template.id) ? "Quitar favorito" : "Añadir favorito"}</button><button type="button" onClick={onDuplicate}><Copy size={16}/>Duplicar Score</button><button type="button" onClick={onTemplate}><Library size={16}/>Guardar como plantilla</button><button type="button" onClick={onDelete} className="danger"><Trash2 size={16}/>Eliminar Score</button></div></details></div>
+  </section>;
+}
+
+function InformationStep({ template, divisions, update, onSave, busy }) {
   return <section className="sb-card p-5 sm:p-7"><Heading title="Información" text="La misma información se utiliza al crear y al editar el Score."/><div className="grid gap-4 md:grid-cols-2">
     <Field label="Nombre"><input className="sb-input" value={template.name} onChange={(event) => update({ name: event.target.value })}/></Field>
     <Field label="División evaluada"><select className="sb-input" value={template.division_id || ""} onChange={(event) => {
@@ -413,16 +459,16 @@ function InformationStep({ template, divisions, update }) {
     <div className="md:col-span-2"><Field label="Objetivo y descripción"><textarea rows="4" className="sb-input resize-y" value={template.description || ""} onChange={(event) => update({ description: event.target.value })}/></Field></div>
     <Field label="Escala"><input className="sb-input" value="0–100 puntos" disabled/></Field>
     <Field label="Estado"><input className="sb-input" value={template.status === "published" ? "Publicado" : "Borrador"} disabled/></Field>
-  </div></section>;
+  </div><button type="button" disabled={busy} onClick={onSave} className="sb-information-save sb-button sb-button-primary mt-5"><Save size={17}/> Guardar cambios</button></section>;
 }
 
-function CategoriesStep({ template, updateCategory, addCategory, removeCategory, busy }) {
+function CategoriesStep({ template, updateCategory, addCategory, cloneCategory, removeCategory, busy }) {
   return <section className="space-y-4"><div className="sb-card p-5 sm:p-7"><Heading title="Categorías" text="Organiza el diagnóstico y asigna un peso total de 100%."/><WeightTotal total={template.score_categories.reduce((sum, item) => sum + Number(item.weight || 0), 0)}/><button type="button" disabled={busy} onClick={addCategory} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir categoría</button></div>
-    {template.score_categories.map((category, index) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="mb-4 flex items-center justify-between gap-3"><strong>Categoría {index + 1}</strong><button type="button" aria-label="Eliminar categoría" onClick={() => removeCategory(category.id)} className="sb-icon-button danger"><Trash2 size={18}/></button></div><div className="grid gap-4 md:grid-cols-[1fr_150px]"><Field label="Nombre"><input className="sb-input" value={category.name} onChange={(event) => updateCategory(category.id, { name: event.target.value })}/></Field><Field label="Peso %"><input type="number" min="0" max="100" className="sb-input" value={category.weight} onChange={(event) => updateCategory(category.id, { weight: event.target.value })}/></Field><div className="md:col-span-2"><Field label="Descripción"><textarea rows="3" className="sb-input resize-y" value={category.description || ""} onChange={(event) => updateCategory(category.id, { description: event.target.value })}/></Field></div></div></article>)}
+    {template.score_categories.map((category, index) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-category-summary-mobile mb-4"><strong>Categoría {index + 1}</strong><button type="button" aria-label="Eliminar categoría" onClick={() => removeCategory(category.id)} className="sb-icon-button danger"><Trash2 size={18}/></button></div><div className="sb-category-summary-desktop mb-4"><div><strong>{category.name}</strong><p className="sb-muted mt-1 text-sm">{category.score_questions.length} preguntas · {Number(category.weight || 0)}%</p></div><div className="sb-category-actions"><button type="button" disabled={busy} onClick={() => cloneCategory(category)} className="sb-button sb-button-ghost"><Copy size={16}/> Duplicar</button><button type="button" aria-label="Eliminar categoría" onClick={() => removeCategory(category.id)} className="sb-icon-button danger"><Trash2 size={18}/></button></div></div><div className="grid gap-4 md:grid-cols-[1fr_150px]"><Field label="Nombre"><input className="sb-input" value={category.name} onChange={(event) => updateCategory(category.id, { name: event.target.value })}/></Field><Field label="Peso %"><input type="number" min="0" max="100" className="sb-input" value={category.weight} onChange={(event) => updateCategory(category.id, { weight: event.target.value })}/></Field><div className="md:col-span-2"><Field label="Descripción"><textarea rows="3" className="sb-input resize-y" value={category.description || ""} onChange={(event) => updateCategory(category.id, { description: event.target.value })}/></Field></div></div></article>)}
   </section>;
 }
 
-function QuestionsStep({ template, updateQuestion, addQuestion, removeQuestion, busy }) {
+function QuestionsStep({ template, updateQuestion, addQuestion, cloneQuestion, removeQuestion, busy }) {
   const [expandedQuestionId, setExpandedQuestionId] = useState(null);
   async function addAndExpand(category) {
     const questionId = await addQuestion(category);
@@ -432,9 +478,13 @@ function QuestionsStep({ template, updateQuestion, addQuestion, removeQuestion, 
     const removed = await removeQuestion(categoryId, questionId);
     if (removed && expandedQuestionId === questionId) setExpandedQuestionId(null);
   }
+  async function duplicateAndExpand(category, question) {
+    const questionId = await cloneQuestion(category, question);
+    if (questionId) setExpandedQuestionId(questionId);
+  }
   return <section className="space-y-4">{template.score_categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-section-title mb-4"><h2>{category.name}</h2><span className="sb-badge">{category.score_questions.length} preguntas</span></div>
     <div className="sb-questions-mobile space-y-4">{category.score_questions.map((question, index) => <div key={question.id} className="sb-question"><div className="flex items-center justify-between gap-3"><strong>Pregunta {index + 1}</strong><button type="button" aria-label="Eliminar pregunta" onClick={() => removeQuestion(category.id, question.id)} className="sb-icon-button danger"><Trash2 size={17}/></button></div><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>)}<button type="button" disabled={busy} onClick={() => addQuestion(category)} className="sb-button sb-button-secondary"><Plus size={17}/> Añadir pregunta</button></div>
-    <div className="sb-questions-desktop"><div className="sb-question-table-head" aria-hidden="true"><span>#</span><span>Pregunta</span><span>Tipo</span><span>Peso</span><span>Req.</span><span>Acciones</span></div>{category.score_questions.map((question, index) => { const expanded = expandedQuestionId === question.id; return <div key={question.id} className={`sb-question-compact ${expanded ? "expanded" : ""}`}><button type="button" className="sb-question-row" aria-expanded={expanded} onClick={() => setExpandedQuestionId(expanded ? null : question.id)}><span>{index + 1}</span><strong title={question.prompt}>{question.prompt}</strong><span>{responseTypeLabel(question.response_type)}</span><span>{question.response_type === "text" ? "—" : `${Number(question.weight || 0)}%`}</span><span>{question.required ? "Sí" : "No"}</span><span>{expanded ? "Cerrar" : "Editar"}</span></button><button type="button" aria-label={`Eliminar ${question.prompt}`} onClick={() => removeAndClose(category.id, question.id)} className="sb-question-delete danger"><Trash2 size={16}/></button>{expanded && <div className="sb-question-editor"><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>}</div>; })}<button type="button" disabled={busy} onClick={() => addAndExpand(category)} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir pregunta</button></div>
+    <div className="sb-questions-desktop"><div className="sb-question-table-head" aria-hidden="true"><span>#</span><span>Pregunta</span><span>Tipo</span><span>Peso</span><span>Req.</span><span>Acciones</span></div>{category.score_questions.map((question, index) => { const expanded = expandedQuestionId === question.id; return <div key={question.id} className={`sb-question-compact ${expanded ? "expanded" : ""}`}><button type="button" className="sb-question-row" aria-expanded={expanded} onClick={() => setExpandedQuestionId(expanded ? null : question.id)}><span>{index + 1}</span><strong title={question.prompt}>{question.prompt}</strong><span>{responseTypeLabel(question.response_type)}</span><span>{question.response_type === "text" ? "—" : `${Number(question.weight || 0)}%`}</span><span>{question.required ? "Sí" : "No"}</span><span>{expanded ? "Cerrar" : "Editar"}</span></button><div className="sb-question-row-actions"><button type="button" aria-label={`Duplicar ${question.prompt}`} onClick={() => duplicateAndExpand(category, question)}><Copy size={15}/></button><button type="button" aria-label={`Eliminar ${question.prompt}`} onClick={() => removeAndClose(category.id, question.id)} className="danger"><Trash2 size={15}/></button></div>{expanded && <div className="sb-question-editor"><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>}</div>; })}<button type="button" disabled={busy} onClick={() => addAndExpand(category)} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir pregunta</button></div>
   </article>)}</section>;
 }
 
