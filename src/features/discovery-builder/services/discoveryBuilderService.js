@@ -38,7 +38,8 @@ export async function getDiscoveryBuilderData() {
   const [templatesResult, scoresResult] = await Promise.all([
     supabase.from("discovery_templates").select(templateSelect).order("updated_at", { ascending: false }),
     supabase.from("score_templates")
-      .select("id, name, status, score_categories(id, name, position, score_questions(id, prompt, response_type, position))")
+      .select("id, name, status, score_categories(id, name, position, score_questions(id, prompt, response_type, position, scale_min, scale_max, options, scoring_config))")
+      .eq("status", "published")
       .order("name"),
   ]);
 
@@ -63,6 +64,47 @@ export async function createDiscoveryTemplate(payload) {
   const { data, error } = await supabase.from("discovery_templates").insert(payload).select("id").single();
   if (error) throw error;
   return data;
+}
+
+export async function duplicateDiscoveryTemplate(template, name, createdBy) {
+  let copyId = null;
+  try {
+    const copy = await createDiscoveryTemplate({
+      organization_id: template.organization_id,
+      division_id: template.division_id || null,
+      name,
+      description: template.description || "",
+      created_by: createdBy,
+      status: "draft",
+      version: 1,
+    });
+    copyId = copy.id;
+
+    for (const sourceSection of template.discovery_sections) {
+      const section = await createSection({
+        template_id: copy.id,
+        title: sourceSection.title,
+        description: sourceSection.description || "",
+        position: sourceSection.position,
+      });
+      for (const sourceQuestion of sourceSection.discovery_questions) {
+        await createQuestion({
+          section_id: section.id,
+          prompt: sourceQuestion.prompt,
+          help_text: sourceQuestion.help_text || "",
+          response_type: sourceQuestion.response_type,
+          options: sourceQuestion.options || [],
+          required: sourceQuestion.required,
+          position: sourceQuestion.position,
+          question_kind: sourceQuestion.question_kind,
+        });
+      }
+    }
+    return copy;
+  } catch (error) {
+    if (copyId) await supabase.from("discovery_templates").delete().eq("id", copyId);
+    throw error;
+  }
 }
 
 export async function updateDiscoveryTemplate(id, changes) {

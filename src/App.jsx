@@ -12,7 +12,8 @@ import ResetPassword from "./auth/ResetPassword";
 import Dashboard from "./app/Dashboard";
 import Clients from "./app/Clients";
 import ClientProfile from "./app/ClientProfile";
-import Discovery from "./app/Discovery";
+import DiscoveryBuilder from "./app/Discovery";
+import DiscoveryExecution, { DiscoveryResult, DiscoveryRunner } from "./app/DiscoveryExecution";
 import Projects from "./app/Projects";
 import Score from "./app/Score";
 import Settings from "./app/Settings";
@@ -38,6 +39,10 @@ export default function App() {
 
       {/* APP PROTEGIDA */}
       <Route element={<ProtectedRoute />}>
+        <Route path="/discovery/evaluaciones/:assessmentId" element={<DiscoveryRunner />} />
+
+        <Route path="/discovery/evaluaciones/:assessmentId/resultado" element={<DiscoveryResult />} />
+
         <Route element={<AppLayout />}>
 
         <Route
@@ -54,8 +59,10 @@ export default function App() {
 
         <Route
           path="/discovery"
-          element={<Discovery />}
+          element={<DiscoveryExecution />}
         />
+
+        <Route path="/discovery/builder" element={<DiscoveryBuilder />} />
 
         <Route
           path="/proyectos"

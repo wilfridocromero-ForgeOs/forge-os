@@ -10,6 +10,7 @@ import {
   Settings,
   BookOpen,
   SlidersHorizontal,
+  ClipboardPenLine,
   X,
 } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
@@ -191,6 +192,7 @@ export default function Sidebar({
                     <NavLink
                       key={item.label}
                       to={item.to}
+                      end={item.to === "/discovery"}
                       onClick={() => setSidebarOpen(false)}
                       className={({ isActive }) =>
                         `
@@ -243,6 +245,14 @@ export default function Sidebar({
                 >
                   <SlidersHorizontal size={20} />
                   <span className="font-medium">Score Builder</span>
+                </NavLink>
+                <NavLink
+                  to="/discovery/builder"
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) => `flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
+                >
+                  <ClipboardPenLine size={20} />
+                  <span className="font-medium">Discovery Builder</span>
                 </NavLink>
                 </div>
               )}

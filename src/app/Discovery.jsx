@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Archive, ArrowLeft, Check, ChevronRight, CircleHelp, ClipboardList,
+  Archive, ArrowLeft, Check, ChevronRight, CircleHelp, ClipboardCopy, ClipboardList,
   Eye, FileText, Link2, LoaderCircle, Plus, Save, Search, Settings2,
   Sparkles, Trash2,
 } from "lucide-react";
@@ -9,7 +9,7 @@ import Page from "../components/ui/Page";
 import { useAuth } from "../Context/AuthContext";
 import { useDivisions } from "../hooks/useDivisions";
 import {
-  createDiscoveryTemplate, createQuestion, createSection, deleteDiscoveryTemplate,
+  createDiscoveryTemplate, createQuestion, createSection, deleteDiscoveryTemplate, duplicateDiscoveryTemplate,
   deleteQuestion, deleteSection, getDiscoveryBuilderData, replaceScoreLink,
   updateDiscoveryTemplate, updateQuestion, updateSection,
 } from "../features/discovery-builder/services/discoveryBuilderService";
@@ -49,6 +49,24 @@ function validationFor(template) {
     { label: "Cada sección tiene preguntas", valid: sections.length > 0 && sections.every((section) => section.discovery_questions.length > 0) },
     { label: "Preguntas evaluativas conectadas", valid: questions.filter((q) => q.question_kind === "evaluative").every((q) => q.discovery_question_score_links.length > 0) },
   ];
+}
+
+function optionValue(option) {
+  return String(typeof option === "object" ? option.value ?? option.label ?? "" : option).trim().toLocaleLowerCase("es");
+}
+
+function scoreQuestionIsCompatible(discoveryQuestion, scoreQuestion) {
+  const normalizeType = (type) => type === "boolean" ? "yes_no" : type;
+  if (normalizeType(discoveryQuestion.response_type) !== normalizeType(scoreQuestion.response_type)) return false;
+  if (normalizeType(discoveryQuestion.response_type) === "scale") {
+    return Number.isFinite(scoreQuestion.scale_min) && Number.isFinite(scoreQuestion.scale_max)
+      && scoreQuestion.scale_min < scoreQuestion.scale_max;
+  }
+  if (normalizeType(discoveryQuestion.response_type) !== "multiple_choice") return true;
+  const discoveryOptions = (discoveryQuestion.options || []).map(optionValue).filter(Boolean).sort();
+  const scoreOptions = (scoreQuestion.options || []).map(optionValue).filter(Boolean).sort();
+  return discoveryOptions.length > 0 && discoveryOptions.length === scoreOptions.length
+    && discoveryOptions.every((value, index) => value === scoreOptions[index]);
 }
 
 export default function Discovery() {
@@ -192,6 +210,14 @@ export default function Discovery() {
     if (result !== null) updateSelected({ status: "published", published_at: publishedAt });
   }
 
+  async function duplicateTemplate() {
+    const suggestedName = `${selected.name} — Copia`;
+    const name = window.prompt("Nombre de la copia", suggestedName)?.trim();
+    if (!name) return;
+    const copy = await runAction("duplicate", () => duplicateDiscoveryTemplate(selected, name, user.id), "Discovery duplicado como borrador.");
+    if (copy) await loadData(copy.id);
+  }
+
   async function archiveTemplate() {
     const status = selected.status === "archived" ? "draft" : "archived";
     const changes = status === "draft" ? { status, published_at: null } : { status };
@@ -241,6 +267,7 @@ export default function Discovery() {
               <div className="db-builder-head">
                 <div><small>EDITANDO</small><h2>{selected.name}</h2></div>
                 <div className="db-head-actions">
+                  <button className="db-icon-button" title="Duplicar" disabled={action === "duplicate"} onClick={duplicateTemplate}><ClipboardCopy size={17} /></button>
                   <button className="db-icon-button" title="Archivar" onClick={archiveTemplate}><Archive size={17} /></button>
                   <button className="db-icon-button danger" title="Eliminar" onClick={removeTemplate}><Trash2 size={17} /></button>
                   <span className="db-save-state">{action ? <><LoaderCircle className="spin" size={14} /> Guardando</> : <><Check size={14} /> Guardado</>}</span>
@@ -314,7 +341,16 @@ function Connections({ template, scoreTemplates, connect }) {
   const questions = template.discovery_sections.flatMap((section) => section.discovery_questions.map((question) => ({ section, question }))).filter(({ question }) => question.question_kind === "evaluative");
   return <div><StageTitle number="04" title="Conecta con Score" text="Cada pregunta evaluativa puede alimentar una pregunta del Score sin modificar su motor." />
     <div className="db-connection-note"><Link2 size={18} /><p><strong>Score sigue siendo la fuente canónica.</strong><br />Discovery solo declara la relación; no cambia pesos, escalas ni cálculos.</p></div>
-    <div className="db-stack">{questions.map(({ section, question }) => <article className="db-card db-link-row" key={question.id}><div><small>{section.title}</small><h3>{question.prompt}</h3></div><ChevronRight size={18} /><label>Pregunta Score<select value={question.discovery_question_score_links[0]?.score_question_id || ""} onChange={(e) => connect(section, question, e.target.value)}><option value="">Sin conexión</option>{scoreTemplates.map((score) => <optgroup key={score.id} label={score.name}>{score.score_categories.map((category) => category.score_questions.map((scoreQuestion) => <option key={scoreQuestion.id} value={scoreQuestion.id}>{category.name} · {scoreQuestion.prompt}</option>))}</optgroup>)}</select></label></article>)}
+    <div className="db-stack">{questions.map(({ section, question }) => {
+      const compatibleScores = scoreTemplates.map((score) => ({
+        ...score,
+        score_categories: score.score_categories.map((category) => ({
+          ...category,
+          score_questions: category.score_questions.filter((scoreQuestion) => scoreQuestionIsCompatible(question, scoreQuestion)),
+        })).filter((category) => category.score_questions.length),
+      })).filter((score) => score.score_categories.length);
+      return <article className="db-card db-link-row" key={question.id}><div><small>{section.title}</small><h3>{question.prompt}</h3></div><ChevronRight size={18} /><label>Pregunta Score<select value={question.discovery_question_score_links[0]?.score_question_id || ""} onChange={(e) => connect(section, question, e.target.value)}><option value="">Sin conexión</option>{compatibleScores.map((score) => <optgroup key={score.id} label={score.name}>{score.score_categories.map((category) => category.score_questions.map((scoreQuestion) => <option key={scoreQuestion.id} value={scoreQuestion.id}>{category.name} · {scoreQuestion.prompt}</option>))}</optgroup>)}</select>{!compatibleScores.length && <small>No hay preguntas Score compatibles con este tipo y configuración.</small>}</label></article>;
+    })}
       {!questions.length && <EmptyInline title="No hay preguntas evaluativas" text="Marca al menos una pregunta como evaluativa para conectarla con Score." />}</div>
   </div>;
 }
