@@ -170,7 +170,11 @@ export default function ScoreBuilder() {
       category_id: category.id, prompt: "Nueva pregunta", help_text: "", response_type: "scale",
       weight: 0, required: true, position: category.score_questions.length,
     }).select("id, prompt, help_text, response_type, weight, required, position, scale_min, scale_max, options, scoring_config").single());
-    if (result) updateCategory(category.id, { score_questions: [...category.score_questions, result.data] });
+    if (result) {
+      updateCategory(category.id, { score_questions: [...category.score_questions, result.data] });
+      return result.data.id;
+    }
+    return null;
   }
 
   async function addLibraryQuestion(category, question) {
@@ -207,12 +211,14 @@ export default function ScoreBuilder() {
   }
 
   async function removeQuestion(categoryId, questionId) {
-    if (!window.confirm("¿Eliminar esta pregunta?")) return;
+    if (!window.confirm("¿Eliminar esta pregunta?")) return false;
     const result = await runAction("delete", () => supabase.from("score_questions").delete().eq("id", questionId));
     if (result) {
       const category = selected.score_categories.find((item) => item.id === categoryId);
       updateCategory(categoryId, { score_questions: category.score_questions.filter((item) => item.id !== questionId) });
+      return true;
     }
+    return false;
   }
 
   function validateTemplate() {
@@ -417,14 +423,34 @@ function CategoriesStep({ template, updateCategory, addCategory, removeCategory,
 }
 
 function QuestionsStep({ template, updateQuestion, addQuestion, removeQuestion, busy }) {
-  return <section className="space-y-4">{template.score_categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-section-title mb-4"><h2>{category.name}</h2><span className="sb-badge">{category.score_questions.length} preguntas</span></div><div className="space-y-4">{category.score_questions.map((question, index) => <div key={question.id} className="sb-question"><div className="flex items-center justify-between gap-3"><strong>Pregunta {index + 1}</strong><button type="button" aria-label="Eliminar pregunta" onClick={() => removeQuestion(category.id, question.id)} className="sb-icon-button danger"><Trash2 size={17}/></button></div><div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Field label="Pregunta"><input className="sb-input" value={question.prompt} onChange={(event) => updateQuestion(category.id, question.id, { prompt: event.target.value })}/></Field>
-        <Field label="Tipo de respuesta"><select className="sb-input" value={question.response_type} onChange={(event) => updateQuestion(category.id, question.id, { response_type: event.target.value })}>{responseTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-        <div className="lg:col-span-2"><Field label="Descripción o ayuda"><textarea rows="2" className="sb-input resize-y" value={question.help_text || ""} onChange={(event) => updateQuestion(category.id, question.id, { help_text: event.target.value })}/></Field></div>
-        {question.response_type === "scale" && <><Field label="Valor mínimo"><input type="number" className="sb-input" value={question.scale_min || 1} onChange={(event) => updateQuestion(category.id, question.id, { scale_min: event.target.value })}/></Field><Field label="Valor máximo"><input type="number" className="sb-input" value={question.scale_max || 5} onChange={(event) => updateQuestion(category.id, question.id, { scale_max: event.target.value })}/></Field></>}
-        {question.response_type === "multiple_choice" && <div className="lg:col-span-2"><Field label="Opciones (una por línea)"><textarea rows="3" className="sb-input resize-y" value={(question.options || []).join("\n")} onChange={(event) => updateQuestion(category.id, question.id, { options: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })}/></Field></div>}
-        <label className="sb-check"><input type="checkbox" checked={Boolean(question.required)} onChange={(event) => updateQuestion(category.id, question.id, { required: event.target.checked })}/> Respuesta obligatoria</label>
-      </div></div>)}<button type="button" disabled={busy} onClick={() => addQuestion(category)} className="sb-button sb-button-secondary"><Plus size={17}/> Añadir pregunta</button></div></article>)}</section>;
+  const [expandedQuestionId, setExpandedQuestionId] = useState(null);
+  async function addAndExpand(category) {
+    const questionId = await addQuestion(category);
+    if (questionId) setExpandedQuestionId(questionId);
+  }
+  async function removeAndClose(categoryId, questionId) {
+    const removed = await removeQuestion(categoryId, questionId);
+    if (removed && expandedQuestionId === questionId) setExpandedQuestionId(null);
+  }
+  return <section className="space-y-4">{template.score_categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-section-title mb-4"><h2>{category.name}</h2><span className="sb-badge">{category.score_questions.length} preguntas</span></div>
+    <div className="sb-questions-mobile space-y-4">{category.score_questions.map((question, index) => <div key={question.id} className="sb-question"><div className="flex items-center justify-between gap-3"><strong>Pregunta {index + 1}</strong><button type="button" aria-label="Eliminar pregunta" onClick={() => removeQuestion(category.id, question.id)} className="sb-icon-button danger"><Trash2 size={17}/></button></div><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>)}<button type="button" disabled={busy} onClick={() => addQuestion(category)} className="sb-button sb-button-secondary"><Plus size={17}/> Añadir pregunta</button></div>
+    <div className="sb-questions-desktop"><div className="sb-question-table-head" aria-hidden="true"><span>#</span><span>Pregunta</span><span>Tipo</span><span>Peso</span><span>Req.</span><span>Acciones</span></div>{category.score_questions.map((question, index) => { const expanded = expandedQuestionId === question.id; return <div key={question.id} className={`sb-question-compact ${expanded ? "expanded" : ""}`}><button type="button" className="sb-question-row" aria-expanded={expanded} onClick={() => setExpandedQuestionId(expanded ? null : question.id)}><span>{index + 1}</span><strong title={question.prompt}>{question.prompt}</strong><span>{responseTypeLabel(question.response_type)}</span><span>{question.response_type === "text" ? "—" : `${Number(question.weight || 0)}%`}</span><span>{question.required ? "Sí" : "No"}</span><span>{expanded ? "Cerrar" : "Editar"}</span></button><button type="button" aria-label={`Eliminar ${question.prompt}`} onClick={() => removeAndClose(category.id, question.id)} className="sb-question-delete danger"><Trash2 size={16}/></button>{expanded && <div className="sb-question-editor"><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>}</div>; })}<button type="button" disabled={busy} onClick={() => addAndExpand(category)} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir pregunta</button></div>
+  </article>)}</section>;
+}
+
+function QuestionFields({ categoryId, question, updateQuestion }) {
+  return <div className="mt-4 grid gap-4 lg:grid-cols-2">
+    <Field label="Pregunta"><input className="sb-input" value={question.prompt} onChange={(event) => updateQuestion(categoryId, question.id, { prompt: event.target.value })}/></Field>
+    <Field label="Tipo de respuesta"><select className="sb-input" value={question.response_type} onChange={(event) => updateQuestion(categoryId, question.id, { response_type: event.target.value })}>{responseTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+    <div className="lg:col-span-2"><Field label="Descripción o ayuda"><textarea rows="2" className="sb-input resize-y" value={question.help_text || ""} onChange={(event) => updateQuestion(categoryId, question.id, { help_text: event.target.value })}/></Field></div>
+    {question.response_type === "scale" && <><Field label="Valor mínimo"><input type="number" className="sb-input" value={question.scale_min || 1} onChange={(event) => updateQuestion(categoryId, question.id, { scale_min: event.target.value })}/></Field><Field label="Valor máximo"><input type="number" className="sb-input" value={question.scale_max || 5} onChange={(event) => updateQuestion(categoryId, question.id, { scale_max: event.target.value })}/></Field></>}
+    {question.response_type === "multiple_choice" && <div className="lg:col-span-2"><Field label="Opciones (una por línea)"><textarea rows="3" className="sb-input resize-y" value={(question.options || []).join("\n")} onChange={(event) => updateQuestion(categoryId, question.id, { options: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })}/></Field></div>}
+    <label className="sb-check"><input type="checkbox" checked={Boolean(question.required)} onChange={(event) => updateQuestion(categoryId, question.id, { required: event.target.checked })}/> Respuesta obligatoria</label>
+  </div>;
+}
+
+function responseTypeLabel(value) {
+  return responseTypes.find(([type]) => type === value)?.[1] || value;
 }
 
 function WeightsStep({ template, updateCategory, updateQuestion }) {
