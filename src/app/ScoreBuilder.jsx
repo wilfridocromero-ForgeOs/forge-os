@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArchiveRestore, Check, ChevronRight, ClipboardList, Copy, Heart,
-  Library, LoaderCircle, MoreHorizontal, Plus, Save, Search, Trash2,
+  Library, LoaderCircle, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
+  Plus, Save, Search, Trash2,
 } from "lucide-react";
 
 import Page from "../components/ui/Page";
@@ -70,6 +71,7 @@ export default function ScoreBuilder() {
   const [libraryCategory, setLibraryCategory] = useState("all");
   const [view, setView] = useState("scores");
   const [favorites, setFavorites] = useState([]);
+  const [scoreListCollapsed, setScoreListCollapsed] = useState(false);
 
   const selected = useMemo(() => templates.find((item) => item.id === selectedId), [templates, selectedId]);
 
@@ -385,7 +387,7 @@ export default function ScoreBuilder() {
   return <Page className="score-builder-shell">
     <header className="sb-header">
       <div><p className="sb-eyebrow">ORVESEN Intelligence</p><h1>Score Builder</h1><p className="sb-muted max-w-3xl">Construye evaluaciones funcionales de divisiones y áreas sobre una escala real de 0 a 100.</p></div>
-      <button type="button" onClick={() => setCreating((value) => !value)} className="sb-button sb-button-primary"><Plus size={18}/> Nuevo Score</button>
+      <button type="button" onClick={() => setCreating((value) => !value)} className="sb-button sb-button-primary sb-new-score-mobile"><Plus size={18}/> Nuevo Score</button>
     </header>
 
     {notice && <div role="status" className={`sb-alert ${notice.type === "error" ? "sb-alert-error" : "sb-alert-success"}`}>{notice.text}</div>}
@@ -413,8 +415,8 @@ export default function ScoreBuilder() {
     </section>}
 
     {view === "official" ? <OfficialLibrary categories={visibleLibrary} library={library} search={librarySearch} setSearch={setLibrarySearch} selectedCategory={libraryCategory} setSelectedCategory={setLibraryCategory} onAdd={addLibraryQuestion} disabled={action === "library"}/>
-      : <div className="sb-workspace">
-        <ScoreList loading={loading} templates={visibleTemplates} selectedId={selectedId} view={view} onSelect={(id) => { setSelectedId(id); setActiveStep(0); setNotice(null); }}/>
+      : <div className={`sb-workspace ${scoreListCollapsed ? "sb-workspace-list-collapsed" : ""}`}>
+        <ScoreList loading={loading} templates={visibleTemplates} selectedId={selectedId} view={view} collapsed={scoreListCollapsed} onToggle={() => setScoreListCollapsed((value) => !value)} onNew={() => setCreating((value) => !value)} onSelect={(id) => { setSelectedId(id); setActiveStep(0); setNotice(null); }}/>
         {selected ? <main className="min-w-0 space-y-5">
           <ScoreContext template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/>
           <WizardNav activeStep={activeStep} setActiveStep={setActiveStep}/>
@@ -430,9 +432,10 @@ export default function ScoreBuilder() {
   </Page>;
 }
 
-function ScoreList({ loading, templates, selectedId, view, onSelect }) {
-  return <aside className="sb-card sb-list"><div className="sb-section-title"><ClipboardList size={18}/><h2>{view === "templates" ? "Plantillas" : view === "favorites" ? "Favoritos" : "Mis Scores"}</h2></div>
-    {loading ? <p className="sb-muted p-3">Cargando...</p> : <div className="space-y-2">{templates.map((template) => <button type="button" key={template.id} onClick={() => onSelect(template.id)} className={`sb-score-row ${selectedId === template.id ? "active" : ""}`}>
+function ScoreList({ loading, templates, selectedId, view, collapsed, onToggle, onNew, onSelect }) {
+  const title = view === "templates" ? "Plantillas" : view === "favorites" ? "Favoritos" : "Mis Scores";
+  return <aside className={`sb-card sb-list ${collapsed ? "collapsed" : ""}`}><div className="sb-list-header"><div className="sb-section-title"><ClipboardList size={18}/><h2>{title}</h2></div><div className="sb-list-header-actions"><button type="button" onClick={onNew} className="sb-button sb-button-primary sb-list-new"><Plus size={16}/><span>Nuevo Score</span></button><button type="button" onClick={onToggle} className="sb-list-toggle" aria-label={collapsed ? "Abrir Mis Scores" : "Contraer Mis Scores"} title={collapsed ? "Abrir Mis Scores" : "Contraer Mis Scores"}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div></div>
+    {loading ? <p className="sb-muted p-3">Cargando...</p> : <div className="sb-list-content space-y-2">{templates.map((template) => <button type="button" key={template.id} onClick={() => onSelect(template.id)} className={`sb-score-row ${selectedId === template.id ? "active" : ""}`}>
       <span className="min-w-0"><strong>{template.name}</strong><small>{template.divisions?.name || "Sin división"} · {template.status === "published" ? "Publicado" : "Borrador"} · /100</small><small>Actualizado {formatDate(template.updated_at)}</small></span><ChevronRight size={17}/>
     </button>)}</div>}
   </aside>;
@@ -482,9 +485,21 @@ function QuestionsStep({ template, updateQuestion, addQuestion, cloneQuestion, r
     const questionId = await cloneQuestion(category, question);
     if (questionId) setExpandedQuestionId(questionId);
   }
-  return <section className="space-y-4">{template.score_categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-section-title mb-4"><h2>{category.name}</h2><span className="sb-badge">{category.score_questions.length} preguntas</span></div>
+  return <section className="space-y-4">{template.score_categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6">
+    <div className="sb-section-title mb-4"><h2>{category.name}</h2><span className="sb-badge">{category.score_questions.length} preguntas</span></div>
     <div className="sb-questions-mobile space-y-4">{category.score_questions.map((question, index) => <div key={question.id} className="sb-question"><div className="flex items-center justify-between gap-3"><strong>Pregunta {index + 1}</strong><button type="button" aria-label="Eliminar pregunta" onClick={() => removeQuestion(category.id, question.id)} className="sb-icon-button danger"><Trash2 size={17}/></button></div><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>)}<button type="button" disabled={busy} onClick={() => addQuestion(category)} className="sb-button sb-button-secondary"><Plus size={17}/> Añadir pregunta</button></div>
-    <div className="sb-questions-desktop"><div className="sb-question-table-head" aria-hidden="true"><span>#</span><span>Pregunta</span><span>Tipo</span><span>Peso</span><span>Req.</span><span>Acciones</span></div>{category.score_questions.map((question, index) => { const expanded = expandedQuestionId === question.id; return <div key={question.id} className={`sb-question-compact ${expanded ? "expanded" : ""}`}><button type="button" className="sb-question-row" aria-expanded={expanded} onClick={() => setExpandedQuestionId(expanded ? null : question.id)}><span>{index + 1}</span><strong title={question.prompt}>{question.prompt}</strong><span>{responseTypeLabel(question.response_type)}</span><span>{question.response_type === "text" ? "—" : `${Number(question.weight || 0)}%`}</span><span>{question.required ? "Sí" : "No"}</span><span>{expanded ? "Cerrar" : "Editar"}</span></button><div className="sb-question-row-actions"><button type="button" aria-label={`Duplicar ${question.prompt}`} onClick={() => duplicateAndExpand(category, question)}><Copy size={15}/></button><button type="button" aria-label={`Eliminar ${question.prompt}`} onClick={() => removeAndClose(category.id, question.id)} className="danger"><Trash2 size={15}/></button></div>{expanded && <div className="sb-question-editor"><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/></div>}</div>; })}<button type="button" disabled={busy} onClick={() => addAndExpand(category)} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir pregunta</button></div>
+    <div className="sb-questions-desktop">
+      <div className="sb-question-table-head" aria-hidden="true"><span>#</span><span>Pregunta</span><span>Tipo</span><span>Peso</span><span>Req.</span><span>Acciones</span></div>
+      {category.score_questions.map((question, index) => {
+        const expanded = expandedQuestionId === question.id;
+        return <div key={question.id} className={`sb-question-compact ${expanded ? "expanded" : ""}`}>
+          <button type="button" className="sb-question-row" aria-expanded={expanded} onClick={() => setExpandedQuestionId(expanded ? null : question.id)}><span>{index + 1}</span><strong title={question.prompt}>{question.prompt}</strong><span>{responseTypeLabel(question.response_type)}</span><span>{question.response_type === "text" ? "—" : `${Number(question.weight || 0)}%`}</span><span>{question.required ? "Sí" : "No"}</span><span>{expanded ? "Cerrar" : "Editar"}</span></button>
+          <div className="sb-question-row-actions"><button type="button" aria-label={`Duplicar ${question.prompt}`} onClick={() => duplicateAndExpand(category, question)}><Copy size={15}/></button><button type="button" aria-label={`Eliminar ${question.prompt}`} onClick={() => removeAndClose(category.id, question.id)} className="danger"><Trash2 size={15}/></button></div>
+          {expanded && <div className="sb-question-editor"><QuestionFields categoryId={category.id} question={question} updateQuestion={updateQuestion}/><div className="sb-question-editor-actions"><p>Los cambios quedan aplicados al borrador. Usa <strong>Guardar</strong> para persistirlos.</p><div><button type="button" disabled={busy} onClick={() => duplicateAndExpand(category, question)} className="sb-button sb-button-ghost"><Copy size={16}/> Duplicar pregunta</button><button type="button" disabled={busy} onClick={() => removeAndClose(category.id, question.id)} className="sb-button sb-button-danger"><Trash2 size={16}/> Eliminar pregunta</button><button type="button" onClick={() => setExpandedQuestionId(null)} className="sb-button sb-button-secondary"><Check size={16}/> Aplicar y cerrar</button></div></div></div>}
+        </div>;
+      })}
+      <button type="button" disabled={busy} onClick={() => addAndExpand(category)} className="sb-button sb-button-secondary mt-4"><Plus size={17}/> Añadir pregunta</button>
+    </div>
   </article>)}</section>;
 }
 
