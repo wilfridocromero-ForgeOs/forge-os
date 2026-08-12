@@ -434,11 +434,82 @@ export default function ScoreBuilder() {
 
 function ScoreList({ loading, templates, selectedId, view, collapsed, onToggle, onNew, onSelect }) {
   const title = view === "templates" ? "Plantillas" : view === "favorites" ? "Favoritos" : "Mis Scores";
-  return <aside className={`sb-card sb-list ${collapsed ? "collapsed" : ""}`}><div className="sb-list-header"><div className="sb-section-title"><ClipboardList size={18}/><h2>{title}</h2></div><div className="sb-list-header-actions"><button type="button" onClick={onNew} className="sb-button sb-button-primary sb-list-new"><Plus size={16}/><span>Nuevo Score</span></button><button type="button" onClick={onToggle} className="sb-list-toggle" aria-label={collapsed ? "Abrir Mis Scores" : "Contraer Mis Scores"} title={collapsed ? "Abrir Mis Scores" : "Contraer Mis Scores"}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div></div>
-    {loading ? <p className="sb-muted p-3">Cargando...</p> : <div className="sb-list-content space-y-2">{templates.map((template) => <button type="button" key={template.id} onClick={() => onSelect(template.id)} className={`sb-score-row ${selectedId === template.id ? "active" : ""}`}>
-      <span className="min-w-0"><strong>{template.name}</strong><small>{template.divisions?.name || "Sin división"} · {template.status === "published" ? "Publicado" : "Borrador"} · /100</small><small>Actualizado {formatDate(template.updated_at)}</small></span><ChevronRight size={17}/>
-    </button>)}</div>}
-  </aside>;
+
+  return (
+    <>
+      {!collapsed && (
+        <aside className="sb-card sb-list">
+          <div className="sb-list-header">
+            <div className="sb-section-title">
+              <ClipboardList size={18} />
+              <h2>{title}</h2>
+            </div>
+
+            <div className="sb-list-header-actions">
+              <button
+                type="button"
+                onClick={onNew}
+                className="sb-button sb-button-primary sb-list-new"
+              >
+                <Plus size={16} />
+                <span>Nuevo Score</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onToggle}
+                className="sb-list-toggle"
+                aria-label="Contraer Mis Scores"
+                title="Contraer Mis Scores"
+              >
+                <PanelLeftClose size={18} />
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="sb-muted p-3">Cargando...</p>
+          ) : (
+            <div className="sb-list-content space-y-2">
+              {templates.map((template) => (
+                <button
+                  type="button"
+                  key={template.id}
+                  onClick={() => onSelect(template.id)}
+                  className={`sb-score-row ${
+                    selectedId === template.id ? "active" : ""
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <strong>{template.name}</strong>
+                    <small>
+                      {template.divisions?.name || "Sin división"} ·{" "}
+                      {template.status === "published" ? "Publicado" : "Borrador"} · /100
+                    </small>
+                    <small>Actualizado {formatDate(template.updated_at)}</small>
+                  </span>
+
+                  <ChevronRight size={17} />
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      )}
+
+      {collapsed && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="sb-list-reopen"
+          aria-label="Abrir Mis Scores"
+          title="Abrir Mis Scores"
+        >
+          <PanelLeftOpen size={18} />
+        </button>
+      )}
+    </>
+  );
 }
 
 function WizardNav({ activeStep, setActiveStep }) {
