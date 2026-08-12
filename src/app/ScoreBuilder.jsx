@@ -372,13 +372,14 @@ export default function ScoreBuilder() {
         <ScoreList loading={loading} templates={visibleTemplates} selectedId={selectedId} view={view} onSelect={(id) => { setSelectedId(id); setActiveStep(0); setNotice(null); }}/>
         {selected ? <main className="min-w-0 space-y-5">
           <WizardNav activeStep={activeStep} setActiveStep={setActiveStep}/>
+          <div className="sb-actions-desktop"><BuilderActions template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/></div>
           {activeStep === 0 && <InformationStep template={selected} divisions={divisions} update={updateSelected}/>} 
           {activeStep === 1 && <CategoriesStep template={selected} updateCategory={updateCategory} addCategory={addCategory} removeCategory={removeCategory} busy={Boolean(action)}/>} 
           {activeStep === 2 && <QuestionsStep template={selected} updateQuestion={updateQuestion} addQuestion={addQuestion} removeQuestion={removeQuestion} busy={Boolean(action)}/>} 
           {activeStep === 3 && <WeightsStep template={selected} updateCategory={updateCategory} updateQuestion={updateQuestion}/>} 
           {activeStep === 4 && <PreviewStep template={selected}/>} 
           {activeStep === 5 && <PublishStep template={selected} validation={validateTemplate()} onSave={() => persistTemplate(selected.status)} onPublish={() => persistTemplate("published")} onUnpublish={() => persistTemplate("draft")} busy={Boolean(action)}/>} 
-          <BuilderActions template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/>
+          <div className="sb-actions-mobile"><BuilderActions template={selected} favorites={favorites} busy={Boolean(action)} onFavorite={toggleFavorite} onDuplicate={() => cloneSelected("score")} onTemplate={() => cloneSelected("template")} onDelete={removeTemplate} onSave={() => persistTemplate(selected.status)}/></div>
         </main> : !loading && <section className="sb-card sb-empty"><ClipboardList size={28}/><h2>No hay Scores en esta vista</h2><p className="sb-muted">Crea un Score o selecciona otra biblioteca.</p></section>}
       </div>}
   </Page>;
