@@ -309,3 +309,4 @@ create index if not exists user_division_score_access_division_idx on public.use
 create index if not exists discovery_assessments_client_idx on public.discovery_assessments(client_id);
 create index if not exists discovery_assessments_created_by_idx on public.discovery_assessments(created_by);
 create index if not exists discovery_assessments_template_idx on public.discovery_assessments(template_id);
+

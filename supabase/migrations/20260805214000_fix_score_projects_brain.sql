@@ -68,7 +68,7 @@ with check (
 );
 
 insert into public.knowledge_folders (organization_id, parent_id, division_id, name, created_by)
-select o.id, null, null, 'Fundación ORVESEN', u.id
+select o.id, null, null, 'FundaciÃ³n ORVESEN', u.id
 from public.organizations o
 join lateral (
   select id from public.users
@@ -79,5 +79,6 @@ join lateral (
 where o.organization_type = 'internal'
   and not exists (
     select 1 from public.knowledge_folders f
-    where f.organization_id=o.id and f.parent_id is null and lower(f.name)=lower('Fundación ORVESEN')
+    where f.organization_id=o.id and f.parent_id is null and lower(f.name)=lower('FundaciÃ³n ORVESEN')
   );
+

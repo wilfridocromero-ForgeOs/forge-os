@@ -214,21 +214,21 @@ with digital as (
   order by d.created_at limit 1
 ), category_seed(name, slug, description, position) as (
   values
-  ('Gestión de Proyectos','gestion-de-proyectos','Gobernanza, alcance, planificación y control de proyectos digitales.',1),
-  ('Calidad del Trabajo','calidad-del-trabajo','Estándares de calidad, revisión y consistencia de entregables.',2),
-  ('Diseño UI/UX','diseno-ui-ux','Experiencia, interfaz, usabilidad y decisiones centradas en usuarios.',3),
-  ('Desarrollo Web','desarrollo-web','Arquitectura, mantenibilidad, seguridad y calidad de implementación.',4),
-  ('Landing Pages','landing-pages','Claridad de propuesta, conversión y calidad técnica de páginas de campaña.',5),
-  ('SEO','seo','Visibilidad orgánica, rastreabilidad, contenido y salud técnica.',6),
-  ('Responsive','responsive','Adaptabilidad, legibilidad y operación consistente entre dispositivos.',7),
+  ('GestiÃ³n de Proyectos','gestion-de-proyectos','Gobernanza, alcance, planificaciÃ³n y control de proyectos digitales.',1),
+  ('Calidad del Trabajo','calidad-del-trabajo','EstÃ¡ndares de calidad, revisiÃ³n y consistencia de entregables.',2),
+  ('DiseÃ±o UI/UX','diseno-ui-ux','Experiencia, interfaz, usabilidad y decisiones centradas en usuarios.',3),
+  ('Desarrollo Web','desarrollo-web','Arquitectura, mantenibilidad, seguridad y calidad de implementaciÃ³n.',4),
+  ('Landing Pages','landing-pages','Claridad de propuesta, conversiÃ³n y calidad tÃ©cnica de pÃ¡ginas de campaÃ±a.',5),
+  ('SEO','seo','Visibilidad orgÃ¡nica, rastreabilidad, contenido y salud tÃ©cnica.',6),
+  ('Responsive','responsive','Adaptabilidad, legibilidad y operaciÃ³n consistente entre dispositivos.',7),
   ('Performance','performance','Velocidad, estabilidad visual, eficiencia y experiencia percibida.',8),
   ('Automatizaciones','automatizaciones','Fiabilidad, trazabilidad y valor operativo de automatizaciones.',9),
-  ('Branding','branding','Coherencia, diferenciación y aplicación sistemática de marca.',10),
-  ('Comunicación','comunicacion','Claridad, cadencia, documentación y alineación con interesados.',11),
-  ('Productividad','productividad','Flujo, foco, capacidad, priorización y eliminación de bloqueos.',12),
-  ('Documentación','documentacion','Calidad, vigencia, accesibilidad y uso del conocimiento documentado.',13),
+  ('Branding','branding','Coherencia, diferenciaciÃ³n y aplicaciÃ³n sistemÃ¡tica de marca.',10),
+  ('ComunicaciÃ³n','comunicacion','Claridad, cadencia, documentaciÃ³n y alineaciÃ³n con interesados.',11),
+  ('Productividad','productividad','Flujo, foco, capacidad, priorizaciÃ³n y eliminaciÃ³n de bloqueos.',12),
+  ('DocumentaciÃ³n','documentacion','Calidad, vigencia, accesibilidad y uso del conocimiento documentado.',13),
   ('Cumplimiento de Procesos','cumplimiento-de-procesos','Adherencia, control, evidencia y mejora continua de procesos.',14),
-  ('Innovación','innovacion','Experimentación, aprendizaje y conversión de ideas en valor medible.',15)
+  ('InnovaciÃ³n','innovacion','ExperimentaciÃ³n, aprendizaje y conversiÃ³n de ideas en valor medible.',15)
 )
 insert into public.score_library_categories(division_id,name,slug,description,position,is_official)
 select digital.division_id,s.name,s.slug,s.description,s.position,true from digital cross join category_seed s
@@ -236,21 +236,21 @@ on conflict (organization_id,division_id,slug) do update set name=excluded.name,
 
 with dimension_seed(position, title_pattern, description_pattern, weight, difficulty, response_type) as (
   values
-  (1,'Estándar definido para %s','Evalúa si existen criterios documentados, responsables y un resultado esperado verificable para %s.',8,'basic','boolean'),
+  (1,'EstÃ¡ndar definido para %s','EvalÃºa si existen criterios documentados, responsables y un resultado esperado verificable para %s.',8,'basic','boolean'),
   (2,'Madurez actual de %s','Valora de 1 a 5 el nivel de consistencia, repetibilidad y control demostrado en %s.',8,'intermediate','scale'),
-  (3,'Cobertura medible de %s','Indica el porcentaje de trabajo relevante que actualmente cumple los estándares acordados de %s.',8,'intermediate','percentage'),
-  (4,'Responsabilidad operativa en %s','Confirma si existe una persona responsable, con autoridad y seguimiento periódico sobre %s.',6,'basic','boolean'),
-  (5,'Calidad de la evidencia en %s','Valora la calidad de métricas, registros y pruebas disponibles para demostrar resultados en %s.',8,'advanced','scale'),
-  (6,'Frecuencia de revisión de %s','Describe cada cuánto se revisan resultados, riesgos y oportunidades relacionados con %s.',5,'intermediate','multiple_choice'),
-  (7,'Incidencias abiertas en %s','Registra la cantidad actual de incidencias relevantes que afectan el desempeño de %s.',6,'intermediate','number'),
+  (3,'Cobertura medible de %s','Indica el porcentaje de trabajo relevante que actualmente cumple los estÃ¡ndares acordados de %s.',8,'intermediate','percentage'),
+  (4,'Responsabilidad operativa en %s','Confirma si existe una persona responsable, con autoridad y seguimiento periÃ³dico sobre %s.',6,'basic','boolean'),
+  (5,'Calidad de la evidencia en %s','Valora la calidad de mÃ©tricas, registros y pruebas disponibles para demostrar resultados en %s.',8,'advanced','scale'),
+  (6,'Frecuencia de revisiÃ³n de %s','Describe cada cuÃ¡nto se revisan resultados, riesgos y oportunidades relacionados con %s.',5,'intermediate','multiple_choice'),
+  (7,'Incidencias abiertas en %s','Registra la cantidad actual de incidencias relevantes que afectan el desempeÃ±o de %s.',6,'intermediate','number'),
   (8,'Riesgo operativo de %s','Valora de 1 a 5 el impacto y probabilidad de fallos no controlados dentro de %s.',7,'advanced','scale'),
-  (9,'Automatización aplicada a %s','Indica qué porcentaje del flujo repetitivo de %s está automatizado con controles confiables.',6,'advanced','percentage'),
-  (10,'Satisfacción de interesados en %s','Valora de 1 a 5 la satisfacción de clientes, usuarios y responsables respecto a %s.',7,'intermediate','scale'),
+  (9,'AutomatizaciÃ³n aplicada a %s','Indica quÃ© porcentaje del flujo repetitivo de %s estÃ¡ automatizado con controles confiables.',6,'advanced','percentage'),
+  (10,'SatisfacciÃ³n de interesados en %s','Valora de 1 a 5 la satisfacciÃ³n de clientes, usuarios y responsables respecto a %s.',7,'intermediate','scale'),
   (11,'Cumplimiento de plazos en %s','Indica el porcentaje de compromisos de %s entregados dentro del plazo acordado.',8,'intermediate','percentage'),
-  (12,'Dependencias críticas de %s','Documenta las dependencias externas o internas que podrían comprometer los resultados de %s.',5,'advanced','text'),
+  (12,'Dependencias crÃ­ticas de %s','Documenta las dependencias externas o internas que podrÃ­an comprometer los resultados de %s.',5,'advanced','text'),
   (13,'Plan de mejora para %s','Confirma si existe un plan priorizado, con responsables y fechas, para mejorar %s.',6,'intermediate','boolean'),
-  (14,'Impacto empresarial de %s','Valora de 1 a 5 cuánto contribuye actualmente %s a los objetivos estratégicos y financieros.',7,'advanced','scale'),
-  (15,'Próxima decisión sobre %s','Describe la decisión concreta más importante que debe tomarse para elevar el desempeño de %s.',5,'advanced','text')
+  (14,'Impacto empresarial de %s','Valora de 1 a 5 cuÃ¡nto contribuye actualmente %s a los objetivos estratÃ©gicos y financieros.',7,'advanced','scale'),
+  (15,'PrÃ³xima decisiÃ³n sobre %s','Describe la decisiÃ³n concreta mÃ¡s importante que debe tomarse para elevar el desempeÃ±o de %s.',5,'advanced','text')
 ), official_categories as (
   select c.id,c.name from public.score_library_categories c where c.is_official
   and c.division_id in (select d.id from public.divisions d where lower(d.name)=lower('ORVESEN Digital'))
@@ -292,3 +292,4 @@ for each row execute function public.set_updated_at();
 drop trigger if exists set_score_library_questions_updated_at on public.score_library_questions;
 create trigger set_score_library_questions_updated_at before update on public.score_library_questions
 for each row execute function public.set_updated_at();
+

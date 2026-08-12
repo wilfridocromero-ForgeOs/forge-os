@@ -24,3 +24,4 @@ where max_score is distinct from 100
 
 alter table public.score_instances
   alter column max_score set default 100;
+
