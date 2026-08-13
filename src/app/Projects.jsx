@@ -9,6 +9,7 @@ import { useOrganization } from "../Context/OrganizationContext";
 import { useAuth } from "../Context/AuthContext";
 import { useDivisions } from "../hooks/useDivisions";
 import { createProject, deleteProject, getProjectOptions, getProjects, updateProject } from "../services/ProjectService";
+import { useSearchParams } from "react-router-dom";
 
 const statuses = { planned: "Planificado", active: "Activo", blocked: "Bloqueado", completed: "Finalizado", cancelled: "Cancelado" };
 const priorities = { low: "Baja", medium: "Media", high: "Alta", urgent: "Urgente" };
@@ -19,6 +20,7 @@ function isOverdue(project) { return project.due_at && new Date(project.due_at) 
 function Metric({ icon: Icon, label, value }) { return <Card hover={false} contentClassName="p-5"><div className="flex items-center justify-between"><div><p className="text-xs uppercase tracking-[.22em] text-zinc-600">{label}</p><p className="mt-2 text-3xl font-semibold text-white">{value}</p></div><Icon className="text-zinc-600" size={22} /></div></Card>; }
 
 export default function Projects() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { organization } = useOrganization();
   const { user, canManageUsers } = useAuth();
   const { divisions } = useDivisions(organization?.id);
@@ -26,6 +28,13 @@ export default function Projects() {
   const [loading, setLoading] = useState(true); const [error, setError] = useState("");
   const [search, setSearch] = useState(""); const [status, setStatus] = useState("all"); const [division, setDivision] = useState("all");
   const [modal, setModal] = useState(false); const [editing, setEditing] = useState(null);
+
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    // Route state intentionally opens the existing creation flow.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditing(null); setModal(true); setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => { let active = true; if (!organization?.id) return;
     Promise.all([getProjects(organization.id), getProjectOptions(organization.id)])

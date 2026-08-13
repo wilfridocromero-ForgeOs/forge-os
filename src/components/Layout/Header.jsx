@@ -12,6 +12,10 @@ import {
   Settings,
   Moon,
   Sun,
+  ClipboardCheck,
+  Users,
+  FolderKanban,
+  CalendarDays,
 } from "lucide-react";
 
 import { useAuth } from "../../Context/AuthContext";
@@ -147,7 +151,8 @@ export default function Header({ setSidebarOpen }) {
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        <button
+        <HeadlessMenu as="div" className="relative hidden sm:block">
+          <HeadlessMenu.Button
           className="
             hidden
             sm:flex
@@ -174,7 +179,16 @@ export default function Header({ setSidebarOpen }) {
         >
           <Plus size={16} />
           Nuevo
-        </button>
+          </HeadlessMenu.Button>
+          <HeadlessMenu.Items className="absolute right-0 mt-3 w-60 overflow-hidden rounded-2xl border border-zinc-800 bg-[#111113] p-1.5 shadow-2xl focus:outline-none">
+            {[
+              ["Nuevo diagnóstico", "/discovery?new=1", ClipboardCheck],
+              ["Nuevo cliente", "/clientes?new=1", Users],
+              ["Nuevo proyecto", "/proyectos?new=1", FolderKanban],
+              ["Nuevo evento", "/calendario?new=1", CalendarDays],
+            ].map(([label, path, Icon]) => <HeadlessMenu.Item key={path}>{({ active }) => <button onClick={() => navigate(path)} className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm ${active ? "bg-zinc-900" : ""}`}><Icon size={17} className="text-zinc-500" />{label}</button>}</HeadlessMenu.Item>)}
+          </HeadlessMenu.Items>
+        </HeadlessMenu>
 
         <button
           className="

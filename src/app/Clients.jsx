@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Columns3, LayoutGrid, List, Mail, Search } from "lucide-react";
 
 import Page from "../components/ui/Page";
@@ -65,6 +65,7 @@ function ClientCard({ client, onInvite, canInvite, onOpen }) {
 
 export default function Clients() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { organization } = useOrganization();
   const { role } = useAuth();
   const [clients, setClients] = useState([]);
@@ -76,6 +77,14 @@ export default function Clients() {
   const [view, setView] = useState(() => localStorage.getItem("orvesen-client-view") || "cards");
   const [inviteClient, setInviteClient] = useState(null);
   const canInviteClients = role === "platform_owner";
+
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    // Route state intentionally opens the existing creation flow.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpenModal(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let active = true;

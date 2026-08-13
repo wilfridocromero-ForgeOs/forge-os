@@ -5,6 +5,7 @@ import Page from "../components/ui/Page";
 import Card from "../components/ui/Card";
 import { useAuth } from "../Context/AuthContext";
 import { supabase } from "../lib/supabase";
+import { useSearchParams } from "react-router-dom";
 
 const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const typeLabels = { meeting: "Reunión", task: "Tarea", reminder: "Recordatorio", deadline: "Entrega", note: "Nota" };
@@ -27,6 +28,7 @@ function emptyEvent(date = new Date()) {
 }
 
 export default function Calendar() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile, user, canManageUsers, isInternalOrganization } = useAuth();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [view, setView] = useState(() => window.matchMedia("(max-width: 767px)").matches ? "list" : "month");
@@ -36,6 +38,13 @@ export default function Calendar() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyEvent());
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    // Route state intentionally opens the existing creation flow.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm(emptyEvent()); setMessage(""); setModalOpen(true); setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function loadEvents() {
     if (!profile?.organization_id) return;
@@ -53,6 +62,8 @@ export default function Calendar() {
     setLoading(false);
   }
 
+  // Existing calendar synchronization; loadEvents owns its loading state.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadEvents(); }, [profile?.organization_id, month]);
 
   const calendarDays = useMemo(() => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, BarChart3, BookOpen, Building2, Check, CheckCircle2,
   ChevronRight, CircleAlert, ClipboardCheck, Clock3, LoaderCircle, PencilRuler,
@@ -46,18 +46,19 @@ function friendlyError(error, fallback = "No se pudo completar la operación.") 
 export default function DiscoveryExecution() {
   const { profile, user, canManageUsers } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState({ templates: [], clients: [], assessments: [] });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [data, setData] = useState({ templates: [], clients: [], assessments: [], divisions: [], companyModel: null });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
-  const [selection, setSelection] = useState({ templateId: "", clientId: "" });
+  const [selection, setSelection] = useState({ divisionId: "", templateId: "", clientId: "" });
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     if (!profile?.organization_id) return;
     setLoading(true);
     try {
-      setData(await getExecutionDashboardData());
+      setData(await getExecutionDashboardData(profile.organization_id));
       setError("");
     } catch (reason) {
       setError(friendlyError(reason, "No se pudo cargar Discovery."));
@@ -72,8 +73,21 @@ export default function DiscoveryExecution() {
     load();
   }, [load]);
 
-  function openStart(templateId = "") {
-    setSelection({ templateId: templateId || data.templates[0]?.id || "", clientId: "" });
+  useEffect(() => {
+    if (!loading && searchParams.get("new") === "1") {
+      const divisionId = searchParams.get("division") || "";
+      openStart("", divisionId);
+      setSearchParams({}, { replace: true });
+    }
+    // openStart is intentionally driven by URL context after data has loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams, setSearchParams]);
+
+  function openStart(templateId = "", divisionId = "") {
+    const template = data.templates.find((item) => item.id === templateId);
+    const resolvedDivision = divisionId || template?.division_id || "";
+    const firstTemplate = template || data.templates.find((item) => !resolvedDivision || item.division_id === resolvedDivision);
+    setSelection({ divisionId: resolvedDivision, templateId: firstTemplate?.id || "", clientId: "" });
     setStartOpen(true);
     setError("");
   }
@@ -81,8 +95,8 @@ export default function DiscoveryExecution() {
   async function startDiscovery(event) {
     event.preventDefault();
     const template = data.templates.find((item) => item.id === selection.templateId);
-    const client = data.clients.find((item) => String(item.id) === selection.clientId);
-    if (!template || !client) return setError("Selecciona un Discovery y un cliente.");
+    const client = data.clients.find((item) => String(item.id) === selection.clientId) || null;
+    if (!template) return setError("Selecciona un diagnóstico publicado.");
     setStarting(true);
     try {
       const assessment = await createAssessment({
@@ -106,12 +120,12 @@ export default function DiscoveryExecution() {
     <header className="dx-hero">
       <div>
         <span className="dx-eyebrow"><Sparkles size={14} /> Discovery</span>
-        <h1>Comprende el negocio antes de decidir.</h1>
-        <p>Ejecuta diagnósticos publicados, guarda el avance y consulta los resultados de cada cliente.</p>
+        <h1>Diagnostica tu organización y convierte evidencia en decisiones.</h1>
+        <p>Inicia, continúa y consulta diagnósticos conectados con el sistema Score.</p>
       </div>
       <div className="dx-hero-actions">
         {canManageUsers && <Link className="dx-button" to="/discovery/builder"><PencilRuler size={17} /> Discovery Builder</Link>}
-        <button className="dx-button dx-primary" onClick={() => openStart()} disabled={!data.templates.length || !data.clients.length}><Plus size={17} /> Iniciar Discovery</button>
+        <button className="dx-button dx-primary" onClick={() => openStart()} disabled={!data.templates.length}><Plus size={17} /> Nuevo diagnóstico</button>
       </div>
     </header>
 
@@ -119,13 +133,20 @@ export default function DiscoveryExecution() {
 
     {loading ? <Loading text="Cargando evaluaciones..." /> : <>
       <section className="dx-summary-grid">
-        <SummaryCard icon={BookOpen} value={data.templates.length} label="Disponibles" />
+        <SummaryCard icon={BookOpen} value={data.templates.length || "—"} label="Disponibles" />
         <SummaryCard icon={Clock3} value={inProgress.length} label="En progreso" />
         <SummaryCard icon={CheckCircle2} value={completed.length} label="Completados" />
       </section>
 
       <section>
-        <SectionHeading title="Discoveries disponibles" text="Plantillas publicadas listas para trabajar con clientes." />
+        <SectionHeading title="Evaluaciones disponibles" text="Diagnósticos publicados, organizados por las áreas del modelo empresarial." />
+        {data.divisions.length > 0 && <div className="dx-division-guide">
+          <button className="dx-organization-option" onClick={() => openStart()}><Building2 size={20} /><span><strong>Evaluar organización</strong><small>Elige una división que necesite evidencia; el Master Score no es un cuestionario.</small></span><ArrowRight size={16} /></button>
+          {data.divisions.map((division) => {
+            const available = data.templates.filter((template) => template.division_id === division.id).length;
+            return <button key={division.id} onClick={() => openStart("", division.id)} disabled={!available}><span><strong>{division.name}</strong><small>{division.score ? `${Number(division.score.performance_percentage).toFixed(2)} / 100 · Cobertura ${Number(division.score.coverage_percentage).toFixed(2)}%` : "Sin evaluar"}</small></span><span>{available ? `${available} ${available === 1 ? "diagnóstico" : "diagnósticos"}` : "Sin diagnósticos publicados"}</span></button>;
+          })}
+        </div>}
         <div className="dx-template-grid">
           {data.templates.map((template) => {
             const questions = allQuestions(template);
@@ -159,6 +180,7 @@ export default function DiscoveryExecution() {
 
     {startOpen && <StartModal
       templates={data.templates}
+      divisions={data.divisions}
       clients={data.clients}
       selection={selection}
       setSelection={setSelection}
@@ -428,14 +450,16 @@ function HistoryRow({ assessment }) {
   </article>;
 }
 
-function StartModal({ templates, clients, selection, setSelection, onClose, onSubmit, busy }) {
+function StartModal({ templates, divisions, clients, selection, setSelection, onClose, onSubmit, busy }) {
+  const availableTemplates = templates.filter((template) => !selection.divisionId || template.division_id === selection.divisionId);
   return <div className="dx-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="dx-modal" onSubmit={onSubmit}>
     <div className="dx-modal-head"><div><span className="dx-eyebrow">Nueva evaluación</span><h2>Iniciar Discovery</h2></div><button type="button" onClick={onClose}><X size={20} /></button></div>
-    <p>Selecciona la conversación y el negocio que deseas evaluar.</p>
-    <label>Discovery<select value={selection.templateId} onChange={(event) => setSelection({ ...selection, templateId: event.target.value })}><option value="">Seleccionar Discovery</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
-    <label>Cliente / negocio<select value={selection.clientId} onChange={(event) => setSelection({ ...selection, clientId: event.target.value })}><option value="">Seleccionar cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.company_name}{client.contact_name ? ` · ${client.contact_name}` : ""}</option>)}</select></label>
-    {!clients.length && <div className="dx-modal-note"><Building2 size={16} /> Necesitas al menos un cliente para iniciar.</div>}
-    <div className="dx-modal-actions"><button type="button" className="dx-button" onClick={onClose}>Cancelar</button><button className="dx-button dx-primary" disabled={busy || !selection.templateId || !selection.clientId}>{busy ? <LoaderCircle className="dx-spin" size={16} /> : <Play size={16} />} Comenzar</button></div>
+    <p>Selecciona qué área evaluar y el diagnóstico publicado que obtendrá la evidencia.</p>
+    <label>Área / división<select value={selection.divisionId} onChange={(event) => { const divisionId = event.target.value; const first = templates.find((template) => !divisionId || template.division_id === divisionId); setSelection({ ...selection, divisionId, templateId: first?.id || "" }); }}><option value="">Todas las áreas</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}{division.score ? ` · ${Number(division.score.performance_percentage).toFixed(2)}/100` : " · Sin evaluar"}</option>)}</select></label>
+    <label>Diagnóstico<select value={selection.templateId} onChange={(event) => setSelection({ ...selection, templateId: event.target.value })}><option value="">Seleccionar diagnóstico</option>{availableTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+    <label>Contexto<select value={selection.clientId} onChange={(event) => setSelection({ ...selection, clientId: event.target.value })}><option value="">Organización activa</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.company_name}{client.contact_name ? ` · ${client.contact_name}` : ""}</option>)}</select></label>
+    {!availableTemplates.length && <div className="dx-modal-note"><CircleAlert size={16} /> No hay diagnósticos publicados para esta área.</div>}
+    <div className="dx-modal-actions"><button type="button" className="dx-button" onClick={onClose}>Cancelar</button><button className="dx-button dx-primary" disabled={busy || !selection.templateId}>{busy ? <LoaderCircle className="dx-spin" size={16} /> : <Play size={16} />} Comenzar o continuar</button></div>
   </form></div>;
 }
 

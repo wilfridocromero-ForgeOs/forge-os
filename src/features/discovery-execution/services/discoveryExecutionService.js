@@ -64,44 +64,83 @@ export function normalizeAssessment(assessment) {
   };
 }
 
-export async function getExecutionDashboardData() {
-  const [templatesResult, clientsResult, assessmentsResult] = await Promise.all([
+export async function getExecutionDashboardData(organizationId) {
+  const [templatesResult, clientsResult, assessmentsResult, modelsResult, scoresResult] = await Promise.all([
     supabase.from("discovery_templates")
       .select(publishedTemplateSelect)
+      .eq("organization_id", organizationId)
       .eq("status", "published")
       .order("published_at", { ascending: false }),
     supabase.from("clients")
       .select("id, organization_id, workspace_organization_id, company_name, contact_name, industry, division_id, status")
+      .eq("organization_id", organizationId)
       .order("company_name"),
     supabase.from("discovery_assessments")
       .select(assessmentSelect)
+      .eq("organization_id", organizationId)
       .not("discovery_template_id", "is", null)
       .order("updated_at", { ascending: false }),
+    supabase.from("company_score_models")
+      .select("id,name,version,minimum_publishable_coverage,company_score_components(id,division_id,weight,active,created_at,divisions(id,name,position,active))")
+      .eq("organization_id", organizationId)
+      .eq("status", "published")
+      .order("version", { ascending: false })
+      .limit(1),
+    supabase.from("current_division_scores")
+      .select("id,division_id,performance_percentage,coverage_percentage,status,calculated_at")
+      .eq("organization_id", organizationId),
   ]);
 
-  const error = templatesResult.error || clientsResult.error || assessmentsResult.error;
+  const error = templatesResult.error || clientsResult.error || assessmentsResult.error || modelsResult.error || scoresResult.error;
   if (error) throw error;
+
+  const model = modelsResult.data?.[0] || null;
+  const scoresByDivision = new Map((scoresResult.data || []).map((score) => [score.division_id, score]));
+  const divisions = (model?.company_score_components || [])
+    .filter((component) => component.active)
+    .map((component) => ({
+      id: component.division_id,
+      name: component.divisions?.name || "División",
+      position: component.divisions?.position ?? Number.MAX_SAFE_INTEGER,
+      weight: Number(component.weight),
+      score: scoresByDivision.get(component.division_id) || null,
+    }))
+    .sort((a, b) => b.weight - a.weight || a.position - b.position);
 
   return {
     templates: (templatesResult.data || []).map(sortTemplate),
     clients: clientsResult.data || [],
     assessments: (assessmentsResult.data || []).map(normalizeAssessment),
+    companyModel: model,
+    divisions,
   };
 }
 
 export async function createAssessment({ organizationId, template, client, userId }) {
+  let existingQuery = supabase.from("discovery_assessments")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("discovery_template_id", template.id)
+    .neq("status", "completed")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  existingQuery = client?.id ? existingQuery.eq("client_id", client.id) : existingQuery.is("client_id", null);
+  const existing = await existingQuery.maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data) return { ...existing.data, resumed: true };
+
   const { data, error } = await supabase.from("discovery_assessments").insert({
     organization_id: organizationId,
-    client_id: client.id,
+    client_id: client?.id || null,
     discovery_template_id: template.id,
-    division_id: template.division_id || client.division_id || null,
+    division_id: template.division_id || client?.division_id || null,
     status: "in_progress",
     max_score: 100,
     created_by: userId,
   }).select("id").single();
 
   if (error) throw error;
-  return data;
+  return { ...data, resumed: false };
 }
 
 export async function getAssessment(assessmentId) {

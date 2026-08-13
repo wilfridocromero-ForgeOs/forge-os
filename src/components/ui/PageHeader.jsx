@@ -3,25 +3,23 @@ export default function PageHeader({
   title,
   description,
   children,
+  compact = false,
 }) {
   return (
     <div
-      className="
-        mb-10
+      className={`
+        ${compact ? "mb-0 gap-4 lg:mb-0" : "mb-10 gap-8 lg:mb-12"}
         flex
         flex-col
-        gap-8
-
-        lg:mb-12
         lg:flex-row
         lg:items-end
         lg:justify-between
-      "
+      `}
     >
       <div className="min-w-0">
 
         {eyebrow && (
-          <p className="mb-4 text-xs uppercase tracking-[0.35em] text-zinc-500">
+          <p className={`${compact ? "mb-2" : "mb-4"} text-xs uppercase tracking-[0.35em] text-zinc-500`}>
             {eyebrow}
           </p>
         )}
@@ -43,8 +41,8 @@ export default function PageHeader({
 
         {description && (
           <p
-            className="
-              mt-4
+            className={`
+              ${compact ? "mt-2" : "mt-4"}
               max-w-3xl
               text-sm
               leading-7
@@ -54,7 +52,7 @@ export default function PageHeader({
 
               lg:text-lg
               lg:leading-8
-            "
+            `}
           >
             {description}
           </p>

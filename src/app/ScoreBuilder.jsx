@@ -17,6 +17,70 @@ const responseTypes = [
   ["scale", "Escala 1 a 5"], ["yes_no", "Sí / No"], ["number", "Número"],
   ["percentage", "Porcentaje"], ["text", "Texto"], ["multiple_choice", "Selección múltiple"],
 ];
+
+function configFor(question) {
+  const config = question.scoring_config && typeof question.scoring_config === "object" ? question.scoring_config : {};
+  if (question.response_type === "yes_no") return { yes_score: config.yes_score ?? 100, no_score: config.no_score ?? 0 };
+  if (question.response_type === "scale") return { direction: config.direction ?? "higher", normalization: "linear" };
+  if (question.response_type === "percentage") return { mode: config.mode ?? "direct" };
+  if (question.response_type === "number") return { mode: config.mode ?? (config.target !== undefined ? "target" : "target"), direction: config.direction ?? "higher", ...config };
+  return config;
+}
+
+function initialTypeState(responseType) {
+  if (responseType === "yes_no") return { scoring_config: { yes_score: 100, no_score: 0 }, options: [] };
+  if (responseType === "scale") return { scoring_config: { direction: "higher", normalization: "linear" }, options: [], scale_min: 1, scale_max: 5 };
+  if (responseType === "percentage") return { scoring_config: { mode: "direct" }, options: [] };
+  if (responseType === "number") return { scoring_config: { mode: "target", direction: "higher" }, options: [] };
+  if (responseType === "multiple_choice") return { scoring_config: {}, options: [] };
+  return { scoring_config: {}, options: [] };
+}
+
+function setOptionalNumber(object, key, value) {
+  const next = { ...object };
+  if (value === "") delete next[key];
+  else next[key] = Number(value);
+  return next;
+}
+
+function rangesOverlap(first, second) {
+  if (first.min === undefined || second.min === undefined) return false;
+  return (first.max == null || second.min <= first.max) && (second.max == null || first.min <= second.max);
+}
+
+function questionConfigurationError(question, minimumChoiceOptions = 2) {
+  const config = configFor(question);
+  const validScore = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
+  if (question.response_type === "text") return "";
+  if (question.response_type === "yes_no") return validScore(config.yes_score) && validScore(config.no_score) ? "" : "Define puntos entre 0 y 100 para Sí y No.";
+  if (question.response_type === "scale") return Number(question.scale_min) < Number(question.scale_max) && ["higher", "lower"].includes(config.direction) ? "" : "La escala mínima debe ser menor que la máxima.";
+  if (question.response_type === "percentage") return ["direct", "inverse"].includes(config.mode) ? "" : "Selecciona cómo interpretar el porcentaje.";
+  if (question.response_type === "number" && config.mode === "target") return Number(config.target) > 0 && ["higher", "lower"].includes(config.direction) ? "" : "Define un objetivo mayor que cero.";
+  if (question.response_type === "number" && config.mode === "thresholds") {
+    const ranges = Array.isArray(config.thresholds) ? config.thresholds : [];
+    if (!ranges.length) return "Añade al menos un rango.";
+    if (ranges.some((range) => range.min === undefined || !("max" in range) || !validScore(range.score) || (range.max !== null && range.min > range.max))) return "Completa todos los rangos con límites y puntuaciones válidas.";
+    if (ranges.some((range, index) => ranges.slice(index + 1).some((other) => rangesOverlap(range, other)))) return "Los rangos no pueden solaparse.";
+    return "";
+  }
+  if (question.response_type === "multiple_choice") {
+    const options = Array.isArray(question.options) ? question.options : [];
+    if (options.length < minimumChoiceOptions) return `Añade al menos ${minimumChoiceOptions} opciones.`;
+    if (options.some((option) => !option?.label?.trim() || !option?.value?.trim() || !validScore(option.score))) return "Completa etiqueta, valor y puntuación de cada opción.";
+    const values = options.map((option) => option.value.trim());
+    return new Set(values).size === values.length ? "" : "Los valores de las opciones deben ser únicos.";
+  }
+  return "La configuración de puntuación está incompleta.";
+}
+
+function hasRangeGaps(ranges = []) {
+  const complete = ranges.filter((range) => range.min !== undefined && (range.max === null || Number.isFinite(range.max))).sort((a, b) => a.min - b.min);
+  return complete.some((range, index) => index > 0 && complete[index - 1].max !== null && range.min > complete[index - 1].max);
+}
+
+function stableValue(label) {
+  return label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
 const templateSelect = `
   id, organization_id, name, description, status, version, template_kind,
   source_template_id, division_id, max_score, created_by, published_at, created_at, updated_at,
@@ -194,7 +258,7 @@ export default function ScoreBuilder() {
           category_id: created.data.id, library_question_id: question.library_question_id || null,
           prompt: question.prompt, help_text: question.help_text || "", response_type: question.response_type,
           weight: Number(question.weight || 0), required: Boolean(question.required), position: index,
-          scale_min: Number(question.scale_min || 1), scale_max: Number(question.scale_max || 5),
+          scale_min: Number(question.scale_min ?? 1), scale_max: Number(question.scale_max ?? 5),
           options: question.options || [], scoring_config: question.scoring_config || {},
         })));
         if (copied.error) throw copied.error;
@@ -210,8 +274,8 @@ export default function ScoreBuilder() {
       category_id: category.id, library_question_id: question.library_question_id || null,
       prompt: question.prompt, help_text: question.help_text || "", response_type: question.response_type,
       weight: Number(question.weight || 0), required: Boolean(question.required),
-      position: category.score_questions.length, scale_min: Number(question.scale_min || 1),
-      scale_max: Number(question.scale_max || 5), options: question.options || [],
+      position: category.score_questions.length, scale_min: Number(question.scale_min ?? 1),
+      scale_max: Number(question.scale_max ?? 5), options: question.options || [],
       scoring_config: question.scoring_config || {},
     }).select("id").single(), "Pregunta duplicada correctamente.");
     if (result) await loadBuilder(selected.id);
@@ -274,6 +338,8 @@ export default function ScoreBuilder() {
       const total = category.score_questions.reduce((sum, item) => sum + Number(item.weight || 0), 0);
       if (Math.abs(total - 100) > 0.01) return `Las preguntas de “${category.name}” deben sumar 100%. Actualmente suman ${total}%.`;
       if (category.score_questions.some((question) => !question.prompt.trim())) return "Todas las preguntas necesitan texto.";
+      const invalidQuestion = category.score_questions.find((question) => questionConfigurationError(question));
+      if (invalidQuestion) return `“${invalidQuestion.prompt}”: ${questionConfigurationError(invalidQuestion)}`;
     }
     return "";
   }
@@ -289,8 +355,8 @@ export default function ScoreBuilder() {
     try {
       const templateResult = await supabase.from("score_templates").update({
         name: selected.name.trim(), description: selected.description?.trim() || "",
-        division_id: selected.division_id, max_score: 100, status: nextStatus,
-        published_at: publishing ? (selected.published_at || new Date().toISOString()) : null,
+        division_id: selected.division_id, max_score: 100, status: publishing ? "draft" : nextStatus,
+        published_at: publishing ? null : nextStatus === "published" ? selected.published_at : null,
         updated_at: new Date().toISOString(),
       }).eq("id", selected.id).select("id").single();
       if (templateResult.error) throw templateResult.error;
@@ -305,12 +371,18 @@ export default function ScoreBuilder() {
             prompt: question.prompt.trim(), help_text: question.help_text?.trim() || "",
             response_type: question.response_type, weight: Number(question.weight),
             required: Boolean(question.required), position: questionIndex,
-            scale_min: Number(question.scale_min || 1), scale_max: Number(question.scale_max || 5),
+            scale_min: Number(question.scale_min ?? 1), scale_max: Number(question.scale_max ?? 5),
             options: question.options || [], scoring_config: question.scoring_config || {},
             updated_at: new Date().toISOString(),
           }).eq("id", question.id).select("id").single();
           if (questionResult.error) throw questionResult.error;
         }
+      }
+      if (publishing) {
+        const publishResult = await supabase.from("score_templates").update({
+          status: "published", published_at: selected.published_at || new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq("id", selected.id).select("id").single();
+        if (publishResult.error) throw publishResult.error;
       }
       notify(publishing ? "Score publicado correctamente." : nextStatus === "draft" && selected.status === "published" ? "Score despublicado y guardado como borrador." : "Borrador guardado correctamente.");
       await loadBuilder(selected.id);
@@ -350,7 +422,7 @@ export default function ScoreBuilder() {
             category_id: copy.data.id, library_question_id: question.library_question_id || null,
             prompt: question.prompt, help_text: question.help_text || "", response_type: question.response_type,
             weight: Number(question.weight), required: Boolean(question.required), position: index,
-            scale_min: Number(question.scale_min || 1), scale_max: Number(question.scale_max || 5),
+            scale_min: Number(question.scale_min ?? 1), scale_max: Number(question.scale_max ?? 5),
             options: question.options || [], scoring_config: question.scoring_config || {},
           })));
           if (questions.error) throw questions.error;
@@ -575,12 +647,28 @@ function QuestionsStep({ template, updateQuestion, addQuestion, cloneQuestion, r
 }
 
 function QuestionFields({ categoryId, question, updateQuestion }) {
+  const config = configFor(question);
+  const configurationError = questionConfigurationError(question);
+  const updateConfig = (changes) => updateQuestion(categoryId, question.id, { scoring_config: { ...config, ...changes } });
+  const changeType = (responseType) => updateQuestion(categoryId, question.id, { response_type: responseType, ...initialTypeState(responseType) });
+  const thresholds = Array.isArray(config.thresholds) ? config.thresholds : [];
+  const updateThreshold = (index, nextRange) => updateConfig({ thresholds: thresholds.map((range, rangeIndex) => rangeIndex === index ? nextRange : range) });
+  const options = Array.isArray(question.options) ? question.options : [];
+  const updateOption = (index, nextOption) => updateQuestion(categoryId, question.id, { options: options.map((option, optionIndex) => optionIndex === index ? nextOption : option) });
   return <div className="mt-4 grid gap-4 lg:grid-cols-2">
     <Field label="Pregunta"><input className="sb-input" value={question.prompt} onChange={(event) => updateQuestion(categoryId, question.id, { prompt: event.target.value })}/></Field>
-    <Field label="Tipo de respuesta"><select className="sb-input" value={question.response_type} onChange={(event) => updateQuestion(categoryId, question.id, { response_type: event.target.value })}>{responseTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+    <Field label="Tipo de respuesta"><select className="sb-input" value={question.response_type} onChange={(event) => changeType(event.target.value)}>{responseTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
     <div className="lg:col-span-2"><Field label="Descripción o ayuda"><textarea rows="2" className="sb-input resize-y" value={question.help_text || ""} onChange={(event) => updateQuestion(categoryId, question.id, { help_text: event.target.value })}/></Field></div>
-    {question.response_type === "scale" && <><Field label="Valor mínimo"><input type="number" className="sb-input" value={question.scale_min || 1} onChange={(event) => updateQuestion(categoryId, question.id, { scale_min: event.target.value })}/></Field><Field label="Valor máximo"><input type="number" className="sb-input" value={question.scale_max || 5} onChange={(event) => updateQuestion(categoryId, question.id, { scale_max: event.target.value })}/></Field></>}
-    {question.response_type === "multiple_choice" && <div className="lg:col-span-2"><Field label="Opciones (una por línea)"><textarea rows="3" className="sb-input resize-y" value={(question.options || []).join("\n")} onChange={(event) => updateQuestion(categoryId, question.id, { options: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })}/></Field></div>}
+    <div className="lg:col-span-2 sb-scoring-head"><strong>{question.response_type === "text" ? "Respuesta informativa" : "Configuración de puntuación"}</strong><span className={configurationError ? "pending" : "complete"}>{configurationError ? "Configuración pendiente" : question.response_type === "text" ? "No puntuable" : "Configuración completa"}</span></div>
+    {question.response_type === "yes_no" && <div className="lg:col-span-2 sb-config-grid"><Field label="Puntos para Sí"><input type="number" min="0" max="100" className="sb-input" value={config.yes_score ?? 100} onChange={(event) => updateConfig({ yes_score: Number(event.target.value) })}/></Field><Field label="Puntos para No"><input type="number" min="0" max="100" className="sb-input" value={config.no_score ?? 0} onChange={(event) => updateConfig({ no_score: Number(event.target.value) })}/></Field></div>}
+    {question.response_type === "scale" && <div className="lg:col-span-2 sb-config-grid"><Field label="Escala mínima"><input type="number" className="sb-input" value={question.scale_min ?? 1} onChange={(event) => updateQuestion(categoryId, question.id, { scale_min: event.target.value })}/></Field><Field label="Escala máxima"><input type="number" className="sb-input" value={question.scale_max ?? 5} onChange={(event) => updateQuestion(categoryId, question.id, { scale_max: event.target.value })}/></Field><Field label="Dirección de puntuación"><select className="sb-input" value={config.direction ?? "higher"} onChange={(event) => updateConfig({ direction: event.target.value, normalization: "linear" })}><option value="higher">Más alto es mejor</option><option value="lower">Más bajo es mejor</option></select></Field><p className="sb-config-help">{config.direction === "lower" ? "Mínimo → 100 · Máximo → 0" : "Mínimo → 0 · Máximo → 100"}</p></div>}
+    {question.response_type === "percentage" && <div className="lg:col-span-2 sb-config-grid"><Field label="Cómo interpretar el porcentaje"><select className="sb-input" value={config.mode ?? "direct"} onChange={(event) => updateConfig({ mode: event.target.value })}><option value="direct">Más alto es mejor</option><option value="inverse">Más bajo es mejor</option></select></Field><p className="sb-config-help">{config.mode === "inverse" ? "Un porcentaje alto produce una puntuación baja." : "Un porcentaje alto produce una puntuación alta."}</p></div>}
+    {question.response_type === "number" && <div className="lg:col-span-2 sb-config-stack"><Field label="Método de puntuación"><select className="sb-input" value={config.mode ?? "target"} onChange={(event) => updateQuestion(categoryId, question.id, { scoring_config: event.target.value === "thresholds" ? { mode: "thresholds", thresholds: [] } : { mode: "target", direction: "higher" } })}><option value="target">Objetivo</option><option value="thresholds">Rangos</option></select></Field>
+      {(config.mode ?? "target") === "target" ? <div className="sb-config-grid"><Field label="Objetivo"><input type="number" min="0" className="sb-input" value={config.target ?? ""} onChange={(event) => updateQuestion(categoryId, question.id, { scoring_config: setOptionalNumber(config, "target", event.target.value) })} placeholder="Pendiente" /></Field><Field label="Dirección"><select className="sb-input" value={config.direction ?? "higher"} onChange={(event) => updateConfig({ direction: event.target.value })}><option value="higher">Más alto es mejor</option><option value="lower">Más bajo es mejor</option></select></Field></div> : <><div className="sb-config-list">{thresholds.map((range, index) => <div className="sb-config-row" key={index}><Field label="Desde"><input type="number" className="sb-input" value={range.min ?? ""} onChange={(event) => updateThreshold(index, setOptionalNumber(range, "min", event.target.value))}/></Field><Field label="Hasta"><input type="number" className="sb-input" value={range.max ?? ""} onChange={(event) => updateThreshold(index, { ...range, max: event.target.value === "" ? null : Number(event.target.value) })} placeholder="Sin límite" /></Field><Field label="Puntuación"><input type="number" min="0" max="100" className="sb-input" value={range.score ?? ""} onChange={(event) => updateThreshold(index, setOptionalNumber(range, "score", event.target.value))}/></Field><button type="button" className="sb-icon-button danger" aria-label="Eliminar rango" onClick={() => updateConfig({ thresholds: thresholds.filter((_, rangeIndex) => rangeIndex !== index) })}><Trash2 size={16}/></button></div>)}</div><button type="button" className="sb-button sb-button-secondary sb-add-config" onClick={() => updateConfig({ thresholds: [...thresholds, {}] })}><Plus size={15}/> Añadir rango</button>{hasRangeGaps(thresholds) && <p className="sb-config-warning">Algunos valores no producirán puntuación.</p>}</>}
+    </div>}
+    {question.response_type === "multiple_choice" && <div className="lg:col-span-2 sb-config-stack"><div className="sb-config-list">{options.map((option, index) => <div className="sb-config-row sb-option-row" key={index}><Field label="Etiqueta"><input className="sb-input" value={option?.label ?? ""} onChange={(event) => { const label = event.target.value; updateOption(index, { ...option, label, ...(!option?.value ? { value: stableValue(label) } : {}) }); }}/></Field><Field label="Valor"><input className="sb-input" value={option?.value ?? ""} onChange={(event) => updateOption(index, { ...option, value: event.target.value })}/></Field><Field label="Puntuación"><input type="number" min="0" max="100" className="sb-input" value={option?.score ?? ""} onChange={(event) => updateOption(index, setOptionalNumber(option, "score", event.target.value))}/></Field><button type="button" className="sb-icon-button danger" aria-label="Eliminar opción" onClick={() => updateQuestion(categoryId, question.id, { options: options.filter((_, optionIndex) => optionIndex !== index) })}><Trash2 size={16}/></button></div>)}</div><button type="button" className="sb-button sb-button-secondary sb-add-config" onClick={() => updateQuestion(categoryId, question.id, { options: [...options, {}] })}><Plus size={15}/> Añadir opción</button></div>}
+    {question.response_type === "text" && <div className="lg:col-span-2 sb-info-note">Las preguntas de texto no generan puntuación automática.</div>}
+    {configurationError && question.response_type !== "text" && <p className="lg:col-span-2 sb-config-error">{configurationError}</p>}
     <label className="sb-check"><input type="checkbox" checked={Boolean(question.required)} onChange={(event) => updateQuestion(categoryId, question.id, { required: event.target.checked })}/> Respuesta obligatoria</label>
   </div>;
 }

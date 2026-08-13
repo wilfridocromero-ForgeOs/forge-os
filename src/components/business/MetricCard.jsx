@@ -7,9 +7,10 @@ export default function MetricCard({
   subtitle,
   trend,
   loading = false,
+  compact = false,
 }) {
   return (
-    <Card className="h-full" contentClassName="p-4 sm:p-5">
+    <Card className="h-full" contentClassName={compact ? "p-3.5 sm:p-4" : "p-4 sm:p-5"}>
 
       <div className="flex h-full flex-col">
 
@@ -49,7 +50,7 @@ export default function MetricCard({
 
         {/* Valor */}
 
-        <div className="mt-3">
+        <div className={compact ? "mt-2" : "mt-3"}>
 
           <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {loading ? "…" : value}
