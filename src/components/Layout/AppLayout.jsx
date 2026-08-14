@@ -17,7 +17,7 @@ export default function AppLayout() {
       <div className="lg:ml-72 min-h-screen flex flex-col">
         <Header setSidebarOpen={setSidebarOpen} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="app-content flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>

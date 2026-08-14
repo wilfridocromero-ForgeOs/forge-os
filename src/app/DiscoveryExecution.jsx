@@ -12,6 +12,11 @@ import {
   createAssessment, deleteDiscoveryResponse, finalizeAssessment, getAssessment,
   getExecutionDashboardData, saveDiscoveryResponse,
 } from "../features/discovery-execution/services/discoveryExecutionService";
+import {
+  getDiscoveryQuestionConfigurationError,
+  normalizeDiscoveryOptions,
+  normalizeDiscoveryResponseType,
+} from "../features/discovery/responseTypes";
 import "./DiscoveryExecution.css";
 
 function isAnswered(value) {
@@ -22,6 +27,19 @@ function isAnswered(value) {
 
 function allQuestions(template) {
   return (template?.discovery_sections || []).flatMap((section) => section.discovery_questions || []);
+}
+
+function questionConfigurationError(question) {
+  const linkedOptions = question.discovery_question_score_links?.[0]?.score_questions?.options || [];
+  const options = question.options?.length ? question.options : linkedOptions;
+  return getDiscoveryQuestionConfigurationError({ ...question, options });
+}
+
+function questionIsRequiredAndIncomplete(question, answers) {
+  return question.required && (
+    Boolean(questionConfigurationError(question))
+    || !isAnswered(answers[question.id])
+  );
 }
 
 function progressFor(assessment) {
@@ -144,7 +162,7 @@ export default function DiscoveryExecution() {
           <button className="dx-organization-option" onClick={() => openStart()}><Building2 size={20} /><span><strong>Evaluar organización</strong><small>Elige una división que necesite evidencia; el Master Score no es un cuestionario.</small></span><ArrowRight size={16} /></button>
           {data.divisions.map((division) => {
             const available = data.templates.filter((template) => template.division_id === division.id).length;
-            return <button key={division.id} onClick={() => openStart("", division.id)} disabled={!available}><span><strong>{division.name}</strong><small>{division.score ? `${Number(division.score.performance_percentage).toFixed(2)} / 100 · Cobertura ${Number(division.score.coverage_percentage).toFixed(2)}%` : "Sin evaluar"}</small></span><span>{available ? `${available} ${available === 1 ? "diagnóstico" : "diagnósticos"}` : "Sin diagnósticos publicados"}</span></button>;
+            return <button key={division.id} onClick={() => openStart("", division.id)} disabled={!available}><span><strong>{division.name}</strong><small>{division.score ? `Desempeño ${Number(division.score.performance_percentage).toFixed(2)} / 100 · Cobertura ${Number(division.score.coverage_percentage).toFixed(2)}%` : "Sin evaluar"}</small></span><span>{available ? `${available} ${available === 1 ? "diagnóstico" : "diagnósticos"}` : "Sin diagnósticos publicados"}</span></button>;
           })}
         </div>}
         <div className="dx-template-grid">
@@ -223,7 +241,7 @@ export function DiscoveryRunner() {
       setAnswers(valueMap);
       setAssessment(next);
       const sections = next.discovery_templates.discovery_sections;
-      const firstIncomplete = sections.findIndex((section) => section.discovery_questions.some((question) => question.required && !isAnswered(valueMap[question.id])));
+      const firstIncomplete = sections.findIndex((section) => section.discovery_questions.some((question) => questionIsRequiredAndIncomplete(question, valueMap)));
       setSectionIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
       setError("");
     } catch (reason) {
@@ -293,6 +311,8 @@ export function DiscoveryRunner() {
 
   async function continueSection() {
     const section = assessment.discovery_templates.discovery_sections[sectionIndex];
+    const invalidRequired = section.discovery_questions.find((question) => question.required && questionConfigurationError(question));
+    if (invalidRequired) return setError(`No se puede continuar: “${invalidRequired.prompt}” tiene una configuración inválida.`);
     const missing = section.discovery_questions.filter((question) => question.required && !isAnswered(answers[question.id]));
     if (missing.length) return setError("Completa las preguntas obligatorias antes de continuar.");
     try {
@@ -304,6 +324,8 @@ export function DiscoveryRunner() {
 
   async function finish() {
     const questions = allQuestions(assessment.discovery_templates);
+    const invalidRequired = questions.find((question) => question.required && questionConfigurationError(question));
+    if (invalidRequired) return setError(`No se puede finalizar: “${invalidRequired.prompt}” tiene una configuración inválida.`);
     const missing = questions.filter((question) => question.required && !isAnswered(answers[question.id]));
     if (missing.length) return setError("Aún faltan preguntas obligatorias.");
     setFinalizing(true);
@@ -326,7 +348,7 @@ export function DiscoveryRunner() {
   const section = sections[sectionIndex];
   const questions = allQuestions(template);
   const answeredCount = questions.filter((question) => isAnswered(answers[question.id])).length;
-  const completedSections = sections.filter((item) => item.discovery_questions.every((question) => !question.required || isAnswered(answers[question.id]))).length;
+  const completedSections = sections.filter((item) => item.discovery_questions.every((question) => !questionIsRequiredAndIncomplete(question, answers))).length;
   const percentage = questions.length ? Math.round(answeredCount / questions.length * 100) : 0;
 
   return <div className="dx-runner-page">
@@ -349,7 +371,7 @@ export function DiscoveryRunner() {
         total={questions.length}
         completedSections={completedSections}
         sectionTotal={sections.length}
-        requiredMissing={questions.filter((question) => question.required && !isAnswered(answers[question.id])).length}
+        requiredMissing={questions.filter((question) => questionIsRequiredAndIncomplete(question, answers)).length}
         onBack={() => setReviewing(false)}
         onFinish={finish}
         finalizing={finalizing}
@@ -419,16 +441,27 @@ function QuestionField({ question, index, value, onChange }) {
   const min = linkedScoreQuestion?.scale_min ?? 1;
   const max = linkedScoreQuestion?.scale_max ?? 5;
   const rawOptions = question.options?.length ? question.options : linkedScoreQuestion?.options || [];
-  const options = rawOptions.map((option) => typeof option === "object" ? { value: option.value ?? option.label, label: option.label ?? option.value } : { value: option, label: option });
+  const options = normalizeDiscoveryOptions(rawOptions);
+  const responseType = normalizeDiscoveryResponseType(question.response_type);
+  const configurationError = questionConfigurationError(question);
+  if (configurationError && import.meta.env.DEV) {
+    console.warn("Discovery question has an invalid response configuration", {
+      questionId: question.id,
+      responseType: question.response_type,
+      configurationError,
+    });
+  }
   return <article className="dx-question">
     <div className="dx-question-index">{String(index + 1).padStart(2, "0")}</div>
     <div className="dx-question-body"><label>{question.prompt}{question.required && <em>*</em>}</label>{question.help_text && <p>{question.help_text}</p>}
-      {question.response_type === "text" && <textarea rows={4} value={value ?? ""} onChange={(event) => onChange(event.target.value)} placeholder="Escribe tu respuesta..." />}
-      {question.response_type === "yes_no" && <div className="dx-choice-row"><Choice active={value === "yes"} onClick={() => onChange("yes")}>Sí</Choice><Choice active={value === "no"} onClick={() => onChange("no")}>No</Choice></div>}
-      {question.response_type === "number" && <input type="number" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? "" : Number(event.target.value))} placeholder="0" />}
-      {question.response_type === "percentage" && <div className="dx-suffix-input"><input type="number" min="0" max="100" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? "" : Math.min(100, Math.max(0, Number(event.target.value))))} /><span>%</span></div>}
-      {question.response_type === "scale" && <div className="dx-scale">{Array.from({ length: max - min + 1 }, (_, offset) => min + offset).map((number) => <Choice key={number} active={Number(value) === number} onClick={() => onChange(number)}>{number}</Choice>)}</div>}
-      {question.response_type === "multiple_choice" && <div className="dx-options">{options.map((option) => <Choice key={String(option.value)} active={value === option.value} onClick={() => onChange(option.value)}>{option.label}</Choice>)}</div>}
+      {configurationError ? <div className="dx-question-config-error" role="alert"><CircleAlert size={17} /><span><strong>Esta pregunta necesita configuración.</strong>{configurationError}</span></div> : <>
+        {responseType === "text" && <textarea rows={4} value={value ?? ""} onChange={(event) => onChange(event.target.value)} placeholder="Escribe tu respuesta..." />}
+        {responseType === "yes_no" && <div className="dx-choice-row"><Choice active={value === "yes"} onClick={() => onChange("yes")}>Sí</Choice><Choice active={value === "no"} onClick={() => onChange("no")}>No</Choice></div>}
+        {responseType === "number" && <input type="number" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? "" : Number(event.target.value))} placeholder="0" />}
+        {responseType === "percentage" && <div className="dx-suffix-input"><input type="number" min="0" max="100" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? "" : Math.min(100, Math.max(0, Number(event.target.value))))} /><span>%</span></div>}
+        {responseType === "scale" && <div className="dx-scale">{Array.from({ length: max - min + 1 }, (_, offset) => min + offset).map((number) => <Choice key={number} active={Number(value) === number} onClick={() => onChange(number)}>{number}</Choice>)}</div>}
+        {responseType === "multiple_choice" && <div className="dx-options">{options.map((option) => <Choice key={String(option.value)} active={value === option.value} onClick={() => onChange(option.value)}>{option.label}</Choice>)}</div>}
+      </>}
     </div>
   </article>;
 }

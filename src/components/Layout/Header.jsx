@@ -36,12 +36,13 @@ export default function Header({ setSidebarOpen }) {
   return (
     <header
       className="
+        app-header
         sticky
         top-0
         z-30
 
         flex
-        h-18
+        min-h-18
         items-center
         justify-between
 

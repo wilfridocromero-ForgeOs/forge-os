@@ -13,6 +13,12 @@ import {
   deleteQuestion, deleteSection, getDiscoveryBuilderData, replaceScoreLink,
   updateDiscoveryTemplate, updateQuestion, updateSection,
 } from "../features/discovery-builder/services/discoveryBuilderService";
+import {
+  DISCOVERY_RESPONSE_TYPES,
+  getDiscoveryQuestionConfigurationError,
+  getDiscoveryResponseType,
+  normalizeDiscoveryResponseType,
+} from "../features/discovery/responseTypes";
 import "./Discovery.css";
 
 const steps = [
@@ -22,10 +28,6 @@ const steps = [
   { label: "Conexiones", icon: Link2 },
   { label: "Vista previa", icon: Eye },
   { label: "Publicar", icon: Sparkles },
-];
-const responseTypes = [
-  ["text", "Texto libre"], ["yes_no", "Sí / No"], ["scale", "Escala"],
-  ["number", "Número"], ["percentage", "Porcentaje"], ["multiple_choice", "Selección múltiple"],
 ];
 const blankTemplate = { name: "", description: "", division_id: "" };
 
@@ -43,11 +45,18 @@ function countQuestions(template) {
 function validationFor(template) {
   const sections = template?.discovery_sections || [];
   const questions = sections.flatMap((section) => section.discovery_questions);
+  const invalidQuestions = questions
+    .map((question) => ({ question, error: getDiscoveryQuestionConfigurationError(question) }))
+    .filter(({ error }) => error);
   return [
     { label: "Nombre definido", valid: Boolean(template?.name?.trim()) },
     { label: "Al menos una sección", valid: sections.length > 0 },
     { label: "Cada sección tiene preguntas", valid: sections.length > 0 && sections.every((section) => section.discovery_questions.length > 0) },
     { label: "Preguntas evaluativas conectadas", valid: questions.filter((q) => q.question_kind === "evaluative").every((q) => q.discovery_question_score_links.length > 0) },
+    ...invalidQuestions.map(({ question, error }) => ({
+      label: `${error} Pregunta: “${question.prompt}”`,
+      valid: false,
+    })),
   ];
 }
 
@@ -56,13 +65,12 @@ function optionValue(option) {
 }
 
 function scoreQuestionIsCompatible(discoveryQuestion, scoreQuestion) {
-  const normalizeType = (type) => type === "boolean" ? "yes_no" : type;
-  if (normalizeType(discoveryQuestion.response_type) !== normalizeType(scoreQuestion.response_type)) return false;
-  if (normalizeType(discoveryQuestion.response_type) === "scale") {
+  if (normalizeDiscoveryResponseType(discoveryQuestion.response_type) !== normalizeDiscoveryResponseType(scoreQuestion.response_type)) return false;
+  if (normalizeDiscoveryResponseType(discoveryQuestion.response_type) === "scale") {
     return Number.isFinite(scoreQuestion.scale_min) && Number.isFinite(scoreQuestion.scale_max)
       && scoreQuestion.scale_min < scoreQuestion.scale_max;
   }
-  if (normalizeType(discoveryQuestion.response_type) !== "multiple_choice") return true;
+  if (normalizeDiscoveryResponseType(discoveryQuestion.response_type) !== "multiple_choice") return true;
   const discoveryOptions = (discoveryQuestion.options || []).map(optionValue).filter(Boolean).sort();
   const scoreOptions = (scoreQuestion.options || []).map(optionValue).filter(Boolean).sort();
   return discoveryOptions.length > 0 && discoveryOptions.length === scoreOptions.length
@@ -204,7 +212,8 @@ export default function Discovery() {
 
   async function publish() {
     const checks = validationFor(selected);
-    if (checks.some((item) => !item.valid)) return notify("Completa las validaciones antes de publicar.", "error");
+    const failed = checks.find((item) => !item.valid);
+    if (failed) return notify(failed.label, "error");
     const publishedAt = new Date().toISOString();
     const result = await runAction("publish", () => updateDiscoveryTemplate(selected.id, { status: "published", published_at: publishedAt }), "Discovery publicado.");
     if (result !== null) updateSelected({ status: "published", published_at: publishedAt });
@@ -330,9 +339,9 @@ function QuestionEditor({ section, question, index, saveField, removeQuestion })
   const optionText = question.options.map((option) => typeof option === "string" ? option : option.label || option.value).join("\n");
   return <article className="db-card db-question-card"><div className="db-question-number">{index + 1}</div><div className="db-question-fields">
     <label>Pregunta<textarea defaultValue={question.prompt} onBlur={(e) => saveField(section, question, "prompt", e.target.value.trim())} rows={2} /></label>
-    <div className="db-form-grid compact"><label>Tipo de respuesta<select value={question.response_type} onChange={(e) => saveField(section, question, "response_type", e.target.value)}>{responseTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Propósito<select value={question.question_kind} onChange={(e) => saveField(section, question, "question_kind", e.target.value)}><option value="informative">Informativa</option><option value="evaluative">Evaluativa</option></select></label></div>
+    <div className="db-form-grid compact"><label>Tipo de respuesta<select value={normalizeDiscoveryResponseType(question.response_type)} onChange={(e) => saveField(section, question, "response_type", e.target.value)}>{DISCOVERY_RESPONSE_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label><label>Propósito<select value={question.question_kind} onChange={(e) => saveField(section, question, "question_kind", e.target.value)}><option value="informative">Informativa</option><option value="evaluative">Evaluativa</option></select></label></div>
     <label>Texto de ayuda<input defaultValue={question.help_text || ""} onBlur={(e) => saveField(section, question, "help_text", e.target.value.trim())} placeholder="Contexto opcional para quien responde" /></label>
-    {question.response_type === "multiple_choice" && <label>Opciones (una por línea)<textarea defaultValue={optionText} onBlur={(e) => saveField(section, question, "options", e.target.value.split("\n").map((value) => value.trim()).filter(Boolean))} rows={3} /></label>}
+    {getDiscoveryResponseType(question.response_type)?.requiresOptions && <label>Opciones (una por línea)<textarea defaultValue={optionText} onBlur={(e) => saveField(section, question, "options", e.target.value.split("\n").map((value) => value.trim()).filter(Boolean))} rows={3} /></label>}
     <label className="db-check"><input type="checkbox" checked={question.required} onChange={(e) => saveField(section, question, "required", e.target.checked)} /> Respuesta obligatoria</label>
   </div><button className="db-icon-button danger" onClick={() => removeQuestion(section, question)}><Trash2 size={16} /></button></article>;
 }
@@ -358,7 +367,7 @@ function Connections({ template, scoreTemplates, connect }) {
 function Preview({ template }) {
   return <div className="db-content-narrow"><StageTitle number="05" title="Vista previa" text="Así verá el equipo la estructura del Discovery." />
     <div className="db-preview"><div className="db-preview-cover"><span>DISCOVERY</span><h2>{template.name}</h2><p>{template.description || "Sin descripción"}</p><div><b>{template.discovery_sections.length}</b> secciones <b>{countQuestions(template)}</b> preguntas</div></div>
-      {template.discovery_sections.map((section, sectionIndex) => <section key={section.id}><div className="db-preview-section"><span>{String(sectionIndex + 1).padStart(2, "0")}</span><div><h3>{section.title}</h3><p>{section.description}</p></div></div>{section.discovery_questions.map((question, index) => <div className="db-preview-question" key={question.id}><b>{index + 1}.</b><div><p>{question.prompt}{question.required && <em>*</em>}</p><small>{responseTypes.find(([value]) => value === question.response_type)?.[1]} · {question.question_kind === "evaluative" ? "Evaluativa" : "Informativa"}</small></div></div>)}</section>)}
+      {template.discovery_sections.map((section, sectionIndex) => <section key={section.id}><div className="db-preview-section"><span>{String(sectionIndex + 1).padStart(2, "0")}</span><div><h3>{section.title}</h3><p>{section.description}</p></div></div>{section.discovery_questions.map((question, index) => <div className="db-preview-question" key={question.id}><b>{index + 1}.</b><div><p>{question.prompt}{question.required && <em>*</em>}</p><small>{getDiscoveryResponseType(question.response_type)?.label || "Tipo no compatible"} · {question.question_kind === "evaluative" ? "Evaluativa" : "Informativa"}</small></div></div>)}</section>)}
     </div>
   </div>;
 }

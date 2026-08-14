@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+:root {
+  --app-header-height: 4.5rem;
+}
+
 /* Forge OS Theme */
 
 body {
@@ -19,6 +23,16 @@ html,
 body,
 #root {
   min-height: 100%;
+}
+
+.app-header {
+  min-height: calc(var(--app-header-height) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.app-content {
+  min-width: 0;
+  scroll-padding-top: var(--app-header-height);
 }
 
 body,
