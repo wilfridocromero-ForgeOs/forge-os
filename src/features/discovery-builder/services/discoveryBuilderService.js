@@ -15,6 +15,57 @@ const templateSelect = `
   )
 `;
 
+const librarySelect = `
+  id, category_id, title, description, response_type, options, active,
+  score_library_categories(id, name, organization_id, division_id, is_official)
+`;
+
+function libraryResponseType(responseType) {
+  return responseType === "yes_no" ? "boolean" : responseType;
+}
+
+function normalizeLibraryTitle(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+function libraryCategorySlug(value) {
+  return normalizeLibraryTitle(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "seccion";
+}
+
+async function getPrivateLibraryQuestions(categoryId) {
+  const { data, error } = await supabase.from("score_library_questions")
+    .select(librarySelect).eq("category_id", categoryId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function getOrCreateDiscoveryLibraryCategory({ organizationId, divisionId, categoryName, createdBy }) {
+  const name = String(categoryName || "").trim().replace(/\s+/g, " ");
+  const slug = libraryCategorySlug(name);
+  const categoryQuery = () => {
+    let query = supabase.from("score_library_categories").select("id")
+      .eq("organization_id", organizationId).eq("slug", slug).eq("is_official", false);
+    query = divisionId ? query.eq("division_id", divisionId) : query.is("division_id", null);
+    return query.maybeSingle();
+  };
+  const existing = await categoryQuery();
+  if (existing.error) throw existing.error;
+  if (existing.data) return existing.data.id;
+  const created = await supabase.from("score_library_categories").insert({
+    organization_id: organizationId, division_id: divisionId || null,
+    name, slug,
+    description: `Preguntas reutilizables de la sección ${name}.`,
+    is_official: false, created_by: createdBy,
+  }).select("id").single();
+  if (!created.error) return created.data.id;
+  if (created.error.code !== "23505") throw created.error;
+  const racedCategory = await categoryQuery();
+  if (racedCategory.error) throw racedCategory.error;
+  if (!racedCategory.data) throw created.error;
+  return racedCategory.data.id;
+}
+
 export function normalizeTemplate(template) {
   return {
     ...template,
@@ -35,16 +86,19 @@ export function normalizeTemplate(template) {
 }
 
 export async function getDiscoveryBuilderData() {
-  const [templatesResult, scoresResult] = await Promise.all([
+  const [templatesResult, scoresResult, libraryResult] = await Promise.all([
     supabase.from("discovery_templates").select(templateSelect).order("updated_at", { ascending: false }),
     supabase.from("score_templates")
       .select("id, name, status, score_categories(id, name, position, score_questions(id, prompt, response_type, position, scale_min, scale_max, options, scoring_config))")
       .eq("status", "published")
       .order("name"),
+    supabase.from("score_library_questions").select(librarySelect)
+      .eq("active", true).order("title"),
   ]);
 
   if (templatesResult.error) throw templatesResult.error;
   if (scoresResult.error) throw scoresResult.error;
+  if (libraryResult.error) throw libraryResult.error;
 
   return {
     templates: (templatesResult.data || []).map(normalizeTemplate),
@@ -57,7 +111,29 @@ export async function getDiscoveryBuilderData() {
           score_questions: [...(category.score_questions || [])].sort((a, b) => a.position - b.position),
         })),
     })),
+    libraryQuestions: libraryResult.data || [],
   };
+}
+
+export async function saveDiscoveryQuestionToLibrary({ question, organizationId, divisionId, categoryName, createdBy }) {
+  const normalizedTitle = normalizeLibraryTitle(question.prompt);
+  const responseType = libraryResponseType(question.response_type);
+  const categoryId = await getOrCreateDiscoveryLibraryCategory({ organizationId, divisionId, categoryName, createdBy });
+  const privateQuestions = await getPrivateLibraryQuestions(categoryId);
+  const equivalent = (item) => normalizeLibraryTitle(item.title) === normalizedTitle
+    && item.response_type === responseType;
+  const duplicate = privateQuestions.find(equivalent);
+  if (duplicate) return { status: "duplicate", question: duplicate };
+  const { data, error } = await supabase.from("score_library_questions").insert({
+    category_id: categoryId, title: question.prompt.trim(),
+    description: question.help_text || "", response_type: responseType,
+    options: Array.isArray(question.options) ? question.options : [], created_by: createdBy,
+  }).select(librarySelect).single();
+  if (!error) return { status: "created", question: data };
+  if (error.code !== "23505") throw error;
+  const racedDuplicate = (await getPrivateLibraryQuestions(categoryId)).find(equivalent);
+  if (racedDuplicate) return { status: "duplicate", question: racedDuplicate };
+  throw error;
 }
 
 export async function createDiscoveryTemplate(payload) {

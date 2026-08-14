@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive, ArrowLeft, Check, ChevronRight, CircleHelp, ClipboardCopy, ClipboardList,
-  Eye, FileText, Link2, LoaderCircle, Plus, Save, Search, Settings2,
+  BookOpen, Eye, FileText, Link2, LoaderCircle, Plus, Save, Search, Settings2,
   Sparkles, Trash2,
 } from "lucide-react";
 
@@ -10,7 +10,7 @@ import { useAuth } from "../Context/AuthContext";
 import { useDivisions } from "../hooks/useDivisions";
 import {
   createDiscoveryTemplate, createQuestion, createSection, deleteDiscoveryTemplate, duplicateDiscoveryTemplate,
-  deleteQuestion, deleteSection, getDiscoveryBuilderData, replaceScoreLink,
+  deleteQuestion, deleteSection, getDiscoveryBuilderData, replaceScoreLink, saveDiscoveryQuestionToLibrary,
   updateDiscoveryTemplate, updateQuestion, updateSection,
 } from "../features/discovery-builder/services/discoveryBuilderService";
 import {
@@ -64,6 +64,24 @@ function optionValue(option) {
   return String(typeof option === "object" ? option.value ?? option.label ?? "" : option).trim().toLocaleLowerCase("es");
 }
 
+function libraryResponseType(responseType) {
+  return normalizeDiscoveryResponseType(responseType) === "yes_no" ? "boolean" : normalizeDiscoveryResponseType(responseType);
+}
+
+function normalizedQuestionText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+function questionIsInPrivateLibrary(question, sectionName, libraryQuestions, organizationId, divisionId) {
+  return libraryQuestions.some((libraryQuestion) => (
+    libraryQuestion.score_library_categories?.organization_id === organizationId
+    && (libraryQuestion.score_library_categories?.division_id || null) === (divisionId || null)
+    && normalizedQuestionText(libraryQuestion.score_library_categories?.name) === normalizedQuestionText(sectionName)
+    && libraryQuestion.response_type === libraryResponseType(question.response_type)
+    && normalizedQuestionText(libraryQuestion.title) === normalizedQuestionText(question.prompt)
+  ));
+}
+
 function scoreQuestionIsCompatible(discoveryQuestion, scoreQuestion) {
   if (normalizeDiscoveryResponseType(discoveryQuestion.response_type) !== normalizeDiscoveryResponseType(scoreQuestion.response_type)) return false;
   if (normalizeDiscoveryResponseType(discoveryQuestion.response_type) === "scale") {
@@ -82,6 +100,7 @@ export default function Discovery() {
   const { divisions } = useDivisions(profile?.organization_id);
   const [templates, setTemplates] = useState([]);
   const [scoreTemplates, setScoreTemplates] = useState([]);
+  const [libraryQuestions, setLibraryQuestions] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [activeStep, setActiveStep] = useState(0);
   const [draft, setDraft] = useState(blankTemplate);
@@ -101,6 +120,7 @@ export default function Discovery() {
       const data = await getDiscoveryBuilderData();
       setTemplates(data.templates);
       setScoreTemplates(data.scoreTemplates);
+      setLibraryQuestions(data.libraryQuestions);
       setSelectedId(data.templates.some((item) => item.id === preferredId) ? preferredId : data.templates[0]?.id || "");
     } catch (error) {
       setNotice({ type: "error", text: friendlyError(error, "No se pudo cargar Discovery Builder.") });
@@ -205,6 +225,57 @@ export default function Discovery() {
     if (result !== null) updateLocalSection(section.id, { discovery_questions: section.discovery_questions.filter((item) => item.id !== question.id) });
   }
 
+  async function saveQuestionToLibrary(section, question) {
+    const configurationError = getDiscoveryQuestionConfigurationError(question);
+    if (configurationError) return notify(configurationError, "error");
+    if (question.prompt.trim().length < 5) return notify("La pregunta debe tener al menos 5 caracteres.", "error");
+    const result = await runAction(`library-${question.id}`, () => saveDiscoveryQuestionToLibrary({
+      question, organizationId: profile.organization_id,
+      divisionId: selected.division_id || null, categoryName: section.title, createdBy: user.id,
+    }));
+    if (!result) return;
+    setLibraryQuestions((current) => current.some(({ id }) => id === result.question.id) ? current : [...current, result.question]);
+    if (result.status === "duplicate") return notify("Esta pregunta ya existe en la biblioteca.");
+    notify("Pregunta guardada en biblioteca.");
+  }
+
+  async function saveAllQuestionsToLibrary() {
+    const questions = selected.discovery_sections.flatMap((section) => section.discovery_questions.map((question) => ({ section, question })));
+    let created = 0;
+    let duplicates = 0;
+    setAction("library-all"); setNotice(null);
+    try {
+      for (const { section, question } of questions) {
+        const configurationError = getDiscoveryQuestionConfigurationError(question);
+        if (configurationError || question.prompt.trim().length < 5) {
+          throw new Error(configurationError || "Hay una pregunta con menos de 5 caracteres.");
+        }
+        const result = await saveDiscoveryQuestionToLibrary({
+          question, organizationId: profile.organization_id,
+          divisionId: selected.division_id || null, categoryName: section.title, createdBy: user.id,
+        });
+        if (result.status === "created") {
+          created += 1;
+        } else duplicates += 1;
+        setLibraryQuestions((current) => current.some(({ id }) => id === result.question.id) ? current : [...current, result.question]);
+      }
+      notify(`${created} preguntas guardadas · ${duplicates} ya existían`);
+    } catch (error) {
+      notify(friendlyError(error, error.message), "error");
+    } finally { setAction(""); }
+  }
+
+  async function addLibraryQuestion(section, libraryQuestion) {
+    const question = await runAction(`add-library-${libraryQuestion.id}`, () => createQuestion({
+      section_id: section.id, prompt: libraryQuestion.title,
+      help_text: libraryQuestion.description || "",
+      response_type: normalizeDiscoveryResponseType(libraryQuestion.response_type),
+      options: libraryQuestion.options || [], required: false,
+      position: section.discovery_questions.length, question_kind: "informative",
+    }), "Pregunta de biblioteca añadida.");
+    if (question) updateLocalSection(section.id, { discovery_questions: [...section.discovery_questions, question] });
+  }
+
   async function connectQuestion(section, question, scoreQuestionId) {
     const link = await runAction(`link-${question.id}`, () => replaceScoreLink(question.id, scoreQuestionId), scoreQuestionId ? "Conexión guardada." : "Conexión eliminada.");
     if (link !== null) updateLocalQuestion(section.id, question.id, { discovery_question_score_links: link ? [link] : [] });
@@ -288,7 +359,7 @@ export default function Discovery() {
               <div className="db-stage" key={`${selected.id}-${activeStep}`}>
                 {activeStep === 0 && <Information template={selected} divisions={divisions} saveField={saveTemplateField} />}
                 {activeStep === 1 && <Sections template={selected} addSection={addSection} saveField={saveSectionField} removeSection={removeSection} />}
-                {activeStep === 2 && <Questions template={selected} addQuestion={addNewQuestion} saveField={saveQuestionField} removeQuestion={removeQuestion} />}
+                {activeStep === 2 && <Questions template={selected} libraryQuestions={libraryQuestions} organizationId={profile.organization_id} action={action} addQuestion={addNewQuestion} addLibraryQuestion={addLibraryQuestion} saveToLibrary={saveQuestionToLibrary} saveAll={saveAllQuestionsToLibrary} saveField={saveQuestionField} removeQuestion={removeQuestion} />}
                 {activeStep === 3 && <Connections template={selected} scoreTemplates={scoreTemplates} connect={connectQuestion} />}
                 {activeStep === 4 && <Preview template={selected} />}
                 {activeStep === 5 && <Publish template={selected} publish={publish} action={action} />}
@@ -325,25 +396,34 @@ function Sections({ template, addSection, saveField, removeSection }) {
   </div>;
 }
 
-function Questions({ template, addQuestion, saveField, removeQuestion }) {
-  return <div><StageTitle number="03" title="Diseña las preguntas" text="Combina preguntas informativas y evaluativas en cada sección." />
-    <div className="db-stack">{template.discovery_sections.map((section) => <section className="db-question-group" key={section.id}><div className="db-group-head"><div><small>SECCIÓN</small><h3>{section.title}</h3></div><button className="db-button" onClick={() => addQuestion(section)}><Plus size={15} /> Pregunta</button></div>
-      {section.discovery_questions.map((question, index) => <QuestionEditor key={question.id} section={section} question={question} index={index} saveField={saveField} removeQuestion={removeQuestion} />)}
+function Questions({ template, libraryQuestions, organizationId, action, addQuestion, addLibraryQuestion, saveToLibrary, saveAll, saveField, removeQuestion }) {
+  const [librarySection, setLibrarySection] = useState(null);
+  return <div><StageTitle number="03" title="Diseña las preguntas" text="Combina preguntas informativas y evaluativas en cada sección." action={template.discovery_sections.some((section) => section.discovery_questions.length) && <button className="db-button" disabled={action === "library-all"} onClick={saveAll}><BookOpen size={15} /> Guardar preguntas en biblioteca</button>} />
+    <div className="db-stack">{template.discovery_sections.map((section) => <section className="db-question-group" key={section.id}><div className="db-group-head"><div><small>SECCIÓN</small><h3>{section.title}</h3></div><div className="db-group-actions"><button className="db-button" onClick={() => setLibrarySection(section)}><BookOpen size={15} /> Biblioteca</button><button className="db-button" onClick={() => addQuestion(section)}><Plus size={15} /> Pregunta</button></div></div>
+      {section.discovery_questions.map((question, index) => <QuestionEditor key={question.id} section={section} question={question} index={index} saved={questionIsInPrivateLibrary(question, section.title, libraryQuestions, organizationId, template.division_id)} busy={action === `library-${question.id}`} saveToLibrary={saveToLibrary} saveField={saveField} removeQuestion={removeQuestion} />)}
       {!section.discovery_questions.length && <p className="db-muted-row">Esta sección aún no tiene preguntas.</p>}
     </section>)}
     {!template.discovery_sections.length && <div className="db-empty-mini">Crea una sección antes de añadir preguntas.</div>}</div>
+    {librarySection && <LibraryModal questions={libraryQuestions} onAdd={(question) => addLibraryQuestion(librarySection, question)} onClose={() => setLibrarySection(null)} />}
   </div>;
 }
 
-function QuestionEditor({ section, question, index, saveField, removeQuestion }) {
+function QuestionEditor({ section, question, index, saved, busy, saveToLibrary, saveField, removeQuestion }) {
   const optionText = question.options.map((option) => typeof option === "string" ? option : option.label || option.value).join("\n");
   return <article className="db-card db-question-card"><div className="db-question-number">{index + 1}</div><div className="db-question-fields">
     <label>Pregunta<textarea defaultValue={question.prompt} onBlur={(e) => saveField(section, question, "prompt", e.target.value.trim())} rows={2} /></label>
     <div className="db-form-grid compact"><label>Tipo de respuesta<select value={normalizeDiscoveryResponseType(question.response_type)} onChange={(e) => saveField(section, question, "response_type", e.target.value)}>{DISCOVERY_RESPONSE_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label><label>Propósito<select value={question.question_kind} onChange={(e) => saveField(section, question, "question_kind", e.target.value)}><option value="informative">Informativa</option><option value="evaluative">Evaluativa</option></select></label></div>
     <label>Texto de ayuda<input defaultValue={question.help_text || ""} onBlur={(e) => saveField(section, question, "help_text", e.target.value.trim())} placeholder="Contexto opcional para quien responde" /></label>
     {getDiscoveryResponseType(question.response_type)?.requiresOptions && <label>Opciones (una por línea)<textarea defaultValue={optionText} onBlur={(e) => saveField(section, question, "options", e.target.value.split("\n").map((value) => value.trim()).filter(Boolean))} rows={3} /></label>}
-    <label className="db-check"><input type="checkbox" checked={question.required} onChange={(e) => saveField(section, question, "required", e.target.checked)} /> Respuesta obligatoria</label>
+    <div className="db-question-footer"><label className="db-check"><input type="checkbox" checked={question.required} onChange={(e) => saveField(section, question, "required", e.target.checked)} /> Respuesta obligatoria</label><button className="db-library-save" disabled={saved || busy} onClick={() => saveToLibrary(section, question)}>{saved ? <><Check size={14} /> Guardada en biblioteca</> : busy ? <><LoaderCircle className="spin" size={14} /> Guardando</> : <><BookOpen size={14} /> Guardar en biblioteca</>}</button></div>
   </div><button className="db-icon-button danger" onClick={() => removeQuestion(section, question)}><Trash2 size={16} /></button></article>;
+}
+
+function LibraryModal({ questions, onAdd, onClose }) {
+  const [search, setSearch] = useState("");
+  const normalizedSearch = search.trim().toLocaleLowerCase("es");
+  const visible = questions.filter((question) => `${question.title} ${question.description}`.toLocaleLowerCase("es").includes(normalizedSearch));
+  return <div className="db-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="db-modal db-library-modal" role="dialog" aria-modal="true" aria-label="Biblioteca de preguntas"><div className="db-modal-head"><div><span className="db-eyebrow">Biblioteca</span><h2>Añadir pregunta</h2></div><button onClick={onClose}>×</button></div><div className="db-search db-library-search"><Search size={16} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pregunta" /></div><div className="db-library-list">{visible.map((question) => <article key={question.id}><div><strong>{question.title}</strong><small>{question.score_library_categories?.name} · {getDiscoveryResponseType(question.response_type)?.label || question.response_type}</small></div><button className="db-button" onClick={() => onAdd(question)}>Añadir</button></article>)}{!visible.length && <p className="db-empty-mini">No hay preguntas que coincidan.</p>}</div></div></div>;
 }
 
 function Connections({ template, scoreTemplates, connect }) {

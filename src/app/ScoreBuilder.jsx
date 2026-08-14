@@ -13,10 +13,23 @@ import "./ScoreBuilder.css";
 
 const STEPS = ["Información", "Categorías", "Preguntas", "Pesos", "Vista previa", "Publicar"];
 const blankTemplate = { name: "", division_id: "", description: "" };
+const LIBRARY_RESPONSE_TYPES = [
+  ["boolean", "Sí / No"], ["scale", "Escala 1 a 5"], ["number", "Número"],
+  ["percentage", "Porcentaje"], ["text", "Texto"], ["multiple_choice", "Selección múltiple"],
+];
 const responseTypes = [
   ["scale", "Escala 1 a 5"], ["yes_no", "Sí / No"], ["number", "Número"],
   ["percentage", "Porcentaje"], ["text", "Texto"], ["multiple_choice", "Selección múltiple"],
 ];
+
+function normalizeLibraryText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+function libraryCategorySlug(value) {
+  return normalizeLibraryText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "categoria";
+}
 
 function configFor(question) {
   const config = question.scoring_config && typeof question.scoring_config === "object" ? question.scoring_config : {};
@@ -133,6 +146,7 @@ export default function ScoreBuilder() {
   const [library, setLibrary] = useState([]);
   const [librarySearch, setLibrarySearch] = useState("");
   const [libraryCategory, setLibraryCategory] = useState("all");
+  const [libraryDivision, setLibraryDivision] = useState("all");
   const [view, setView] = useState("scores");
   const [favorites, setFavorites] = useState([]);
   const [scoreListCollapsed, setScoreListCollapsed] = useState(false);
@@ -147,8 +161,8 @@ export default function ScoreBuilder() {
     const [templatesResult, libraryResult, favoritesResult] = await Promise.all([
       supabase.from("score_templates").select(templateSelect).order("updated_at", { ascending: false }),
       supabase.from("score_library_categories")
-        .select("id, name, description, position, is_official, divisions(name), score_library_questions(id, title, description, recommended_weight, difficulty, response_type, options)")
-        .eq("is_official", true).order("position"),
+        .select("id, organization_id, division_id, name, slug, description, position, is_official, divisions(name), score_library_questions(id, title, description, recommended_weight, difficulty, response_type, options)")
+        .order("position"),
       supabase.from("score_template_favorites").select("template_id").eq("user_id", userId),
     ]);
     const error = templatesResult.error || libraryResult.error || favoritesResult.error;
@@ -309,6 +323,109 @@ export default function ScoreBuilder() {
     } finally { setAction(""); }
   }
 
+  async function createLibraryCategory({ name, divisionId }) {
+    const normalizedName = String(name || "").trim().replace(/\s+/g, " ");
+    const slug = libraryCategorySlug(normalizedName);
+    if (normalizedName.length < 2) return notify("Escribe un nombre válido para la categoría.", "error");
+    if (!divisionId) return notify("Selecciona una división.", "error");
+    const duplicate = library.some((category) => !category.is_official
+      && category.organization_id === profile.organization_id
+      && category.division_id === divisionId && category.slug === slug);
+    if (duplicate) return notify("Esta categoría ya existe.", "error");
+
+    setAction("library-category"); setNotice(null);
+    try {
+      const { data, error } = await supabase.from("score_library_categories").insert({
+        organization_id: profile.organization_id, division_id: divisionId,
+        name: normalizedName, slug, is_official: false, created_by: user.id,
+      }).select("id, organization_id, division_id, name, slug, description, position, is_official").single();
+      if (error?.code === "23505") return notify("Esta categoría ya existe.", "error");
+      if (error) throw error;
+      const division = divisions.find(({ id }) => id === divisionId);
+      setLibrary((current) => [...current, { ...data, divisions: division ? { name: division.name } : null, score_library_questions: [] }]);
+      setLibraryDivision(divisionId); setLibraryCategory(data.id);
+      notify("Categoría creada en la biblioteca.");
+      return data;
+    } catch (error) {
+      notify(friendlyError(error, "No se pudo crear la categoría."), "error");
+      return null;
+    } finally { setAction(""); }
+  }
+
+  async function createLibraryQuestion({ categoryId, title, description, responseType, options }) {
+    const category = library.find(({ id }) => id === categoryId);
+    if (!category || category.is_official) return notify("Solo puedes administrar categorías privadas de tu organización.", "error");
+    const normalizedTitle = String(title || "").trim().replace(/\s+/g, " ");
+    if (normalizedTitle.length < 5) return notify("La pregunta debe tener al menos 5 caracteres.", "error");
+    if (!LIBRARY_RESPONSE_TYPES.some(([value]) => value === responseType)) return notify("El tipo de respuesta no es compatible.", "error");
+    const duplicate = category.score_library_questions.some((question) => (
+      normalizeLibraryText(question.title) === normalizeLibraryText(normalizedTitle)
+      && question.response_type === responseType
+    ));
+    if (duplicate) return notify("Esta pregunta ya existe en esta categoría.", "error");
+    const uniqueOptions = new Set(options.map((option) => normalizeLibraryText(option)));
+    if (responseType === "multiple_choice" && (options.length < 2 || uniqueOptions.size !== options.length)) {
+      return notify("Configura al menos dos opciones diferentes.", "error");
+    }
+
+    setAction("library-question"); setNotice(null);
+    try {
+      const { data, error } = await supabase.from("score_library_questions").insert({
+        category_id: categoryId, title: normalizedTitle, description: String(description || "").trim(),
+        response_type: responseType, options, created_by: user.id,
+      }).select("id, title, description, recommended_weight, difficulty, response_type, options").single();
+      if (error?.code === "23505") return notify("Esta pregunta ya existe en esta categoría.", "error");
+      if (error) throw error;
+      setLibrary((current) => current.map((item) => item.id === categoryId
+        ? { ...item, score_library_questions: [...item.score_library_questions, data].sort((a, b) => a.title.localeCompare(b.title)) }
+        : item));
+      notify("Pregunta creada en la biblioteca.");
+      return data;
+    } catch (error) {
+      notify(friendlyError(error, "No se pudo crear la pregunta."), "error");
+      return null;
+    } finally { setAction(""); }
+  }
+
+  async function updateLibraryCategoryDivision(categoryId, divisionId) {
+    const category = library.find(({ id }) => id === categoryId);
+    if (!category || category.is_official || category.organization_id !== profile.organization_id) {
+      return notify("Solo puedes editar categorías privadas de tu organización.", "error");
+    }
+    if (!divisionId) return notify("Selecciona una división.", "error");
+    if (category.division_id === divisionId) return category;
+
+    setAction("library-category-division"); setNotice(null);
+    try {
+      const duplicate = await supabase.from("score_library_categories").select("id")
+        .eq("organization_id", profile.organization_id).eq("division_id", divisionId)
+        .eq("slug", category.slug).eq("is_official", false).neq("id", category.id).maybeSingle();
+      if (duplicate.error) throw duplicate.error;
+      if (duplicate.data) {
+        notify("Ya existe una categoría privada equivalente en la división destino.", "error");
+        return null;
+      }
+
+      const updated = await supabase.from("score_library_categories").update({ division_id: divisionId })
+        .eq("id", category.id).eq("organization_id", profile.organization_id).eq("is_official", false)
+        .select("id, division_id").single();
+      if (updated.error?.code === "23505") {
+        notify("Ya existe una categoría privada equivalente en la división destino.", "error");
+        return null;
+      }
+      if (updated.error) throw updated.error;
+      const division = divisions.find(({ id }) => id === divisionId);
+      setLibrary((current) => current.map((item) => item.id === category.id
+        ? { ...item, division_id: divisionId, divisions: division ? { name: division.name } : null }
+        : item));
+      notify("División de la categoría actualizada.");
+      return updated.data;
+    } catch (error) {
+      notify(friendlyError(error, "No se pudo cambiar la división de la categoría."), "error");
+      return null;
+    } finally { setAction(""); }
+  }
+
   async function removeCategory(categoryId) {
     if (!window.confirm("¿Eliminar esta categoría y todas sus preguntas?")) return;
     const result = await runAction("delete", () => supabase.from("score_categories").delete().eq("id", categoryId));
@@ -454,7 +571,9 @@ export default function ScoreBuilder() {
     ...category,
     score_library_questions: category.score_library_questions.filter((question) => !librarySearch.trim()
       || `${question.title} ${question.description}`.toLowerCase().includes(librarySearch.trim().toLowerCase())),
-  })).filter((category) => (libraryCategory === "all" || category.id === libraryCategory) && category.score_library_questions.length);
+  })).filter((category) => (libraryDivision === "all" || category.division_id === libraryDivision)
+    && (libraryCategory === "all" || category.id === libraryCategory)
+    && (!librarySearch.trim() || category.score_library_questions.length));
 
   return <Page className="score-builder-shell">
     <header className="sb-header">
@@ -465,9 +584,10 @@ export default function ScoreBuilder() {
     {notice && <div role="status" className={`sb-alert ${notice.type === "error" ? "sb-alert-error" : "sb-alert-success"}`}>{notice.text}</div>}
 
     <nav className="sb-tabs" aria-label="Bibliotecas de Score">
-      {[["scores", "Mis Scores"], ["templates", "Plantillas"], ["favorites", "Favoritos"], ["official", "Biblioteca oficial"]].map(([key, label]) =>
+      {[["scores", "Mis Scores"], ["templates", "Plantillas"], ["favorites", "Favoritos"], ["official", "Biblioteca"]].map(([key, label]) =>
         <button type="button" key={key} onClick={() => {
           setView(key);
+          if (key === "official") setLibraryDivision(selected?.division_id || "all");
           if (key !== "official") {
             const next = templates.find((template) => key === "templates"
               ? template.template_kind === "template"
@@ -486,7 +606,7 @@ export default function ScoreBuilder() {
       </form>
     </section>}
 
-    {view === "official" ? <OfficialLibrary categories={visibleLibrary} library={library} search={librarySearch} setSearch={setLibrarySearch} selectedCategory={libraryCategory} setSelectedCategory={setLibraryCategory} onAdd={addLibraryQuestion} disabled={action === "library"}/>
+    {view === "official" ? <OfficialLibrary categories={visibleLibrary} library={library} divisions={divisions} search={librarySearch} setSearch={setLibrarySearch} selectedCategory={libraryCategory} setSelectedCategory={setLibraryCategory} selectedDivision={libraryDivision} setSelectedDivision={setLibraryDivision} onAdd={addLibraryQuestion} onCreateCategory={createLibraryCategory} onCreateQuestion={createLibraryQuestion} onChangeDivision={updateLibraryCategoryDivision} disabled={Boolean(action)}/>
       : <div className={`sb-workspace ${scoreListCollapsed ? "sb-workspace-list-collapsed" : ""}`}>
         <ScoreList loading={loading} templates={visibleTemplates} selectedId={selectedId} view={view} collapsed={scoreListCollapsed} onToggle={() => setScoreListCollapsed((value) => !value)} onNew={() => setCreating((value) => !value)} onSelect={(id) => { setSelectedId(id); setActiveStep(0); setNotice(null); }}/>
         {selected ? <main className="min-w-0 space-y-5">
@@ -694,8 +814,51 @@ function BuilderActions({ template, favorites, busy, onFavorite, onDuplicate, on
   return <footer className="sb-card sb-actions"><div><button type="button" disabled={busy} onClick={onFavorite} className="sb-button sb-button-ghost"><Heart size={16} fill={favorites.includes(template.id) ? "currentColor" : "none"}/> Favorito</button><button type="button" disabled={busy} onClick={onDuplicate} className="sb-button sb-button-ghost"><Copy size={16}/> Duplicar</button><button type="button" disabled={busy} onClick={onTemplate} className="sb-button sb-button-ghost"><Library size={16}/> Guardar como plantilla</button></div><div><button type="button" disabled={busy} onClick={onDelete} className="sb-button sb-button-danger"><Trash2 size={16}/> Eliminar</button><button type="button" disabled={busy} onClick={onSave} className="sb-button sb-button-primary">{busy ? <LoaderCircle className="animate-spin" size={17}/> : <Save size={17}/>} Guardar</button></div></footer>;
 }
 
-function OfficialLibrary({ categories, library, search, setSearch, selectedCategory, setSelectedCategory, onAdd, disabled }) {
-  return <section className="space-y-4"><div className="sb-card sb-library-filter"><label><Search size={17}/><input placeholder="Buscar preguntas profesionales" value={search} onChange={(event) => setSearch(event.target.value)}/></label><select className="sb-input" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}><option value="all">Todas las categorías</option>{library.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>{categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><Heading title={category.name} text={category.description}/><div className="grid gap-3 lg:grid-cols-2">{category.score_library_questions.map((question) => <div key={question.id} className="sb-question"><h3>{question.title}</h3><p className="mt-2 sb-muted text-sm">{question.description}</p><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><small>{question.difficulty} · peso recomendado {question.recommended_weight}%</small><button type="button" disabled={disabled} onClick={() => onAdd(category, question)} className="sb-button sb-button-secondary">Añadir al Score</button></div></div>)}</div></article>)}</section>;
+function OfficialLibrary({ categories, library, divisions, search, setSearch, selectedCategory, setSelectedCategory, selectedDivision, setSelectedDivision, onAdd, onCreateCategory, onCreateQuestion, onChangeDivision, disabled }) {
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState({ name: "", divisionId: "" });
+  const [questionCategory, setQuestionCategory] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryDivision, setCategoryDivision] = useState("");
+  const [questionDraft, setQuestionDraft] = useState({ title: "", description: "", responseType: "boolean", optionsText: "" });
+  const categoryOptions = library.filter((category) => selectedDivision === "all" || category.division_id === selectedDivision);
+
+  async function submitCategory(event) {
+    event.preventDefault();
+    const created = await onCreateCategory(categoryDraft);
+    if (created) { setCreatingCategory(false); setCategoryDraft({ name: "", divisionId: "" }); }
+  }
+
+  async function submitQuestion(event) {
+    event.preventDefault();
+    const options = questionDraft.responseType === "multiple_choice"
+      ? questionDraft.optionsText.split("\n").map((value) => value.trim()).filter(Boolean)
+      : [];
+    const created = await onCreateQuestion({
+      categoryId: questionCategory.id, title: questionDraft.title,
+      description: questionDraft.description, responseType: questionDraft.responseType, options,
+    });
+    if (created) {
+      setQuestionCategory(null);
+      setQuestionDraft({ title: "", description: "", responseType: "boolean", optionsText: "" });
+    }
+  }
+
+  async function submitCategoryDivision(event) {
+    event.preventDefault();
+    const updated = await onChangeDivision(editingCategory.id, categoryDivision);
+    if (updated) setEditingCategory(null);
+  }
+
+  return <section className="space-y-4">
+    <div className="sb-card sb-library-toolbar"><div><p className="sb-eyebrow">Repositorio compartido</p><h2>Biblioteca de preguntas</h2><p className="sb-muted">Crea contenido privado por división o reutiliza la biblioteca oficial.</p></div><button type="button" className="sb-button sb-button-primary" onClick={() => setCreatingCategory((value) => !value)}><Plus size={16}/> Nueva categoría</button></div>
+    {creatingCategory && <form className="sb-card sb-library-create-form" onSubmit={submitCategory}><Field label="Nombre"><input autoFocus className="sb-input" value={categoryDraft.name} onChange={(event) => setCategoryDraft({ ...categoryDraft, name: event.target.value })} placeholder="Ej. Producto y Propuesta de Valor"/></Field><Field label="División"><select className="sb-input" value={categoryDraft.divisionId} onChange={(event) => setCategoryDraft({ ...categoryDraft, divisionId: event.target.value })}><option value="">Selecciona una división</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><div className="sb-library-form-actions"><button type="button" className="sb-button sb-button-secondary" onClick={() => setCreatingCategory(false)}>Cancelar</button><button disabled={disabled} className="sb-button sb-button-primary">Crear categoría</button></div></form>}
+    <div className="sb-card sb-library-filter"><label><Search size={17}/><input placeholder="Buscar preguntas" value={search} onChange={(event) => setSearch(event.target.value)}/></label><select className="sb-input" value={selectedDivision} onChange={(event) => { setSelectedDivision(event.target.value); setSelectedCategory("all"); }}><option value="all">Todas las divisiones</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select><select className="sb-input" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}><option value="all">Todas las categorías</option>{categoryOptions.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+    {categories.map((category) => <article key={category.id} className="sb-card p-5 sm:p-6"><div className="sb-library-category-head"><div><div className="sb-library-meta"><span className="sb-badge">{category.divisions?.name || "Sin división"}</span><span className="sb-badge">{category.is_official ? "Oficial" : "Privada"}</span></div><Heading title={category.name} text={category.description}/></div>{!category.is_official && <div className="sb-library-category-actions"><button type="button" className="sb-button sb-button-secondary" onClick={() => { setEditingCategory(category); setCategoryDivision(category.division_id || ""); }}>Editar división</button><button type="button" className="sb-button sb-button-secondary" onClick={() => setQuestionCategory(category)}><Plus size={15}/> Nueva pregunta</button></div>}</div><div className="grid gap-3 lg:grid-cols-2">{category.score_library_questions.map((question) => <div key={question.id} className="sb-question"><h3>{question.title}</h3><p className="mt-2 sb-muted text-sm">{question.description}</p><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><small>{question.difficulty} · peso recomendado {question.recommended_weight}%</small><button type="button" disabled={disabled} onClick={() => onAdd(category, question)} className="sb-button sb-button-secondary">Añadir al Score</button></div></div>)}{!category.score_library_questions.length && <p className="sb-library-empty">Esta categoría todavía no tiene preguntas.</p>}</div></article>)}
+    {!categories.length && <section className="sb-card sb-empty"><Library size={28}/><h2>No hay categorías en esta selección</h2><p className="sb-muted">Crea una categoría privada o cambia los filtros.</p></section>}
+    {questionCategory && <div className="sb-library-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setQuestionCategory(null)}><form className="sb-card sb-library-question-modal" onSubmit={submitQuestion}><div><p className="sb-eyebrow">{questionCategory.name}</p><h2>Nueva pregunta</h2></div><Field label="Pregunta"><textarea autoFocus rows={3} className="sb-input" value={questionDraft.title} onChange={(event) => setQuestionDraft({ ...questionDraft, title: event.target.value })}/></Field><Field label="Descripción"><textarea rows={3} className="sb-input" value={questionDraft.description} onChange={(event) => setQuestionDraft({ ...questionDraft, description: event.target.value })}/></Field><Field label="Tipo de respuesta"><select className="sb-input" value={questionDraft.responseType} onChange={(event) => setQuestionDraft({ ...questionDraft, responseType: event.target.value, optionsText: "" })}>{LIBRARY_RESPONSE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>{questionDraft.responseType === "multiple_choice" && <Field label="Opciones (una por línea)"><textarea rows={4} className="sb-input" value={questionDraft.optionsText} onChange={(event) => setQuestionDraft({ ...questionDraft, optionsText: event.target.value })}/></Field>}<div className="sb-library-form-actions"><button type="button" className="sb-button sb-button-secondary" onClick={() => setQuestionCategory(null)}>Cancelar</button><button disabled={disabled} className="sb-button sb-button-primary">Guardar pregunta</button></div></form></div>}
+    {editingCategory && <div className="sb-library-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setEditingCategory(null)}><form className="sb-card sb-library-question-modal" onSubmit={submitCategoryDivision}><div><p className="sb-eyebrow">Categoría privada</p><h2>{editingCategory.name}</h2><p className="sb-muted">Cambiar la división conserva el mismo ID y todas sus preguntas.</p></div><Field label="División"><select autoFocus className="sb-input" value={categoryDivision} onChange={(event) => setCategoryDivision(event.target.value)}><option value="">Selecciona una división</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></Field><div className="sb-library-form-actions"><button type="button" className="sb-button sb-button-secondary" onClick={() => setEditingCategory(null)}>Cancelar</button><button disabled={disabled || !categoryDivision} className="sb-button sb-button-primary">Guardar división</button></div></form></div>}
+  </section>;
 }
 
 function Heading({ title, text }) { return <div className="mb-5"><h2 className="text-xl font-semibold">{title}</h2>{text && <p className="mt-2 sb-muted">{text}</p>}</div>; }
