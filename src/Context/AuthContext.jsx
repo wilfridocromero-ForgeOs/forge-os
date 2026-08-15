@@ -20,7 +20,6 @@ export function AuthProvider({ children }) {
     userId: null,
     profile: null,
     moduleAccess: [],
-    areaAccess: [],
     error: null,
   });
 
@@ -41,7 +40,6 @@ export function AuthProvider({ children }) {
           userId: nextUserId,
           profile: null,
           moduleAccess: [],
-          areaAccess: [],
           error: null,
         };
       });
@@ -66,12 +64,11 @@ export function AuthProvider({ children }) {
         .eq("id", userId)
         .maybeSingle(),
       supabase.from("member_module_access").select("module_key, enabled").eq("user_id", userId),
-      supabase.from("user_area_access").select("area_id, is_primary, work_areas(id, name)").eq("user_id", userId),
     ])
-      .then(([profileResult, modulesResult, areasResult]) => {
+      .then(([profileResult, modulesResult]) => {
         if (!active) return;
 
-        const requestError = profileResult.error || modulesResult.error || areasResult.error;
+        const requestError = profileResult.error || modulesResult.error;
         if (requestError) {
           console.error("No se pudo resolver la identidad activa:", requestError.message);
           setIdentity({
@@ -79,7 +76,6 @@ export function AuthProvider({ children }) {
             userId,
             profile: null,
             moduleAccess: [],
-            areaAccess: [],
             error: requestError,
           });
           return;
@@ -91,7 +87,6 @@ export function AuthProvider({ children }) {
             userId,
             profile: null,
             moduleAccess: [],
-            areaAccess: [],
             error: null,
           });
           return;
@@ -110,7 +105,6 @@ export function AuthProvider({ children }) {
           userId,
           profile,
           moduleAccess: modulesResult.data || [],
-          areaAccess: areasResult.data || [],
           error: null,
         });
       })
@@ -122,7 +116,6 @@ export function AuthProvider({ children }) {
           userId,
           profile: null,
           moduleAccess: [],
-          areaAccess: [],
           error,
         });
       });
@@ -235,7 +228,6 @@ export function AuthProvider({ children }) {
         isInternalOrganization,
         canAccess: permissions.canAccess,
         moduleAccess: identity.moduleAccess,
-        areaAccess: identity.areaAccess,
         updateProfile,
         updateOrganizationName,
         loading,
