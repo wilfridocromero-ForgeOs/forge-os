@@ -12,15 +12,12 @@ import {
   Settings,
   Moon,
   Sun,
-  ClipboardCheck,
-  Users,
-  FolderKanban,
-  CalendarDays,
 } from "lucide-react";
 
 import { useAuth } from "../../Context/AuthContext";
 import ProfileModal from "./ProfileModal";
 import { useTheme } from "../../Context/ThemeContext";
+import { quickCreateItems } from "../../config/navigation";
 
 export default function Header({ setSidebarOpen }) {
   const { logout, displayName, initial, displayTitle } = useAuth();
@@ -30,7 +27,7 @@ export default function Header({ setSidebarOpen }) {
 
   async function handleLogout() {
     await logout();
-    navigate("/login");
+    navigate("/login", { replace: true });
   }
 
   return (
@@ -182,12 +179,7 @@ export default function Header({ setSidebarOpen }) {
           Nuevo
           </HeadlessMenu.Button>
           <HeadlessMenu.Items className="absolute right-0 mt-3 w-60 overflow-hidden rounded-2xl border border-zinc-800 bg-[#111113] p-1.5 shadow-2xl focus:outline-none">
-            {[
-              ["Nuevo diagnóstico", "/discovery?new=1", ClipboardCheck],
-              ["Nuevo cliente", "/clientes?new=1", Users],
-              ["Nuevo proyecto", "/proyectos?new=1", FolderKanban],
-              ["Nuevo evento", "/calendario?new=1", CalendarDays],
-            ].map(([label, path, Icon]) => <HeadlessMenu.Item key={path}>{({ active }) => <button onClick={() => navigate(path)} className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm ${active ? "bg-zinc-900" : ""}`}><Icon size={17} className="text-zinc-500" />{label}</button>}</HeadlessMenu.Item>)}
+            {quickCreateItems.map(({ label, to, icon: Icon }) => <HeadlessMenu.Item key={to}>{({ active }) => <button onClick={() => navigate(to)} className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm ${active ? "bg-zinc-900" : ""}`}><Icon size={17} className="text-zinc-500" />{label}</button>}</HeadlessMenu.Item>)}
           </HeadlessMenu.Items>
         </HeadlessMenu>
 

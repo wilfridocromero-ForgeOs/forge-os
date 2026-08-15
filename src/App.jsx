@@ -2,7 +2,9 @@ import { Navigate, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute";
+import CapabilityRoute from "./routes/CapabilityRoute";
 import AppLayout from "./components/Layout/AppLayout";
+import { CAPABILITIES } from "./config/capabilities";
 
 // Auth
 import Login from "./auth/Login";
@@ -16,7 +18,8 @@ import DiscoveryBuilder from "./app/Discovery";
 import DiscoveryExecution, { DiscoveryResult, DiscoveryRunner } from "./app/DiscoveryExecution";
 import Projects from "./app/Projects";
 import Score from "./app/Score";
-import Settings from "./app/Settings";
+import SettingsHub, { AccountSettings, CompanySettings, DivisionsSettings, MembersSettingsPage } from "./app/SettingsHub";
+import BuilderHub from "./app/BuilderHub";
 import Calendar from "./app/Calendar";
 import Brain from "./app/Brain";
 import ScoreBuilder from "./app/ScoreBuilder";
@@ -62,7 +65,7 @@ export default function App() {
           element={<DiscoveryExecution />}
         />
 
-        <Route path="/discovery/builder" element={<DiscoveryBuilder />} />
+        <Route path="/discovery/builder" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><DiscoveryBuilder /></CapabilityRoute>} />
 
         <Route
           path="/proyectos"
@@ -76,13 +79,23 @@ export default function App() {
 
         <Route path="/business-score" element={<BusinessOnly><BusinessScore /></BusinessOnly>} />
 
-        <Route path="/configuracion" element={<Settings />} />
+        <Route path="/configuracion" element={<SettingsHub />} />
+
+        <Route path="/configuracion/cuenta" element={<AccountSettings />} />
+
+        <Route path="/configuracion/empresa" element={<CapabilityRoute capability={CAPABILITIES.manageOrganization}><CompanySettings /></CapabilityRoute>} />
+
+        <Route path="/configuracion/miembros" element={<CapabilityRoute capability={CAPABILITIES.manageMembers}><MembersSettingsPage /></CapabilityRoute>} />
+
+        <Route path="/configuracion/divisiones" element={<CapabilityRoute capability={CAPABILITIES.manageDivisions}><DivisionsSettings /></CapabilityRoute>} />
 
         <Route path="/calendario" element={<Calendar />} />
 
         <Route path="/cerebro" element={<Brain />} />
 
-        <Route path="/score-builder" element={<ScoreBuilder />} />
+        <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><BuilderHub /></CapabilityRoute>} />
+
+        <Route path="/score-builder" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><ScoreBuilder /></CapabilityRoute>} />
 
         </Route>
       </Route>

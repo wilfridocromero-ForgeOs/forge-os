@@ -1,129 +1,30 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState
-} from "react";
-
-import { supabase } from "../lib/supabase";
-
+import { createContext, useContext } from "react";
 import { useAuth } from "./AuthContext";
-
 
 const OrganizationContext = createContext(null);
 
-
-
 export function OrganizationProvider({ children }) {
-
-  const { user } = useAuth();
-
-
-  const [organization, setOrganization] = useState(null);
-
-  const [loading, setLoading] = useState(true);
-
-
-
-  useEffect(() => {
-
-    async function loadOrganization() {
-
-
-      if (!user) {
-
-        setOrganization(null);
-
-        setLoading(false);
-
-        return;
-
-      }
-
-
-      const {
-        data,
-        error
-      } = await supabase
-
-        .from("users")
-
-        .select(`
-          organization_id,
-          organizations (
-            id,
-            name,
-            organization_type
-          )
-        `)
-
-        .eq(
-          "id",
-          user.id
-        )
-
-        .single();
-
-
-
-      if(error){
-
-        console.error(
-          "Organization error:",
-          error
-        );
-
-        setLoading(false);
-
-        return;
-
-      }
-
-
-
-      setOrganization(
-        data?.organizations ?? null
-      );
-
-
-      setLoading(false);
-
-
-    }
-
-
-
-    loadOrganization();
-
-
-  }, [user]);
-
-
-
-
+  const { organization, identityStatus, loading } = useAuth();
 
   return (
-
     <OrganizationContext.Provider
-
       value={{
         organization,
-        setOrganization,
-        loading
+        loading,
+        status: identityStatus,
       }}
-
     >
-
       {children}
-
     </OrganizationContext.Provider>
-
   );
-
 }
 
-
-
-
-export const useOrganization = () =>
-  useContext(OrganizationContext);
+// Context providers and their consumer hooks intentionally share this module.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOrganization() {
+  const context = useContext(OrganizationContext);
+  if (!context) {
+    throw new Error("useOrganization debe utilizarse dentro de OrganizationProvider.");
+  }
+  return context;
+}

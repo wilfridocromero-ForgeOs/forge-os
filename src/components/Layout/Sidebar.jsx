@@ -1,88 +1,15 @@
-import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  Brain,
-  BarChart3,
-  FolderKanban,
-  CalendarDays,
-  DollarSign,
-  Settings,
-  BookOpen,
-  SlidersHorizontal,
-  ClipboardPenLine,
-  X,
-} from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
+import { X } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
+import { navigationGroups } from "../../config/navigation";
 import Logo from "../display/Logo";
-
-const menu = [
-  {
-    title: "GENERAL",
-    items: [
-      {
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        to: "/",
-      },
-      {
-        label: "Clientes",
-        icon: Users,
-        to: "/clientes",
-      },
-      {
-        label: "Discovery",
-        icon: Brain,
-        to: "/discovery",
-      },
-      {
-        label: "Cerebro",
-        icon: BookOpen,
-        to: "/cerebro",
-      },
-      {
-        label: "ORVESEN Score",
-        icon: BarChart3,
-        to: "/orvesen-score",
-        moduleKey: "area_score",
-        internalOnly: true,
-      },
-      {
-        label: "Business Score",
-        icon: BarChart3,
-        to: "/business-score",
-        businessOnly: true,
-      },
-    ],
-  },
-  {
-    title: "OPERACIONES",
-    items: [
-      {
-        label: "Proyectos",
-        icon: FolderKanban,
-        to: "/proyectos",
-        moduleKey: "projects",
-      },
-      {
-        label: "Calendario",
-        icon: CalendarDays,
-        to: "/calendario",
-      },
-      {
-        label: "Ventas",
-        icon: DollarSign,
-        to: "/ventas",
-      },
-    ],
-  },
-];
 
 export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }) {
-  const { displayName, initial, displayTitle, canManageUsers, canAccess, isInternalOrganization } = useAuth();
+  const { displayName, initial, displayTitle, canAccess, hasCapability, isInternalOrganization } = useAuth();
+  const location = useLocation();
 
   return (
     <>
@@ -170,7 +97,7 @@ export default function Sidebar({
 
         <div className="mt-10 flex-1 overflow-y-auto px-5">
 
-          {menu.map((section) => (
+          {navigationGroups.map((section) => (
             <div
               key={section.title}
               className="mb-10"
@@ -182,8 +109,9 @@ export default function Sidebar({
               <div className="space-y-2">
 
                 {section.items.filter((item) => {
-                  if (item.internalOnly && !isInternalOrganization) return false;
-                  if (item.businessOnly && isInternalOrganization) return false;
+                  if (item.organization === "internal" && !isInternalOrganization) return false;
+                  if (item.organization === "external" && isInternalOrganization) return false;
+                  if (item.capability && !hasCapability(item.capability)) return false;
                   return !item.moduleKey || canAccess(item.moduleKey);
                 }).map((item) => {
                   const Icon = item.icon;
@@ -192,10 +120,11 @@ export default function Sidebar({
                     <NavLink
                       key={item.label}
                       to={item.to}
-                      end={item.to === "/discovery"}
+                      end={item.end || item.to === "/"}
                       onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) =>
-                        `
+                      className={({ isActive }) => {
+                        const itemIsActive = isActive || item.activePaths?.some((path) => location.pathname.startsWith(path));
+                        return `
                         flex
                         items-center
                         gap-4
@@ -209,12 +138,12 @@ export default function Sidebar({
                         duration-200
 
                         ${
-                          isActive
+                          itemIsActive
                             ? "bg-zinc-900 text-white"
                             : "text-zinc-400 hover:bg-zinc-900 hover:text-white hover:translate-x-1"
                         }
-                      `
-                      }
+                      `;
+                      }}
                     >
                       <Icon size={20} />
 
@@ -227,35 +156,6 @@ export default function Sidebar({
                 })}
 
               </div>
-
-              {section.title === "OPERACIONES" && canManageUsers && (
-                <div className="space-y-2">
-                <NavLink
-                  to="/configuracion"
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) => `mt-2 flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
-                >
-                  <Settings size={20} />
-                  <span className="font-medium">Configuración</span>
-                </NavLink>
-                <NavLink
-                  to="/score-builder"
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) => `flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
-                >
-                  <SlidersHorizontal size={20} />
-                  <span className="font-medium">Score Builder</span>
-                </NavLink>
-                <NavLink
-                  to="/discovery/builder"
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) => `flex items-center gap-4 rounded-2xl px-4 py-4 transition-all ${isActive ? "bg-zinc-900 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
-                >
-                  <ClipboardPenLine size={20} />
-                  <span className="font-medium">Discovery Builder</span>
-                </NavLink>
-                </div>
-              )}
 
             </div>
           ))}

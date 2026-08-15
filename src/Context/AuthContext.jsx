@@ -1,146 +1,256 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { CAPABILITIES, getRoleCapabilities } from "../config/capabilities";
+import { updateOrganizationName as persistOrganizationName } from "../services/OrganizationService";
 
 const AuthContext = createContext();
 
+const ROLE_LABELS = {
+  platform_owner: "Founder",
+  organization_admin: "Propietario",
+  area_lead: "Líder de área",
+  member: "Miembro",
+};
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
-  const [profileUserId, setProfileUserId] = useState(null);
-  const [moduleAccess, setModuleAccess] = useState([]);
-  const [areaAccess, setAreaAccess] = useState([]);
-
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        console.error("No se pudo restaurar la sesión:", error.message);
-      }
-
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const [sessionResolved, setSessionResolved] = useState(false);
+  const [identity, setIdentity] = useState({
+    status: "idle",
+    userId: null,
+    profile: null,
+    moduleAccess: [],
+    areaAccess: [],
+    error: null,
+  });
 
   useEffect(() => {
     let active = true;
 
-    if (!session?.user?.id) {
-      setProfile(null);
-      setProfileUserId(null);
-      return undefined;
-    }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return;
+      setSession(nextSession);
+      setSessionResolved(true);
+      setIdentity((current) => {
+        const nextUserId = nextSession?.user?.id ?? null;
+        if (current.userId === nextUserId) return current;
+        return {
+          status: nextUserId ? "resolving" : "idle",
+          userId: nextUserId,
+          profile: null,
+          moduleAccess: [],
+          areaAccess: [],
+          error: null,
+        };
+      });
+    });
 
-    supabase
-      .from("users")
-      .select("first_name, organization_id, title, role, organizations(name, organization_type)")
-      .eq("id", session.user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const userId = session?.user?.id;
+
+    if (!userId) return undefined;
+
+    Promise.all([
+      supabase
+        .from("users")
+        .select("first_name, organization_id, title, role, organizations(id, name, organization_type, created_at, updated_at)")
+        .eq("id", userId)
+        .maybeSingle(),
+      supabase.from("member_module_access").select("module_key, enabled").eq("user_id", userId),
+      supabase.from("user_area_access").select("area_id, is_primary, work_areas(id, name)").eq("user_id", userId),
+    ])
+      .then(([profileResult, modulesResult, areasResult]) => {
         if (!active) return;
 
-        if (error) {
-          console.error("No se pudo cargar el perfil:", error.message);
-          setProfile(null);
-          setProfileUserId(session.user.id);
+        const requestError = profileResult.error || modulesResult.error || areasResult.error;
+        if (requestError) {
+          console.error("No se pudo resolver la identidad activa:", requestError.message);
+          setIdentity({
+            status: "error",
+            userId,
+            profile: null,
+            moduleAccess: [],
+            areaAccess: [],
+            error: requestError,
+          });
           return;
         }
 
-        setProfile(data);
-        setProfileUserId(session.user.id);
-      });
+        if (!profileResult.data) {
+          setIdentity({
+            status: "unauthorized",
+            userId,
+            profile: null,
+            moduleAccess: [],
+            areaAccess: [],
+            error: null,
+          });
+          return;
+        }
 
-    Promise.all([
-      supabase.from("member_module_access").select("module_key, enabled").eq("user_id", session.user.id),
-      supabase.from("user_area_access").select("area_id, is_primary, work_areas(id, name)").eq("user_id", session.user.id),
-    ]).then(([modulesResult, areasResult]) => {
-      if (!active) return;
-      setModuleAccess(modulesResult.data || []);
-      setAreaAccess(areasResult.data || []);
-    });
+        const profile = profileResult.data;
+        const hasValidRole = Object.hasOwn(ROLE_LABELS, profile.role);
+        const organization = profile.organizations;
+
+        setIdentity({
+          status: !organization
+            ? "no_organization"
+            : hasValidRole
+              ? "authorized"
+              : "unauthorized",
+          userId,
+          profile,
+          moduleAccess: modulesResult.data || [],
+          areaAccess: areasResult.data || [],
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("No se pudo resolver la identidad activa:", error);
+        setIdentity({
+          status: "error",
+          userId,
+          profile: null,
+          moduleAccess: [],
+          areaAccess: [],
+          error,
+        });
+      });
 
     return () => {
       active = false;
     };
   }, [session?.user?.id]);
 
+  const profile = identity.profile;
+  const organization = profile?.organizations ?? null;
+  const role = identity.status === "authorized" ? profile.role : null;
+  const roleLabel = role ? ROLE_LABELS[role] : null;
+  const capabilities = useMemo(() => getRoleCapabilities(role), [role]);
+  const canManageUsers = capabilities[CAPABILITIES.manageMembers];
+  const organizationType = organization?.organization_type ?? null;
+  const isInternalOrganization = organizationType === "internal";
   const displayName =
     profile?.first_name ||
     session?.user?.user_metadata?.first_name ||
     session?.user?.email?.split("@")[0] ||
     "Usuario";
-
   const initial = displayName.trim().charAt(0).toUpperCase() || "U";
-  const displayTitle = profile?.title || "Miembro";
-  const role = profile?.role || "member";
-  const canManageUsers = role === "platform_owner" || role === "organization_admin";
-  const organizationType = profile?.organizations?.organization_type || "pending";
-  const isInternalOrganization = organizationType === "internal";
 
-  function canAccess(moduleKey) {
-    if (canManageUsers) return true;
-    const configured = moduleAccess.find((item) => item.module_key === moduleKey);
-    if (configured) return configured.enabled;
-    return moduleKey !== "area_score";
+  const permissions = useMemo(() => ({
+    canManageUsers,
+    canAccess(moduleKey) {
+      if (identity.status !== "authorized") return false;
+      if (canManageUsers) return true;
+      const configured = identity.moduleAccess.find((item) => item.module_key === moduleKey);
+      if (configured) return configured.enabled;
+      return moduleKey !== "area_score";
+    },
+  }), [canManageUsers, identity.moduleAccess, identity.status]);
+
+  function hasCapability(capability) {
+    return identity.status === "authorized" && capabilities[capability] === true;
   }
 
   async function updateProfile({ firstName }) {
-    if (!session?.user?.id) {
-      throw new Error("No hay una sesión activa.");
-    }
+    if (!session?.user?.id) throw new Error("No hay una sesión activa.");
 
     const { data, error } = await supabase.rpc("update_my_profile", {
       new_first_name: firstName.trim(),
     });
-
     if (error) throw error;
 
-    setProfile((current) => ({ ...current, ...data }));
+    setIdentity((current) => ({
+      ...current,
+      profile: { ...current.profile, ...data },
+    }));
     return data;
   }
 
- return (
-  <AuthContext.Provider
-    value={{
-      session,
-      user: session?.user ?? null,
-      profile,
-      displayName,
-      initial,
-      displayTitle,
-      role,
-      canManageUsers,
-      organizationType,
-      isInternalOrganization,
-      canAccess,
-      moduleAccess,
-      areaAccess,
-      updateProfile,
-      loading: loading || Boolean(session?.user?.id && profileUserId !== session.user.id),
+  async function updateOrganizationName(name) {
+    if (!organization?.id || !organization.organization_type) {
+      throw new Error("No hay una organización activa.");
+    }
+    if (!hasCapability(CAPABILITIES.updateOrganizationProfile)) {
+      throw new Error("Tu rol no permite editar la organización.");
+    }
 
-      logout: () => supabase.auth.signOut(),
-    }}
-  >
-    {children}
-  </AuthContext.Provider>
-);
-}
+    const updatedOrganization = await persistOrganizationName({
+      organizationId: organization.id,
+      name,
+      organizationType: organization.organization_type,
+    });
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth debe utilizarse dentro de AuthProvider.");
+    setIdentity((current) => ({
+      ...current,
+      profile: {
+        ...current.profile,
+        organizations: updatedOrganization,
+      },
+    }));
+    return updatedOrganization;
   }
 
+  const authStatus = !sessionResolved
+    ? "loading"
+    : session
+      ? "authenticated"
+      : "unauthenticated";
+  const loading = authStatus === "loading" || identity.status === "resolving";
+
+  return (
+    <AuthContext.Provider
+      value={{
+        session,
+        user: session?.user ?? null,
+        profile,
+        organization,
+        membership: profile
+          ? { organizationId: profile.organization_id, role: profile.role }
+          : null,
+        authStatus,
+        identityStatus: identity.status,
+        identityError: identity.error,
+        displayName,
+        initial,
+        displayTitle: roleLabel,
+        jobTitle: profile?.title ?? null,
+        role,
+        roleLabel,
+        capabilities,
+        hasCapability,
+        permissions,
+        canManageUsers,
+        organizationType,
+        isInternalOrganization,
+        canAccess: permissions.canAccess,
+        moduleAccess: identity.moduleAccess,
+        areaAccess: identity.areaAccess,
+        updateProfile,
+        updateOrganizationName,
+        loading,
+        logout: () => supabase.auth.signOut(),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Context providers and their consumer hooks intentionally share this module.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth debe utilizarse dentro de AuthProvider.");
   return context;
 }

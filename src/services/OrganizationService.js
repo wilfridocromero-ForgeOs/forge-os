@@ -24,3 +24,14 @@ export async function getUserOrganization(userId) {
 
   return data.organization;
 }
+
+export async function updateOrganizationName({ organizationId, name, organizationType }) {
+  const { data, error } = await supabase.rpc("admin_update_organization", {
+    target_organization_id: organizationId,
+    new_name: name.trim(),
+    new_type: organizationType,
+  });
+
+  if (error) throw error;
+  return data;
+}

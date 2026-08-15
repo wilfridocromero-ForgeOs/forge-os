@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import EmailInput from "./EmailInput";
 import PasswordInput from "./PasswordInput";
@@ -11,7 +11,6 @@ import { supabase } from "../../lib/supabase";
 
 export default function LoginForm() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +37,7 @@ export default function LoginForm() {
         return;
       }
 
-      const destination = location.state?.from?.pathname ?? "/";
-      navigate(destination, { replace: true });
+      navigate("/", { replace: true });
     } catch {
       setError("No fue posible conectar con el servicio de autenticación.");
     } finally {

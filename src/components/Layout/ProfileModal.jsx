@@ -33,7 +33,7 @@ export default function ProfileModal({ onClose }) {
       <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111113] p-6 shadow-2xl sm:p-7">
         <h2 className="text-2xl font-semibold text-white">Editar perfil</h2>
         <p className="mt-2 text-sm text-zinc-500">
-          Puedes cambiar tu nombre visible. Tu título y permisos los administra ORVESEN.
+          Puedes cambiar tu nombre visible. Tu rol y permisos los administra ORVESEN.
         </p>
 
         <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
@@ -49,7 +49,7 @@ export default function ProfileModal({ onClose }) {
           </label>
 
           <div className="rounded-xl border border-zinc-800 bg-black/40 px-4 py-3">
-            <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500">Título asignado</span>
+            <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500">Rol asignado</span>
             <span className="mt-1 block text-white">{displayTitle}</span>
           </div>
 
