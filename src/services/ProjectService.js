@@ -19,13 +19,18 @@ export async function getProjects(organizationId) {
 
 export async function getProjectOptions(organizationId) {
   if (!organizationId) return { clients: [], users: [] };
-  const [clientsResult, usersResult] = await Promise.all([
+  const [clientsResult, membershipsResult] = await Promise.all([
     supabase.from("clients").select("id, company_name, contact_name").eq("organization_id", organizationId).order("company_name"),
-    supabase.from("users").select("id, first_name, title").eq("organization_id", organizationId).order("first_name"),
+    supabase.from("organization_memberships").select("user_id, role").eq("organization_id", organizationId),
   ]);
   if (clientsResult.error) throw clientsResult.error;
-  if (usersResult.error) throw usersResult.error;
-  return { clients: clientsResult.data || [], users: usersResult.data || [] };
+  if (membershipsResult.error) throw membershipsResult.error;
+  const memberIds = (membershipsResult.data || []).map((membership) => membership.user_id);
+  if (!memberIds.length) return { clients: clientsResult.data || [], users: [] };
+  const { data: users, error: usersError } = await supabase.from("users")
+    .select("id, first_name, title").in("id", memberIds).order("first_name");
+  if (usersError) throw usersError;
+  return { clients: clientsResult.data || [], users: users || [] };
 }
 
 function normalizeProject(values, organizationId, userId) {
@@ -62,15 +67,17 @@ export async function updateProject(projectId, values, organizationId, userId) {
   return data;
 }
 
-export async function deleteProject(projectId, userId) {
-  await supabase.from("project_activity").insert({ project_id: projectId, actor_id: userId, event_type: "project_deleted" });
-  const { error } = await supabase.from("projects").delete().eq("id", projectId);
+export async function archiveProject(projectId, userId) {
+  const { data, error } = await supabase.from("projects").update({ status: "archived" })
+    .eq("id", projectId).select(projectSelection).single();
   if (error) throw error;
+  await supabase.from("project_activity").insert({ project_id: projectId, actor_id: userId, event_type: "project_archived" });
+  return data;
 }
 
 export async function getProjectWork(projectId) {
   const [tasksResult, deliverablesResult] = await Promise.all([
-    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, assigned_to, due_at, completed_at, created_by, created_at, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("created_at"),
+    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, position, assigned_to, due_at, completed_at, created_by, created_at, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("position").order("created_at"),
     supabase.from("project_deliverables").select("id, project_id, title, description, status, due_at, approved_at, created_by, created_at").eq("project_id", projectId).order("created_at"),
   ]);
   if (tasksResult.error) throw tasksResult.error;
@@ -82,8 +89,11 @@ export async function createProjectTask(projectId, values, userId) {
   const { data, error } = await supabase.from("project_tasks").insert({
     project_id: projectId,
     title: values.title.trim(),
+    description: values.description?.trim() || null,
     work_type: values.work_type || "task",
+    status: values.status || "pending",
     priority: values.priority || "medium",
+    position: Number.isInteger(values.position) ? values.position : 0,
     assigned_to: values.assigned_to || null,
     due_at: values.due_at ? new Date(`${values.due_at}T23:59:59`).toISOString() : null,
     created_by: userId,

@@ -1,14 +1,13 @@
 import { useState } from "react";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
-import ProjectWorkPanel from "./ProjectWorkPanel";
 
 const initial = { name: "", description: "", division_id: "", client_id: "", owner_id: "", priority: "medium", status: "planned", starts_at: "", due_at: "" };
 const fieldClass = "mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-zinc-600";
 
 function dateValue(value) { return value ? new Date(value).toISOString().slice(0, 10) : ""; }
 
-export default function ProjectModal({ open, project, divisions, clients, users, userId, onClose, onSave, onProgressChange }) {
+export default function ProjectModal({ open, project, divisions, clients, users, onClose, onSave }) {
   const [form, setForm] = useState(() => project ? { ...initial, ...project, division_id: project.division_id || "", client_id: project.client_id || "", owner_id: project.owner_id || "", starts_at: dateValue(project.starts_at), due_at: dateValue(project.due_at) } : { ...initial, division_id: divisions[0]?.id || "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -33,12 +32,11 @@ export default function ProjectModal({ open, project, divisions, clients, users,
         <label className="text-sm text-zinc-400">Cliente<select className={fieldClass} value={form.client_id} onChange={(e) => set("client_id", e.target.value)}><option value="">Sin cliente</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.company_name}</option>)}</select></label>
         <label className="text-sm text-zinc-400">Responsable<select className={fieldClass} value={form.owner_id} onChange={(e) => set("owner_id", e.target.value)}><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.first_name || "Usuario"}{item.title ? ` · ${item.title}` : ""}</option>)}</select></label>
         <label className="text-sm text-zinc-400">Prioridad<select className={fieldClass} value={form.priority} onChange={(e) => set("priority", e.target.value)}><option value="low">Baja</option><option value="medium">Media</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
-        <label className="text-sm text-zinc-400">Estado<select className={fieldClass} value={form.status} onChange={(e) => set("status", e.target.value)}><option value="planned">Planificado</option><option value="active">Activo</option><option value="blocked">Bloqueado</option><option value="completed">Finalizado</option><option value="cancelled">Cancelado</option></select></label>
+        <label className="text-sm text-zinc-400">Estado<select className={fieldClass} value={form.status} onChange={(e) => set("status", e.target.value)}><option value="planned">Planificación</option><option value="active">Activo</option><option value="blocked">En pausa</option><option value="completed">Completado</option><option value="cancelled">Cancelado</option>{project && <option value="archived">Archivado</option>}</select></label>
         <label className="text-sm text-zinc-400">Fecha de inicio<input type="date" className={fieldClass} value={form.starts_at} onChange={(e) => set("starts_at", e.target.value)} /></label>
         <label className="text-sm text-zinc-400">Fecha límite<input type="date" className={fieldClass} value={form.due_at} onChange={(e) => set("due_at", e.target.value)} /></label>
       </div>
       {!project && <p className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-500">Después de crear el proyecto podrás añadir tareas, checklist, hitos, revisiones y entregables. El progreso se calculará automáticamente.</p>}
-      {project && <ProjectWorkPanel projectId={project.id} users={users} userId={userId} onProgressChange={onProgressChange} />}
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" loading={saving}>Guardar proyecto</Button></div>
     </form>
   </Modal>;
