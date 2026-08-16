@@ -4,14 +4,23 @@ import { useAuth } from "./AuthContext";
 const OrganizationContext = createContext(null);
 
 export function OrganizationProvider({ children }) {
-  const { organization, identityStatus, loading } = useAuth();
+  const authorization = useAuth();
 
   return (
     <OrganizationContext.Provider
       value={{
-        organization,
-        loading,
-        status: identityStatus,
+        organization: authorization.organization,
+        activeOrganization: authorization.organization,
+        organizations: authorization.organizations,
+        membership: authorization.membership,
+        role: authorization.role,
+        permissions: authorization.permissions,
+        capabilities: authorization.capabilities,
+        hasCapability: authorization.hasCapability,
+        setActiveOrganization: authorization.setActiveOrganization,
+        loading: authorization.loading,
+        status: authorization.identityStatus,
+        error: authorization.identityError,
       }}
     >
       {children}

@@ -66,7 +66,11 @@ export async function updateMemberAccess({ userId, moduleKeys, currentScoreIds, 
 }
 
 export async function inviteOrganizationMember(payload) {
-  const { data, error } = await supabase.functions.invoke("invite-user", { body: payload });
+  const invitationPayload = {
+    ...payload,
+    role: payload.role === "admin" ? "organization_admin" : payload.role,
+  };
+  const { data, error } = await supabase.functions.invoke("invite-user", { body: invitationPayload });
   if (error || data?.error) throw new Error(data?.error || error?.message || "No se pudo enviar la invitación.");
   return data;
 }

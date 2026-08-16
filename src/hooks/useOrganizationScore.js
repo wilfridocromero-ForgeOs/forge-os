@@ -26,7 +26,7 @@ export default function useOrganizationScore(selectedDivisionId = "") {
     async function load() {
       setState((current) => ({ ...current, loading: true, error: null }));
       let allowedIds = [];
-      if (role !== "platform_owner" && role !== "organization_admin") {
+      if (role !== "founder" && role !== "admin") {
         const access = await supabase.from("user_division_score_access").select("division_id").eq("user_id", user.id);
         if (access.error) return active && setState({ data: null, options: [], loading: false, error: access.error });
         allowedIds = (access.data || []).map((item) => item.division_id);

@@ -6,8 +6,8 @@ import { updateOrganizationName as persistOrganizationName } from "../services/O
 const AuthContext = createContext();
 
 const ROLE_LABELS = {
-  platform_owner: "Founder",
-  organization_admin: "Propietario",
+  founder: "Fundador",
+  admin: "Administrador",
   area_lead: "Líder de área",
   member: "Miembro",
 };
@@ -15,6 +15,7 @@ const ROLE_LABELS = {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [sessionResolved, setSessionResolved] = useState(false);
+  const [identityRevision, setIdentityRevision] = useState(0);
   const [identity, setIdentity] = useState({
     status: "idle",
     userId: null,
@@ -58,17 +59,13 @@ export function AuthProvider({ children }) {
     if (!userId) return undefined;
 
     Promise.all([
-      supabase
-        .from("users")
-        .select("first_name, organization_id, title, role, organizations(id, name, organization_type, created_at, updated_at)")
-        .eq("id", userId)
-        .maybeSingle(),
+      supabase.rpc("get_my_authorization_context"),
       supabase.from("member_module_access").select("module_key, enabled").eq("user_id", userId),
     ])
-      .then(([profileResult, modulesResult]) => {
+      .then(([contextResult, modulesResult]) => {
         if (!active) return;
 
-        const requestError = profileResult.error || modulesResult.error;
+        const requestError = contextResult.error || modulesResult.error;
         if (requestError) {
           console.error("No se pudo resolver la identidad activa:", requestError.message);
           setIdentity({
@@ -81,7 +78,7 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (!profileResult.data) {
+        if (!contextResult.data) {
           setIdentity({
             status: "unauthorized",
             userId,
@@ -92,9 +89,16 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        const profile = profileResult.data;
-        const hasValidRole = Object.hasOwn(ROLE_LABELS, profile.role);
-        const organization = profile.organizations;
+        const context = contextResult.data;
+        const organization = context.organization;
+        const membership = context.membership;
+        const profile = {
+          ...context.profile,
+          organization_id: membership?.organization_id ?? null,
+          role: membership?.role ?? null,
+          organizations: organization,
+        };
+        const hasValidRole = Object.hasOwn(ROLE_LABELS, membership?.role);
 
         setIdentity({
           status: !organization
@@ -104,6 +108,8 @@ export function AuthProvider({ children }) {
               : "unauthorized",
           userId,
           profile,
+          membership,
+          organizations: context.organizations || [],
           moduleAccess: modulesResult.data || [],
           error: null,
         });
@@ -123,7 +129,7 @@ export function AuthProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, identityRevision]);
 
   const profile = identity.profile;
   const organization = profile?.organizations ?? null;
@@ -194,6 +200,19 @@ export function AuthProvider({ children }) {
     return updatedOrganization;
   }
 
+  async function setActiveOrganization(organizationId) {
+    if (!session?.user?.id) throw new Error("No hay una sesión activa.");
+    setIdentity((current) => ({ ...current, status: "resolving", error: null }));
+    const { error } = await supabase.rpc("set_active_organization", {
+      target_organization_id: organizationId,
+    });
+    if (error) {
+      setIdentity((current) => ({ ...current, status: "error", error }));
+      throw error;
+    }
+    setIdentityRevision((current) => current + 1);
+  }
+
   const authStatus = !sessionResolved
     ? "loading"
     : session
@@ -208,9 +227,8 @@ export function AuthProvider({ children }) {
         user: session?.user ?? null,
         profile,
         organization,
-        membership: profile
-          ? { organizationId: profile.organization_id, role: profile.role }
-          : null,
+        membership: identity.membership ?? null,
+        organizations: identity.organizations ?? [],
         authStatus,
         identityStatus: identity.status,
         identityError: identity.error,
@@ -230,6 +248,7 @@ export function AuthProvider({ children }) {
         moduleAccess: identity.moduleAccess,
         updateProfile,
         updateOrganizationName,
+        setActiveOrganization,
         loading,
         logout: () => supabase.auth.signOut(),
       }}

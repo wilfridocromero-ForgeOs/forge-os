@@ -18,8 +18,8 @@ const NO_ADMIN_CAPABILITIES = Object.freeze(
 );
 
 const ROLE_CAPABILITIES = Object.freeze({
-  platform_owner: ADMIN_CAPABILITIES,
-  organization_admin: Object.freeze({
+  founder: ADMIN_CAPABILITIES,
+  admin: Object.freeze({
     ...ADMIN_CAPABILITIES,
     updateOrganizationProfile: false,
   }),

@@ -67,7 +67,7 @@ export default function Clients() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { organization } = useOrganization();
-  const { role } = useAuth();
+  const { role, isInternalOrganization } = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,7 +76,7 @@ export default function Clients() {
   const [status, setStatus] = useState("all");
   const [view, setView] = useState(() => localStorage.getItem("orvesen-client-view") || "cards");
   const [inviteClient, setInviteClient] = useState(null);
-  const canInviteClients = role === "platform_owner";
+  const canInviteClients = role === "founder" && isInternalOrganization;
 
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
