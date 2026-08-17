@@ -40,7 +40,7 @@ export default function ProjectDetail({ project, organizationId, users, projectM
       <Info label="Fecha de inicio" value={dateLabel(project.starts_at)} />
       <div className="sm:col-span-2 lg:col-span-4"><p className="text-xs uppercase tracking-[.18em] text-zinc-600">Descripción</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{project.description || "Sin descripción"}</p></div>
     </div>}
-    {tab === "tasks" && <ProjectWorkPanel projectId={project.id} users={projectMembers.filter((member) => ["owner", "member"].includes(member.role)).map((member) => member.user).filter(Boolean)} userId={userId} onProgressChange={(progress) => onProjectChange?.({ ...project, progress })} />}
+    {tab === "tasks" && <ProjectWorkPanel projectId={project.id} organizationId={organizationId} users={projectMembers.filter((member) => ["owner", "member"].includes(member.role)).map((member) => member.user).filter(Boolean)} userId={userId} canManage={canManageMembers} onProgressChange={(progress) => onProjectChange?.({ ...project, progress })} />}
     {tab === "members" && <ProjectMembersPanel projectId={project.id} members={projectMembers} organizationUsers={users} actorId={userId} canManage={canManageMembers} onChange={onMembersChange} />}
     {tab === "comments" && <ProjectCommentsPanel projectId={project.id} userId={userId} canComment={canComment} canModerate={canManageMembers} />}
     {tab === "activity" && <ProjectActivityPanel projectId={project.id} />}

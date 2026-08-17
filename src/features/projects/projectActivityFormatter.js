@@ -42,6 +42,11 @@ export function formatProjectActivity(row) {
     comment_deleted: `${actor} eliminó un comentario`,
     file_uploaded: `${actor} subió ${quoted(payload.name || "un archivo")}`,
     file_deleted: `${actor} eliminó ${quoted(payload.name || "un archivo")}`,
+    evidence_requirement_added: `${actor} añadió el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,
+    evidence_requirement_updated: `${actor} actualizó el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,
+    evidence_requirement_removed: `${actor} eliminó el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,
+    evidence_submitted: `${actor} presentó evidencia para ${quoted(payload.label || "un requisito")}`,
+    evidence_removed: `${actor} eliminó evidencia de ${quoted(payload.label || "un requisito")}`,
   };
   return formats[row.event_type] || "Se registró actividad en el proyecto.";
 }

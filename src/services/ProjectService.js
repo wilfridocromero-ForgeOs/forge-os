@@ -259,7 +259,26 @@ export async function getProjectWork(projectId) {
   ]);
   if (tasksResult.error) throw tasksResult.error;
   if (deliverablesResult.error) throw deliverablesResult.error;
-  return { tasks: tasksResult.data || [], deliverables: deliverablesResult.data || [] };
+  const taskIds = (tasksResult.data || []).map((task) => task.id);
+  if (!taskIds.length) return { tasks: [], deliverables: deliverablesResult.data || [] };
+  const [requirementsResult, evidenceResult] = await Promise.all([
+    supabase.from("task_evidence_requirements").select("id, task_id, evidence_type, label, description, is_required, min_count, max_count, position, created_by, created_at, updated_at").in("task_id", taskIds).order("position").order("created_at"),
+    supabase.from("task_evidence").select("id, requirement_id, task_id, evidence_type, storage_path, file_name, mime_type, size_bytes, value_text, value_url, submitted_by, created_at, deleted_at").in("task_id", taskIds).is("deleted_at", null).order("created_at"),
+  ]);
+  if (requirementsResult.error) throw requirementsResult.error;
+  if (evidenceResult.error) throw evidenceResult.error;
+  const requirements = requirementsResult.data || [];
+  const evidence = evidenceResult.data || [];
+  return {
+    tasks: (tasksResult.data || []).map((task) => ({
+      ...task,
+      evidence_requirements: requirements.filter((item) => item.task_id === task.id).map((requirement) => ({
+        ...requirement,
+        evidence: evidence.filter((item) => item.requirement_id === requirement.id),
+      })),
+    })),
+    deliverables: deliverablesResult.data || [],
+  };
 }
 
 export async function createProjectTask(projectId, values, userId) {
@@ -268,7 +287,7 @@ export async function createProjectTask(projectId, values, userId) {
     title: values.title.trim(),
     description: values.description?.trim() || null,
     work_type: values.work_type || "task",
-    status: values.status || "pending",
+    status: values.evidence_requirements?.length ? "pending" : (values.status || "pending"),
     priority: values.priority || "medium",
     position: Number.isInteger(values.position) ? values.position : 0,
     assigned_to: values.assigned_to || null,
@@ -276,18 +295,111 @@ export async function createProjectTask(projectId, values, userId) {
     created_by: userId,
   }).select("*").single();
   if (error) throw error;
+  if (values.evidence_requirements?.length) {
+    const { error: requirementsError } = await supabase.from("task_evidence_requirements").insert(values.evidence_requirements.map((requirement, position) => ({
+      task_id: data.id,
+      evidence_type: requirement.evidence_type,
+      label: requirement.label.trim(),
+      description: requirement.description?.trim() || null,
+      is_required: requirement.is_required,
+      min_count: requirement.is_required ? Number(requirement.min_count) : 0,
+      max_count: Number(requirement.max_count),
+      position,
+      created_by: userId,
+    })));
+    if (requirementsError) {
+      await supabase.from("project_tasks").delete().eq("id", data.id);
+      throw requirementsError;
+    }
+  }
   return data;
 }
 
 export async function updateProjectTask(taskId, changes) {
   const { data, error } = await supabase.from("project_tasks").update(changes).eq("id", taskId).select("*").single();
-  if (error) throw error;
+  if (error) {
+    if (String(error.message).includes("Required evidence is incomplete")) throw new Error("No puedes completar esta tarea todavía. Falta evidencia obligatoria.");
+    throw error;
+  }
   return data;
 }
 
 export async function deleteProjectTask(taskId) {
   const { error } = await supabase.from("project_tasks").delete().eq("id", taskId);
   if (error) throw error;
+}
+
+export async function createTaskEvidenceRequirement(taskId, requirement, userId) {
+  const { data, error } = await supabase.from("task_evidence_requirements").insert({
+    task_id: taskId, evidence_type: requirement.evidence_type, label: requirement.label.trim(),
+    description: requirement.description?.trim() || null, is_required: requirement.is_required,
+    min_count: requirement.is_required ? Number(requirement.min_count) : 0,
+    max_count: Number(requirement.max_count), position: Number(requirement.position || 0), created_by: userId,
+  }).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTaskEvidenceRequirement(id, changes) {
+  const { data, error } = await supabase.from("task_evidence_requirements").update(changes).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTaskEvidenceRequirement(id) {
+  const { error } = await supabase.from("task_evidence_requirements").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function submitTaskEvidenceValue({ taskId, requirement, value, userId }) {
+  const payload = { id: crypto.randomUUID(), task_id: taskId, requirement_id: requirement.id, evidence_type: requirement.evidence_type, submitted_by: userId };
+  if (requirement.evidence_type === "url") payload.value_url = value.trim();
+  else payload.value_text = value.trim();
+  const { data, error } = await supabase.from("task_evidence").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function submitTaskEvidenceFile({ projectId, organizationId, taskId, requirement, file, userId, onProgress }) {
+  validateTaskEvidenceFile(requirement.evidence_type, file);
+  const id = crypto.randomUUID();
+  const path = `${organizationId}/${projectId}/evidence/${taskId}/${id}/${sanitizeStorageFileName(file.name)}`;
+  onProgress?.(20, "Subiendo");
+  const upload = await supabase.storage.from("project-files").upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: false });
+  if (upload.error) throw friendlyFileError(upload.error, "No se pudo subir la evidencia.");
+  onProgress?.(75, "Guardando");
+  const metadata = await supabase.from("task_evidence").insert({ id, task_id: taskId, requirement_id: requirement.id, evidence_type: requirement.evidence_type, storage_path: path, file_name: file.name.trim(), mime_type: file.type, size_bytes: file.size, submitted_by: userId }).select("*").single();
+  if (metadata.error) {
+    await supabase.storage.from("project-files").remove([path]);
+    throw friendlyFileError(metadata.error, "No se pudo registrar la evidencia.");
+  }
+  onProgress?.(100, "Completado");
+  return metadata.data;
+}
+
+export async function openTaskEvidence(evidence) {
+  if (evidence.value_url) { window.open(evidence.value_url, "_blank", "noopener,noreferrer"); return; }
+  if (evidence.value_text) return;
+  const { data, error } = await supabase.storage.from("project-files").createSignedUrl(evidence.storage_path, 60);
+  if (error) throw friendlyFileError(error, "No se pudo abrir la evidencia.");
+  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+}
+
+export async function deleteTaskEvidence(evidence) {
+  if (evidence.storage_path) {
+    const { error } = await supabase.storage.from("project-files").remove([evidence.storage_path]);
+    if (error) throw friendlyFileError(error, "No se pudo eliminar el archivo de evidencia.");
+  }
+  const { error } = await supabase.from("task_evidence").update({ deleted_at: new Date().toISOString() }).eq("id", evidence.id);
+  if (error) throw error;
+}
+
+const evidenceDocumentTypes = new Set([...PROJECT_FILE_ALLOWED_MIME_TYPES].filter((type) => !type.startsWith("image/")));
+export function validateTaskEvidenceFile(type, file) {
+  if (!file.size || file.size > PROJECT_FILE_MAX_BYTES) throw new Error("La evidencia debe pesar entre 1 byte y 50 MB.");
+  if (type === "image" && (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 20 * 1024 * 1024)) throw new Error("La imagen debe ser JPG, PNG o WEBP y pesar hasta 20 MB.");
+  if (type === "video" && !new Set(["video/mp4", "video/webm"]).has(file.type)) throw new Error("El video debe ser MP4 o WEBM y pesar hasta 50 MB.");
+  if (type === "document" && !evidenceDocumentTypes.has(file.type)) throw new Error("El tipo de documento no está permitido.");
 }
 
 export async function createProjectDeliverable(projectId, values, userId) {

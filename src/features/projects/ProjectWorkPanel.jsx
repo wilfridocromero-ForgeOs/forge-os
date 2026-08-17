@@ -9,14 +9,16 @@ import {
   updateProjectDeliverable,
   updateProjectTask,
 } from "../../services/ProjectService";
+import TaskEvidencePanel, { EvidenceRequirementFields } from "./TaskEvidencePanel";
+import { blankEvidenceRequirement } from "./taskEvidenceConfig";
 
 const field = "min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-zinc-600";
 const workLabels = { task: "Tarea", checklist: "Checklist", milestone: "Hito", review: "Revisión" };
 const taskStatusLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", cancelled: "Cancelada" };
 
-export default function ProjectWorkPanel({ projectId, users, userId, onProgressChange }) {
+export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, onProgressChange }) {
   const [work, setWork] = useState({ tasks: [], deliverables: [] });
-  const [task, setTask] = useState({ title: "", description: "", work_type: "task", status: "pending", priority: "medium", assigned_to: "", due_at: "" });
+  const [task, setTask] = useState({ title: "", description: "", work_type: "task", status: "pending", priority: "medium", assigned_to: "", due_at: "", evidence_requirements: [] });
   const [deliverable, setDeliverable] = useState({ title: "", due_at: "" });
   const [error, setError] = useState("");
 
@@ -40,7 +42,7 @@ export default function ProjectWorkPanel({ projectId, users, userId, onProgressC
   async function addTask(event) {
     event.preventDefault();
     if (!task.title.trim()) return;
-    try { setError(""); await createProjectTask(projectId, task, userId); setTask({ ...task, title: "", description: "", due_at: "" }); await load(); }
+    try { setError(""); await createProjectTask(projectId, task, userId); setTask({ ...task, title: "", description: "", due_at: "", evidence_requirements: [] }); await load(); }
     catch (reason) { setError(reason.message); }
   }
 
@@ -72,15 +74,17 @@ export default function ProjectWorkPanel({ projectId, users, userId, onProgressC
         <select aria-label="Responsable" className={field} value={task.assigned_to} onChange={(e) => setTask({ ...task, assigned_to: e.target.value })}><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.first_name || "Usuario"}</option>)}</select>
         <input aria-label="Fecha límite" type="date" className={field} value={task.due_at} onChange={(e) => setTask({ ...task, due_at: e.target.value })} />
         <button type="submit" className="flex items-center justify-center rounded-xl bg-white px-4 text-black"><Plus size={17} /></button>
+        {canManage && <details className="min-w-0 sm:col-span-2 xl:col-span-full"><summary className="cursor-pointer py-2 text-xs text-zinc-400">Requisitos de evidencia ({task.evidence_requirements.length})</summary><div className="space-y-2">{task.evidence_requirements.map((requirement, index) => <EvidenceRequirementFields key={index} value={requirement} onChange={(next) => setTask({ ...task, evidence_requirements: task.evidence_requirements.map((item, itemIndex) => itemIndex === index ? next : item) })} onRemove={() => setTask({ ...task, evidence_requirements: task.evidence_requirements.filter((_, itemIndex) => itemIndex !== index) })} />)}<button type="button" onClick={() => setTask({ ...task, evidence_requirements: [...task.evidence_requirements, blankEvidenceRequirement()] })} className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-white"><Plus size={14} /> Añadir requisito</button></div></details>}
       </form>
 
       <div className="space-y-2">
-        {work.tasks.map((item) => <div key={item.id} className="grid min-w-0 gap-3 rounded-xl border border-zinc-800 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_150px_auto] sm:items-center">
-          <button type="button" aria-label={item.status === "completed" ? "Reabrir" : "Completar"} onClick={() => mutate(() => updateProjectTask(item.id, { status: item.status === "completed" ? "pending" : "completed" }))} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${item.status === "completed" ? "border-white bg-white text-black" : "border-zinc-700 text-transparent"}`}><Check size={15} /></button>
+        {work.tasks.map((item) => { const compliant = (item.evidence_requirements || []).every((requirement) => !requirement.is_required || requirement.evidence.length >= requirement.min_count); return <div key={item.id} className="grid min-w-0 gap-3 rounded-xl border border-zinc-800 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_150px_auto] sm:items-center">
+          <button type="button" disabled={item.status !== "completed" && !compliant} title={!compliant ? "Completa las evidencias obligatorias" : ""} aria-label={item.status === "completed" ? "Reabrir" : "Completar"} onClick={() => mutate(() => updateProjectTask(item.id, { status: item.status === "completed" ? "pending" : "completed" }))} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border disabled:cursor-not-allowed disabled:opacity-40 ${item.status === "completed" ? "border-white bg-white text-black" : "border-zinc-700 text-transparent"}`}><Check size={15} /></button>
           <div className="min-w-0"><p className={`break-words text-sm ${item.status === "completed" ? "text-zinc-600 line-through" : "text-white"}`}>{item.title}</p>{item.description && <p className="mt-1 break-words text-xs text-zinc-500">{item.description}</p>}<p className="mt-1 text-xs text-zinc-600">{workLabels[item.work_type]}{item.assignee?.first_name ? ` · ${item.assignee.first_name}` : ""}</p></div>
-          <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectTask(item.id, { status: e.target.value }))}>{Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectTask(item.id, { status: e.target.value }))}>{Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value} disabled={value === "completed" && !compliant}>{label}</option>)}</select>
           <button type="button" aria-label="Eliminar" onClick={() => mutate(() => deleteProjectTask(item.id))} className="p-2 text-zinc-600 hover:text-red-300"><Trash2 size={15} /></button>
-        </div>)}
+          <TaskEvidencePanel task={item} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} onChange={load} reportError={setError} />
+        </div>; })}
       </div>
 
       <form onSubmit={addDeliverable} className="grid gap-2 rounded-2xl border border-zinc-800 p-3 sm:grid-cols-[1fr_170px_auto]">
