@@ -17,6 +17,14 @@ export async function getProjects(organizationId) {
   return data || [];
 }
 
+export async function getProject(projectId, organizationId) {
+  if (!projectId || !organizationId) return null;
+  const { data, error } = await supabase.from("projects").select(projectSelection)
+    .eq("id", projectId).eq("organization_id", organizationId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getProjectOptions(organizationId) {
   if (!organizationId) return { clients: [], users: [] };
   const [clientsResult, membershipsResult] = await Promise.all([
@@ -45,7 +53,6 @@ function normalizeProject(values, organizationId, userId) {
     owner_id: values.owner_id || null,
     starts_at: values.starts_at ? new Date(`${values.starts_at}T00:00:00`).toISOString() : null,
     due_at: values.due_at ? new Date(`${values.due_at}T23:59:59`).toISOString() : null,
-    completed_at: values.status === "completed" ? new Date().toISOString() : null,
     created_by: userId,
   };
 }
@@ -54,7 +61,6 @@ export async function createProject(values, organizationId, userId) {
   const payload = normalizeProject(values, organizationId, userId);
   const { data, error } = await supabase.from("projects").insert(payload).select(projectSelection).single();
   if (error) throw error;
-  await supabase.from("project_activity").insert({ project_id: data.id, actor_id: userId, event_type: "project_created", payload: { status: data.status } });
   return data;
 }
 
@@ -63,21 +69,28 @@ export async function updateProject(projectId, values, organizationId, userId) {
   delete payload.created_by;
   const { data, error } = await supabase.from("projects").update(payload).eq("id", projectId).select(projectSelection).single();
   if (error) throw error;
-  await supabase.from("project_activity").insert({ project_id: data.id, actor_id: userId, event_type: "project_updated", payload: { status: data.status, progress: data.progress } });
   return data;
 }
 
-export async function archiveProject(projectId, userId) {
+export async function archiveProject(projectId) {
   const { data, error } = await supabase.from("projects").update({ status: "archived" })
     .eq("id", projectId).select(projectSelection).single();
   if (error) throw error;
-  await supabase.from("project_activity").insert({ project_id: projectId, actor_id: userId, event_type: "project_archived" });
   return data;
+}
+
+export async function getProjectActivity(projectId) {
+  if (!projectId) return [];
+  const { data, error } = await supabase.from("project_activity")
+    .select("id, project_id, actor_id, event_type, entity_type, entity_id, payload, created_at, actor:users!project_activity_actor_id_fkey(id, first_name)")
+    .eq("project_id", projectId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
 export async function getProjectWork(projectId) {
   const [tasksResult, deliverablesResult] = await Promise.all([
-    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, position, assigned_to, due_at, completed_at, created_by, created_at, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("position").order("created_at"),
+    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, position, assigned_to, due_at, completed_at, completed_by, created_by, created_at, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("position").order("created_at"),
     supabase.from("project_deliverables").select("id, project_id, title, description, status, due_at, approved_at, created_by, created_at").eq("project_id", projectId).order("created_at"),
   ]);
   if (tasksResult.error) throw tasksResult.error;
@@ -103,9 +116,7 @@ export async function createProjectTask(projectId, values, userId) {
 }
 
 export async function updateProjectTask(taskId, changes) {
-  const payload = { ...changes };
-  if (changes.status) payload.completed_at = changes.status === "completed" ? new Date().toISOString() : null;
-  const { data, error } = await supabase.from("project_tasks").update(payload).eq("id", taskId).select("*").single();
+  const { data, error } = await supabase.from("project_tasks").update(changes).eq("id", taskId).select("*").single();
   if (error) throw error;
   return data;
 }
@@ -126,13 +137,8 @@ export async function createProjectDeliverable(projectId, values, userId) {
   return data;
 }
 
-export async function updateProjectDeliverable(deliverableId, changes, userId) {
-  const payload = { ...changes };
-  if (changes.status) {
-    payload.approved_at = changes.status === "approved" ? new Date().toISOString() : null;
-    payload.approved_by = changes.status === "approved" ? userId : null;
-  }
-  const { data, error } = await supabase.from("project_deliverables").update(payload).eq("id", deliverableId).select("*").single();
+export async function updateProjectDeliverable(deliverableId, changes) {
+  const { data, error } = await supabase.from("project_deliverables").update(changes).eq("id", deliverableId).select("*").single();
   if (error) throw error;
   return data;
 }

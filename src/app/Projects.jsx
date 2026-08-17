@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, CircleDot, Edit3, Search } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import ProjectModal from "../features/projects/ProjectModal";
-import ProjectDetail from "../features/projects/ProjectDetail";
 import { useOrganization } from "../Context/OrganizationContext";
 import { useAuth } from "../Context/AuthContext";
 import { useDivisions } from "../hooks/useDivisions";
-import { archiveProject, createProject, getProjectOptions, getProjects, updateProject } from "../services/ProjectService";
+import { createProject, getProjectOptions, getProjects, updateProject } from "../services/ProjectService";
 
 const statuses = { planned: "Planificación", active: "Activo", blocked: "En pausa", completed: "Completado", cancelled: "Cancelado", archived: "Archivado" };
 const priorities = { low: "Baja", medium: "Media", high: "Alta", urgent: "Urgente" };
@@ -24,6 +23,7 @@ function Metric({ icon: Icon, label, value }) { return <Card hover={false} conte
 
 export default function Projects() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
   const { user, canManageUsers } = useAuth();
   const { divisions } = useDivisions(activeOrganization?.id);
@@ -37,7 +37,6 @@ export default function Projects() {
   const [division, setDivision] = useState("all");
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
@@ -68,9 +67,8 @@ export default function Projects() {
   }), [projects, quickFilter, search, status, division]);
   const metrics = useMemo(() => { const now = new Date(); const soon = new Date(now); soon.setDate(now.getDate() + 7); return { active: projects.filter((p) => p.status === "active").length, completed: projects.filter((p) => p.status === "completed").length, overdue: projects.filter(isOverdue).length, soon: projects.filter((p) => p.due_at && new Date(p.due_at) >= now && new Date(p.due_at) <= soon && !["completed", "cancelled", "archived"].includes(p.status)).length }; }, [projects]);
   function mayEdit(project) { return canManageUsers || project.owner_id === user?.id || project.created_by === user?.id; }
-  function replaceProject(row) { setProjects((current) => current.map((item) => item.id === row.id ? row : item)); setSelected((current) => current?.id === row.id ? row : current); }
+  function replaceProject(row) { setProjects((current) => current.map((item) => item.id === row.id ? row : item)); }
   async function save(values) { const row = editing ? await updateProject(editing.id, values, activeOrganization.id, user.id) : await createProject(values, activeOrganization.id, user.id); if (editing) replaceProject(row); else setProjects((current) => [row, ...current]); }
-  async function archive(project) { if (!window.confirm(`¿Archivar “${project.name}”?`)) return; try { const row = await archiveProject(project.id, user.id); replaceProject(row); setSelected(null); } catch (reason) { setError(reason.message); } }
 
   return <Page className="min-w-0 space-y-6">
     <PageHeader eyebrow="OPERACIONES" title="Proyectos" description="Convierte prioridades en ejecución visible por cliente, división y responsable."><Button className="w-full sm:w-auto" onClick={() => { setEditing(null); setModal(true); }}>+ Nuevo proyecto</Button></PageHeader>
@@ -87,7 +85,7 @@ export default function Projects() {
     {loading && <p className="text-sm text-zinc-500">Cargando proyectos…</p>}
     {!loading && filtered.length === 0 && <Card hover={false} contentClassName="p-8 text-center sm:p-10"><h2 className="text-lg font-semibold text-white">{projects.length ? "No hay coincidencias" : "Todavía no hay proyectos"}</h2><p className="mt-2 text-sm text-zinc-500">{projects.length ? "Ajusta los filtros." : "Crea el primero usando clientes y divisiones existentes."}</p></Card>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-3">{filtered.map((project) => <Card key={project.id} className="min-w-0" contentClassName="p-4 sm:p-5">
-      <button type="button" onClick={() => setSelected(project)} className="block w-full min-w-0 text-left">
+      <button type="button" onClick={() => navigate(`/proyectos/${project.id}`)} className="block w-full min-w-0 text-left">
         <div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs uppercase tracking-[.18em] text-zinc-600">{project.divisions?.name || "Sin división"}</p><h2 className="mt-2 truncate text-lg font-semibold text-white">{project.name}</h2><p className="mt-1 truncate text-sm text-zinc-500">{project.clients?.company_name || "Proyecto interno"}</p></div><span className={`shrink-0 rounded-full px-3 py-1 text-xs ${badge[project.status] || badge.planned}`}>{statuses[project.status] || project.status}</span></div>
         <p className="mt-3 line-clamp-2 min-h-10 break-words text-sm leading-5 text-zinc-500">{project.description || "Sin descripción"}</p>
         <div className="mt-4"><div className="mb-2 flex justify-between text-xs text-zinc-500"><span>Progreso</span><span>{Number(project.progress)}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className="h-full bg-white" style={{ width: `${Math.min(100, Math.max(0, Number(project.progress)))}%` }} /></div></div>
@@ -96,6 +94,5 @@ export default function Projects() {
       {mayEdit(project) && <button type="button" onClick={() => { setEditing(project); setModal(true); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800"><Edit3 size={15}/> Editar</button>}
     </Card>)}</div>
     {modal && <ProjectModal key={editing?.id || "new"} open project={editing} divisions={divisions} clients={options.clients} users={options.users} onClose={() => { setModal(false); setEditing(null); }} onSave={save}/>}
-    {selected && <ProjectDetail project={selected} users={options.users} userId={user.id} canEdit={mayEdit(selected)} onClose={() => setSelected(null)} onEdit={() => { setEditing(selected); setModal(true); setSelected(null); }} onArchive={() => archive(selected)} onProjectChange={replaceProject} />}
   </Page>;
 }

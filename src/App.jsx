@@ -17,6 +17,7 @@ import ClientProfile from "./app/ClientProfile";
 import DiscoveryBuilder from "./app/Discovery";
 import DiscoveryExecution, { DiscoveryResult, DiscoveryRunner } from "./app/DiscoveryExecution";
 import Projects from "./app/Projects";
+import ProjectPage from "./app/ProjectPage";
 import Score from "./app/Score";
 import SettingsHub, { AccountSettings, CompanySettings, DivisionsSettings, MembersSettingsPage } from "./app/SettingsHub";
 import BuilderHub from "./app/BuilderHub";
@@ -71,6 +72,8 @@ export default function App() {
           path="/proyectos"
           element={<Projects />}
         />
+
+        <Route path="/proyectos/:projectId" element={<ProjectPage />} />
 
         <Route
           path="/orvesen-score"

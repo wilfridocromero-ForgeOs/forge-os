@@ -91,7 +91,7 @@ export default function ProjectWorkPanel({ projectId, users, userId, onProgressC
       <div className="space-y-2">
         {work.deliverables.map((item) => <div key={item.id} className="grid items-center gap-2 rounded-xl border border-zinc-800 px-3 py-3 sm:grid-cols-[1fr_150px_auto]">
           <span className="truncate text-sm text-white">{item.title}</span>
-          <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectDeliverable(item.id, { status: e.target.value }, userId))}><option value="pending">Pendiente</option><option value="in_review">En revisión</option><option value="approved">Aprobado</option><option value="delivered">Entregado</option><option value="rejected">Rechazado</option></select>
+          <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectDeliverable(item.id, { status: e.target.value }))}><option value="pending">Pendiente</option><option value="in_review">En revisión</option><option value="approved">Aprobado</option><option value="delivered">Entregado</option><option value="rejected">Rechazado</option></select>
           <button type="button" aria-label="Eliminar entregable" onClick={() => mutate(() => deleteProjectDeliverable(item.id))} className="p-2 text-zinc-600 hover:text-red-300"><Trash2 size={15} /></button>
         </div>)}
       </div>
