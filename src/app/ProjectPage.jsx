@@ -61,7 +61,7 @@ export default function ProjectPage() {
     {loading && <p className="text-sm text-zinc-500">Cargando proyecto…</p>}
     {error && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{error}</p>}
     {!loading && !error && !project && <div className="rounded-2xl border border-zinc-800 p-8 text-center"><h2 className="font-semibold text-white">Proyecto no encontrado</h2><p className="mt-2 text-sm text-zinc-500">No existe o no tienes acceso desde la organización activa.</p></div>}
-    {project && <ProjectDetail embedded project={project} users={options.users} projectMembers={members} onMembersChange={setMembers} userId={user.id} canEdit={canEdit} canManageMembers={canManageMembers} canComment={canComment} onEdit={() => setEditing(true)} onArchive={archive} onProjectChange={setProject} />}
+    {project && <ProjectDetail embedded project={project} organizationId={activeOrganization.id} users={options.users} projectMembers={members} onMembersChange={setMembers} userId={user.id} canEdit={canEdit} canManageMembers={canManageMembers} canComment={canComment} onEdit={() => setEditing(true)} onArchive={archive} onProjectChange={setProject} />}
     {editing && <ProjectModal key={project.id} open project={project} divisions={divisions} clients={options.clients} users={options.users} onClose={() => setEditing(false)} onSave={save} />}
   </Page>;
 }

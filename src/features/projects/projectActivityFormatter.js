@@ -40,6 +40,8 @@ export function formatProjectActivity(row) {
     comment_added: `${actor} publicó un comentario`,
     comment_edited: `${actor} editó un comentario`,
     comment_deleted: `${actor} eliminó un comentario`,
+    file_uploaded: `${actor} subió ${quoted(payload.name || "un archivo")}`,
+    file_deleted: `${actor} eliminó ${quoted(payload.name || "un archivo")}`,
   };
   return formats[row.event_type] || "Se registró actividad en el proyecto.";
 }

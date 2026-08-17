@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Archive, Edit3, Folder } from "lucide-react";
+import { Archive, Edit3 } from "lucide-react";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import ProjectWorkPanel from "./ProjectWorkPanel";
 import ProjectMembersPanel from "./ProjectMembersPanel";
 import ProjectCommentsPanel from "./ProjectCommentsPanel";
 import ProjectActivityPanel from "./ProjectActivityPanel";
+import ProjectFilesPanel from "./ProjectFilesPanel";
 
 const tabs = [
   ["summary", "Resumen"],
@@ -19,7 +20,7 @@ const statusLabels = { planned: "Planificación", active: "Activo", blocked: "En
 const priorityLabels = { low: "Baja", medium: "Media", high: "Alta", urgent: "Urgente" };
 function dateLabel(value) { return value ? new Intl.DateTimeFormat("es", { day: "numeric", month: "long", year: "numeric" }).format(new Date(value)) : "Sin fecha"; }
 
-export default function ProjectDetail({ project, users, projectMembers = [], onMembersChange, userId, canEdit, canManageMembers, canComment, onClose, onEdit, onArchive, onProjectChange, embedded = false }) {
+export default function ProjectDetail({ project, organizationId, users, projectMembers = [], onMembersChange, userId, canEdit, canManageMembers, canComment, onClose, onEdit, onArchive, onProjectChange, embedded = false }) {
   const [tab, setTab] = useState("summary");
 
   if (!project) return null;
@@ -43,7 +44,7 @@ export default function ProjectDetail({ project, users, projectMembers = [], onM
     {tab === "members" && <ProjectMembersPanel projectId={project.id} members={projectMembers} organizationUsers={users} actorId={userId} canManage={canManageMembers} onChange={onMembersChange} />}
     {tab === "comments" && <ProjectCommentsPanel projectId={project.id} userId={userId} canComment={canComment} canModerate={canManageMembers} />}
     {tab === "activity" && <ProjectActivityPanel projectId={project.id} />}
-    {tab === "files" && <Placeholder icon={Folder} title="Archivos del proyecto" text="La base de archivos ya existe y queda preparada para una siguiente iteración." />}
+    {tab === "files" && <ProjectFilesPanel projectId={project.id} organizationId={organizationId} userId={userId} canUpload={canComment} canManage={canManageMembers} />}
   </div>;
 
   if (embedded) return content;
@@ -51,4 +52,3 @@ export default function ProjectDetail({ project, users, projectMembers = [], onM
 }
 
 function Info({ label, value }) { return <div className="min-w-0 rounded-xl border border-zinc-800 p-4"><p className="text-xs uppercase tracking-[.16em] text-zinc-600">{label}</p><p className="mt-2 truncate text-sm text-zinc-200">{value}</p></div>; }
-function Placeholder({ icon: Icon, title, text }) { return <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center"><Icon className="mx-auto text-zinc-600" size={24} /><h3 className="mt-3 font-medium text-white">{title}</h3><p className="mx-auto mt-2 max-w-lg text-sm text-zinc-500">{text}</p></div>; }

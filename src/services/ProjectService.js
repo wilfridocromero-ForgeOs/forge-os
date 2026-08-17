@@ -118,6 +118,108 @@ export async function deleteProjectComment(commentId) {
   if (error) throw error;
 }
 
+export async function getProjectFiles(projectId, cursor = null, pageSize = 30) {
+  if (!projectId) return [];
+  const { data, error } = await supabase.rpc("get_project_files_page", {
+    target_project_id: projectId,
+    before_created_at: cursor?.created_at || null,
+    before_file_id: cursor?.id || null,
+    page_size: pageSize,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function uploadProjectFile({ projectId, organizationId, file, userId, onProgress }) {
+  const id = crypto.randomUUID();
+  const safeName = sanitizeStorageFileName(file.name);
+  const storagePath = `${organizationId}/${projectId}/files/${id}/${safeName}`;
+  onProgress?.(10, "Validando");
+  validateProjectFile(file);
+  onProgress?.(25, "Subiendo");
+  const upload = await supabase.storage.from("project-files").upload(storagePath, file, {
+    cacheControl: "3600",
+    contentType: file.type,
+    upsert: false,
+  });
+  if (upload.error) throw friendlyFileError(upload.error, "No se pudo subir el archivo.");
+  onProgress?.(75, "Guardando metadata");
+  const metadata = await supabase.from("project_files").insert({
+    id,
+    project_id: projectId,
+    storage_path: storagePath,
+    file_name: file.name.trim(),
+    mime_type: file.type,
+    size_bytes: file.size,
+    uploaded_by: userId,
+  }).select("id").single();
+  if (metadata.error) {
+    const cleanup = await supabase.storage.from("project-files").remove([storagePath]);
+    const suffix = cleanup.error ? " El objeto requiere limpieza manual." : " El objeto temporal fue eliminado.";
+    throw friendlyFileError(metadata.error, `No se pudo registrar el archivo.${suffix}`);
+  }
+  onProgress?.(100, "Completado");
+  return metadata.data;
+}
+
+export async function downloadProjectFile(file) {
+  const { data, error } = await supabase.storage.from("project-files").download(file.storage_path);
+  if (error) throw friendlyFileError(error, "No se pudo descargar el archivo.");
+  const url = URL.createObjectURL(data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = file.file_name; anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function previewProjectFile(file) {
+  const { data, error } = await supabase.storage.from("project-files").createSignedUrl(file.storage_path, 60);
+  if (error) throw friendlyFileError(error, "No se pudo abrir el archivo.");
+  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+}
+
+export async function deleteProjectFile(file) {
+  const storage = await supabase.storage.from("project-files").remove([file.storage_path]);
+  if (storage.error) throw friendlyFileError(storage.error, "No se pudo eliminar el objeto almacenado.");
+  const metadata = await supabase.from("project_files").update({ deleted_at: new Date().toISOString() }).eq("id", file.id);
+  if (metadata.error) throw friendlyFileError(metadata.error, "El objeto se eliminó, pero la metadata requiere reintento.");
+}
+
+export const PROJECT_FILE_MAX_BYTES = 50 * 1024 * 1024;
+export const PROJECT_FILE_ALLOWED_MIME_TYPES = new Set([
+  "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/csv", "text/plain", "image/jpeg", "image/png", "image/webp",
+]);
+const blockedExtensions = new Set(["exe", "msi", "bat", "cmd", "com", "scr", "ps1", "sh", "js", "mjs", "cjs", "vbs", "jar", "apk", "dmg", "app", "deb", "rpm", "dll", "so"]);
+
+export function validateProjectFile(file) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (!file.name.trim() || file.name.trim().length > 255) throw new Error("El nombre del archivo no es válido.");
+  if (!file.size || file.size > PROJECT_FILE_MAX_BYTES) throw new Error("El archivo debe pesar entre 1 byte y 50 MB.");
+  if (blockedExtensions.has(extension)) throw new Error("Ese tipo de archivo ejecutable no está permitido.");
+  if (!PROJECT_FILE_ALLOWED_MIME_TYPES.has(file.type)) throw new Error("El tipo de archivo no está permitido para Proyectos.");
+}
+
+export function sanitizeStorageFileName(name) {
+  const normalized = name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const printable = Array.from(normalized, (character) => {
+    const code = character.charCodeAt(0);
+    return code >= 32 && code !== 127 ? character : "_";
+  }).join("");
+  const safe = printable.replace(/[\\/]+/g, "_").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "");
+  return (safe || "archivo").slice(-120);
+}
+
+function friendlyFileError(error, fallback) {
+  const message = String(error?.message || "").toLowerCase();
+  if (message.includes("row-level security") || message.includes("permission")) return new Error("No tienes permiso para realizar esta acción.");
+  if (message.includes("payload too large") || message.includes("maximum allowed size")) return new Error("El archivo supera el límite de 50 MB.");
+  if (message.includes("mime type") || message.includes("content type")) return new Error("El tipo de archivo no está permitido.");
+  if (message.includes("not found") || message.includes("object not found")) return new Error("El archivo ya no existe en el almacenamiento.");
+  return new Error(fallback);
+}
+
 export async function getProjectMembers(projectId) {
   if (!projectId) return [];
   const { data, error } = await supabase.from("project_members")
