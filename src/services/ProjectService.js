@@ -79,13 +79,43 @@ export async function archiveProject(projectId) {
   return data;
 }
 
-export async function getProjectActivity(projectId) {
+export async function getProjectActivity(projectId, beforeActivityId = null, pageSize = 30) {
   if (!projectId) return [];
-  const { data, error } = await supabase.from("project_activity")
-    .select("id, project_id, actor_id, event_type, entity_type, entity_id, payload, created_at, actor:users!project_activity_actor_id_fkey(id, first_name)")
-    .eq("project_id", projectId).order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("get_project_activity_page", {
+    target_project_id: projectId,
+    before_activity_id: beforeActivityId,
+    page_size: pageSize,
+  });
   if (error) throw error;
   return data || [];
+}
+
+export async function getProjectComments(projectId) {
+  if (!projectId) return [];
+  const { data, error } = await supabase.rpc("get_project_comments", { target_project_id: projectId });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createProjectComment(projectId, body, authorId, parentId = null) {
+  const { data, error } = await supabase.from("project_comments").insert({
+    project_id: projectId,
+    author_id: authorId,
+    body: body.trim(),
+    parent_id: parentId,
+  }).select("id").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProjectComment(commentId, body) {
+  const { error } = await supabase.from("project_comments").update({ body: body.trim() }).eq("id", commentId);
+  if (error) throw error;
+}
+
+export async function deleteProjectComment(commentId) {
+  const { error } = await supabase.from("project_comments").update({ deleted_at: new Date().toISOString() }).eq("id", commentId);
+  if (error) throw error;
 }
 
 export async function getProjectMembers(projectId) {
