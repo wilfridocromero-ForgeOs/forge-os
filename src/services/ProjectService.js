@@ -36,7 +36,7 @@ export async function getProjectOptions(organizationId) {
   const memberIds = (membershipsResult.data || []).map((membership) => membership.user_id);
   if (!memberIds.length) return { clients: clientsResult.data || [], users: [] };
   const { data: users, error: usersError } = await supabase.from("users")
-    .select("id, first_name, title").in("id", memberIds).order("first_name");
+    .select("id, first_name, title, division, division_id").in("id", memberIds).order("first_name");
   if (usersError) throw usersError;
   return { clients: clientsResult.data || [], users: users || [] };
 }
@@ -86,6 +86,38 @@ export async function getProjectActivity(projectId) {
     .eq("project_id", projectId).order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+export async function getProjectMembers(projectId) {
+  if (!projectId) return [];
+  const { data, error } = await supabase.from("project_members")
+    .select("id, project_id, user_id, role, added_by, created_at, updated_at, user:users!project_members_user_id_fkey(id, first_name, title, division, division_id)")
+    .eq("project_id", projectId).order("created_at");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addProjectMember(projectId, userId, role, actorId) {
+  const { data, error } = await supabase.from("project_members")
+    .insert({ project_id: projectId, user_id: userId, role, added_by: actorId })
+    .select("id, project_id, user_id, role, added_by, created_at, updated_at, user:users!project_members_user_id_fkey(id, first_name, title, division, division_id)")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProjectMemberRole(memberId, role) {
+  const { data, error } = await supabase.from("project_members").update({ role })
+    .eq("id", memberId)
+    .select("id, project_id, user_id, role, added_by, created_at, updated_at, user:users!project_members_user_id_fkey(id, first_name, title, division, division_id)")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function removeProjectMember(memberId) {
+  const { error } = await supabase.from("project_members").delete().eq("id", memberId);
+  if (error) throw error;
 }
 
 export async function getProjectWork(projectId) {

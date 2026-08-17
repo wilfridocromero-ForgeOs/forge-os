@@ -4,10 +4,12 @@ import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import { getProjectActivity } from "../../services/ProjectService";
 import ProjectWorkPanel from "./ProjectWorkPanel";
+import ProjectMembersPanel from "./ProjectMembersPanel";
 
 const tabs = [
   ["summary", "Resumen"],
   ["tasks", "Tareas"],
+  ["members", "Miembros"],
   ["files", "Archivos"],
   ["activity", "Actividad"],
 ];
@@ -20,11 +22,12 @@ const eventLabels = {
   task_completed: "Tarea completada", task_reopened: "Tarea reabierta", task_deleted: "Tarea eliminada",
   deliverable_created: "Entregable creado", deliverable_updated: "Entregable actualizado",
   deliverable_status_changed: "Estado de entregable actualizado", deliverable_approved: "Entregable aprobado", deliverable_deleted: "Entregable eliminado",
+  member_added: "Miembro añadido", member_removed: "Miembro retirado", member_role_changed: "Rol de miembro actualizado", project_owner_changed: "Propietario del proyecto actualizado",
 };
 function dateLabel(value) { return value ? new Intl.DateTimeFormat("es", { day: "numeric", month: "long", year: "numeric" }).format(new Date(value)) : "Sin fecha"; }
 function dateTimeLabel(value) { return new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
 
-export default function ProjectDetail({ project, users, userId, canEdit, onClose, onEdit, onArchive, onProjectChange, embedded = false }) {
+export default function ProjectDetail({ project, users, projectMembers = [], onMembersChange, userId, canEdit, canManageMembers, onClose, onEdit, onArchive, onProjectChange, embedded = false }) {
   const [tab, setTab] = useState("summary");
   const [activity, setActivity] = useState([]);
   const [activityError, setActivityError] = useState("");
@@ -58,7 +61,8 @@ export default function ProjectDetail({ project, users, userId, canEdit, onClose
       <Info label="Fecha de inicio" value={dateLabel(project.starts_at)} />
       <div className="sm:col-span-2 lg:col-span-4"><p className="text-xs uppercase tracking-[.18em] text-zinc-600">Descripción</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{project.description || "Sin descripción"}</p></div>
     </div>}
-    {tab === "tasks" && <ProjectWorkPanel projectId={project.id} users={users} userId={userId} onProgressChange={(progress) => onProjectChange?.({ ...project, progress })} />}
+    {tab === "tasks" && <ProjectWorkPanel projectId={project.id} users={projectMembers.filter((member) => ["owner", "member"].includes(member.role)).map((member) => member.user).filter(Boolean)} userId={userId} onProgressChange={(progress) => onProjectChange?.({ ...project, progress })} />}
+    {tab === "members" && <ProjectMembersPanel projectId={project.id} members={projectMembers} organizationUsers={users} actorId={userId} canManage={canManageMembers} onChange={onMembersChange} />}
     {tab === "files" && <Placeholder icon={Folder} title="Archivos del proyecto" text="La base de archivos ya existe y queda preparada para una siguiente iteración." />}
     {tab === "activity" && <ActivityTimeline rows={activity} loading={activityLoading} error={activityError} />}
   </div>;
