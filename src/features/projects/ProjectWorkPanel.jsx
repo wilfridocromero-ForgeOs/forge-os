@@ -10,13 +10,13 @@ import {
   updateProjectTask,
 } from "../../services/ProjectService";
 import TaskEvidencePanel, { EvidenceRequirementFields } from "./TaskEvidencePanel";
-import { blankEvidenceRequirement } from "./taskEvidenceConfig";
+import { blankEvidenceRequirement, validateEvidenceRequirement } from "./taskEvidenceConfig";
 
 const field = "min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-zinc-600";
 const workLabels = { task: "Tarea", checklist: "Checklist", milestone: "Hito", review: "Revisión" };
 const taskStatusLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", cancelled: "Cancelada" };
 
-export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, onProgressChange }) {
+export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, canSubmit, onProgressChange }) {
   const [work, setWork] = useState({ tasks: [], deliverables: [] });
   const [task, setTask] = useState({ title: "", description: "", work_type: "task", status: "pending", priority: "medium", assigned_to: "", due_at: "", evidence_requirements: [] });
   const [deliverable, setDeliverable] = useState({ title: "", due_at: "" });
@@ -42,6 +42,8 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
   async function addTask(event) {
     event.preventDefault();
     if (!task.title.trim()) return;
+    const invalidRequirement = task.evidence_requirements.map(validateEvidenceRequirement).find(Boolean);
+    if (invalidRequirement) { setError(invalidRequirement); return; }
     try { setError(""); await createProjectTask(projectId, task, userId); setTask({ ...task, title: "", description: "", due_at: "", evidence_requirements: [] }); await load(); }
     catch (reason) { setError(reason.message); }
   }
@@ -83,7 +85,7 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
           <div className="min-w-0"><p className={`break-words text-sm ${item.status === "completed" ? "text-zinc-600 line-through" : "text-white"}`}>{item.title}</p>{item.description && <p className="mt-1 break-words text-xs text-zinc-500">{item.description}</p>}<p className="mt-1 text-xs text-zinc-600">{workLabels[item.work_type]}{item.assignee?.first_name ? ` · ${item.assignee.first_name}` : ""}</p></div>
           <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectTask(item.id, { status: e.target.value }))}>{Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value} disabled={value === "completed" && !compliant}>{label}</option>)}</select>
           <button type="button" aria-label="Eliminar" onClick={() => mutate(() => deleteProjectTask(item.id))} className="p-2 text-zinc-600 hover:text-red-300"><Trash2 size={15} /></button>
-          <TaskEvidencePanel task={item} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} onChange={load} reportError={setError} />
+          <TaskEvidencePanel task={item} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} canSubmit={canSubmit} onChange={load} reportError={setError} />
         </div>; })}
       </div>
 

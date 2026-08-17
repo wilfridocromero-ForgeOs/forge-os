@@ -263,7 +263,7 @@ export async function getProjectWork(projectId) {
   if (!taskIds.length) return { tasks: [], deliverables: deliverablesResult.data || [] };
   const [requirementsResult, evidenceResult] = await Promise.all([
     supabase.from("task_evidence_requirements").select("id, task_id, evidence_type, label, description, is_required, min_count, max_count, position, created_by, created_at, updated_at").in("task_id", taskIds).order("position").order("created_at"),
-    supabase.from("task_evidence").select("id, requirement_id, task_id, evidence_type, storage_path, file_name, mime_type, size_bytes, value_text, value_url, submitted_by, created_at, deleted_at").in("task_id", taskIds).is("deleted_at", null).order("created_at"),
+    supabase.from("task_evidence").select("id, requirement_id, task_id, evidence_type, storage_path, file_name, mime_type, size_bytes, value_text, value_url, submitted_by, created_at, deleted_at, submitter:users!task_evidence_submitted_by_fkey(id, first_name)").in("task_id", taskIds).is("deleted_at", null).order("created_at"),
   ]);
   if (requirementsResult.error) throw requirementsResult.error;
   if (evidenceResult.error) throw evidenceResult.error;
@@ -336,19 +336,19 @@ export async function createTaskEvidenceRequirement(taskId, requirement, userId)
     min_count: requirement.is_required ? Number(requirement.min_count) : 0,
     max_count: Number(requirement.max_count), position: Number(requirement.position || 0), created_by: userId,
   }).select("*").single();
-  if (error) throw error;
+  if (error) throw friendlyEvidenceError(error);
   return data;
 }
 
 export async function updateTaskEvidenceRequirement(id, changes) {
   const { data, error } = await supabase.from("task_evidence_requirements").update(changes).eq("id", id).select("*").single();
-  if (error) throw error;
+  if (error) throw friendlyEvidenceError(error);
   return data;
 }
 
 export async function deleteTaskEvidenceRequirement(id) {
   const { error } = await supabase.from("task_evidence_requirements").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw friendlyEvidenceError(error);
 }
 
 export async function submitTaskEvidenceValue({ taskId, requirement, value, userId }) {
@@ -356,7 +356,7 @@ export async function submitTaskEvidenceValue({ taskId, requirement, value, user
   if (requirement.evidence_type === "url") payload.value_url = value.trim();
   else payload.value_text = value.trim();
   const { data, error } = await supabase.from("task_evidence").insert(payload).select("*").single();
-  if (error) throw error;
+  if (error) throw friendlyEvidenceError(error);
   return data;
 }
 
@@ -377,12 +377,31 @@ export async function submitTaskEvidenceFile({ projectId, organizationId, taskId
   return metadata.data;
 }
 
+const evidenceSignedUrlCache = new Map();
+
+export async function getTaskEvidencePreviewUrl(evidence) {
+  if (!evidence.storage_path) return evidence.value_url || "";
+  const cached = evidenceSignedUrlCache.get(evidence.storage_path);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+  const { data, error } = await supabase.storage.from("project-files").createSignedUrl(evidence.storage_path, 300);
+  if (error) throw friendlyEvidenceError(error, "No se pudo preparar la vista previa.");
+  evidenceSignedUrlCache.set(evidence.storage_path, { url: data.signedUrl, expiresAt: Date.now() + 240000 });
+  return data.signedUrl;
+}
+
 export async function openTaskEvidence(evidence) {
   if (evidence.value_url) { window.open(evidence.value_url, "_blank", "noopener,noreferrer"); return; }
   if (evidence.value_text) return;
-  const { data, error } = await supabase.storage.from("project-files").createSignedUrl(evidence.storage_path, 60);
-  if (error) throw friendlyFileError(error, "No se pudo abrir la evidencia.");
-  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  window.open(await getTaskEvidencePreviewUrl(evidence), "_blank", "noopener,noreferrer");
+}
+
+export async function downloadTaskEvidence(evidence) {
+  const { data, error } = await supabase.storage.from("project-files").download(evidence.storage_path);
+  if (error) throw friendlyEvidenceError(error, "No se pudo descargar la evidencia.");
+  const url = URL.createObjectURL(data);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = evidence.file_name || "evidencia"; anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function deleteTaskEvidence(evidence) {
@@ -391,7 +410,7 @@ export async function deleteTaskEvidence(evidence) {
     if (error) throw friendlyFileError(error, "No se pudo eliminar el archivo de evidencia.");
   }
   const { error } = await supabase.from("task_evidence").update({ deleted_at: new Date().toISOString() }).eq("id", evidence.id);
-  if (error) throw error;
+  if (error) throw friendlyEvidenceError(error);
 }
 
 const evidenceDocumentTypes = new Set([...PROJECT_FILE_ALLOWED_MIME_TYPES].filter((type) => !type.startsWith("image/")));
@@ -400,6 +419,20 @@ export function validateTaskEvidenceFile(type, file) {
   if (type === "image" && (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 20 * 1024 * 1024)) throw new Error("La imagen debe ser JPG, PNG o WEBP y pesar hasta 20 MB.");
   if (type === "video" && !new Set(["video/mp4", "video/webm"]).has(file.type)) throw new Error("El video debe ser MP4 o WEBM y pesar hasta 50 MB.");
   if (type === "document" && !evidenceDocumentTypes.has(file.type)) throw new Error("El tipo de documento no está permitido.");
+}
+
+function friendlyEvidenceError(error, fallback = "No se pudo completar la acción con la evidencia.") {
+  const message = String(error?.message || "").toLowerCase();
+  if (message.includes("required evidence is incomplete")) return new Error("No puedes completar esta tarea todavía. Falta evidencia obligatoria.");
+  if (message.includes("maximum evidence count")) return new Error("Este requisito ya alcanzó el máximo de evidencias.");
+  if (message.includes("evidence requirements cannot be changed")) return new Error("Reabre la tarea para modificar sus requisitos de evidencia.");
+  if (message.includes("evidence cannot be deleted") || message.includes("evidence may only")) return new Error("Reabre la tarea antes de retirar esta evidencia.");
+  if (message.includes("evidence type cannot change")) return new Error("El tipo no puede cambiar porque este requisito ya tiene historial de evidencia.");
+  if (message.includes("row-level security") || message.includes("permission")) return new Error("No tienes permiso para realizar esta acción.");
+  if (message.includes("mime") || message.includes("type")) return new Error("El tipo de archivo no está permitido para este requisito.");
+  if (message.includes("size") || message.includes("too large")) return new Error("El archivo supera el tamaño permitido.");
+  if (message.includes("not found")) return new Error("La evidencia ya no está disponible.");
+  return new Error(fallback);
 }
 
 export async function createProjectDeliverable(projectId, values, userId) {
