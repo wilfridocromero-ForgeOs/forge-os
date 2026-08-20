@@ -253,12 +253,14 @@ export async function removeProjectMember(memberId) {
 }
 
 export async function getProjectWork(projectId) {
-  const [tasksResult, deliverablesResult] = await Promise.all([
-    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, position, assigned_to, due_at, completed_at, completed_by, created_by, created_at, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("position").order("created_at"),
+  const [tasksResult, deliverablesResult, schedulesResult] = await Promise.all([
+    supabase.from("project_tasks").select("id, project_id, title, description, status, priority, work_type, position, assigned_to, starts_at, due_at, completed_at, completed_by, created_by, created_at, recurrence_schedule_id, scheduled_for, is_recurrence_template, assignee:users!project_tasks_assigned_to_fkey(id, first_name, title)").eq("project_id", projectId).order("position").order("created_at"),
     supabase.from("project_deliverables").select("id, project_id, title, description, status, due_at, approved_at, created_by, created_at").eq("project_id", projectId).order("created_at"),
+    supabase.from("project_task_schedules").select("id, project_id, template_task_id, recurrence_unit, interval_count, weekday, day_of_month, timezone, next_run_at, duration_minutes, active, last_error, last_error_at, last_success_at, created_at, updated_at").eq("project_id", projectId),
   ]);
   if (tasksResult.error) throw tasksResult.error;
   if (deliverablesResult.error) throw deliverablesResult.error;
+  if (schedulesResult.error) throw schedulesResult.error;
   const taskIds = (tasksResult.data || []).map((task) => task.id);
   if (!taskIds.length) return { tasks: [], deliverables: deliverablesResult.data || [] };
   const [requirementsResult, evidenceResult] = await Promise.all([
@@ -272,6 +274,7 @@ export async function getProjectWork(projectId) {
   return {
     tasks: (tasksResult.data || []).map((task) => ({
       ...task,
+      recurrence_schedule: (schedulesResult.data || []).find((item) => item.template_task_id === task.id || item.id === task.recurrence_schedule_id) || null,
       evidence_requirements: requirements.filter((item) => item.task_id === task.id).map((requirement) => ({
         ...requirement,
         evidence: evidence.filter((item) => item.requirement_id === requirement.id),
@@ -291,7 +294,8 @@ export async function createProjectTask(projectId, values, userId) {
     priority: values.priority || "medium",
     position: Number.isInteger(values.position) ? values.position : 0,
     assigned_to: values.assigned_to || null,
-    due_at: values.due_at ? new Date(`${values.due_at}T23:59:59`).toISOString() : null,
+    starts_at: values.starts_at ? new Date(values.starts_at).toISOString() : null,
+    due_at: values.due_at ? new Date(values.due_at).toISOString() : null,
     created_by: userId,
   }).select("*").single();
   if (error) throw error;
@@ -322,6 +326,42 @@ export async function updateProjectTask(taskId, changes) {
     throw error;
   }
   return data;
+}
+
+export async function saveProjectTaskSchedule(taskId, details, schedule, scheduleActive) {
+  const timezone = schedule.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const recurrenceEnabled = schedule.mode !== "none";
+  const { data, error } = await supabase.rpc("save_project_task_schedule", {
+    target_task_id: taskId,
+    requested_assigned_to: details.assigned_to || null,
+    requested_priority: details.priority,
+    requested_work_type: details.work_type,
+    requested_description: details.description.trim() || null,
+    requested_starts_at: details.starts_at ? new Date(details.starts_at).toISOString() : null,
+    requested_due_at: details.due_at ? new Date(details.due_at).toISOString() : null,
+    requested_schedule_active: recurrenceEnabled && scheduleActive,
+    requested_unit: recurrenceEnabled ? schedule.recurrence_unit : null,
+    requested_interval: recurrenceEnabled ? Number(schedule.interval_count) : null,
+    requested_weekday: recurrenceEnabled && schedule.recurrence_unit === "week" ? Number(schedule.weekday) : null,
+    requested_day_of_month: recurrenceEnabled && schedule.recurrence_unit === "month" ? Number(schedule.day_of_month) : null,
+    requested_first_run: recurrenceEnabled ? `${schedule.first_run}:00` : null,
+    requested_timezone: recurrenceEnabled ? timezone : null,
+  });
+  if (error) throw friendlyTaskScheduleError(error);
+  return data;
+}
+
+function friendlyTaskScheduleError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  if (message.includes("not allowed")) return new Error("No tienes permiso para configurar esta tarea.");
+  if (message.includes("evidence history")) return new Error("No puedes activar recurrencia después de entregar evidencia.");
+  if (message.includes("open task")) return new Error("Reabre la tarea antes de activar recurrencia.");
+  if (message.includes("selected weekday")) return new Error("La primera ejecución debe coincidir con el día semanal elegido.");
+  if (message.includes("selected month day")) return new Error("La primera ejecución debe coincidir con el día mensual elegido.");
+  if (message.includes("next recurrence")) return new Error("Selecciona una próxima ejecución futura antes de reactivar.");
+  if (message.includes("invalid recurrence")) return new Error("La próxima ejecución debe ser futura y tener una configuración válida.");
+  if (message.includes("invalid task configuration")) return new Error("Revisa los detalles y fechas de la tarea.");
+  return new Error("No se pudo guardar la programación de la tarea.");
 }
 
 export async function deleteProjectTask(taskId) {

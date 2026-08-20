@@ -29,6 +29,10 @@ export function formatProjectActivity(row) {
     task_completed: `${actor} completó la tarea ${task}`,
     task_reopened: `${actor} reabrió la tarea ${task}`,
     task_deleted: `${actor} eliminó la tarea ${task}`,
+    task_recurrence_activated: `${actor} activó la repetición de ${task}`,
+    task_recurrence_changed: `${actor} modificó la repetición de ${task}`,
+    task_recurrence_stopped: `${actor} detuvo la repetición de ${task}`,
+    task_recurrence_auto_paused: `La tarea programada ${task} fue pausada automáticamente porque ${operationalReason(payload.reason)}`,
     deliverable_created: `${actor} creó el entregable ${deliverable}`,
     deliverable_updated: `${actor} actualizó el entregable ${deliverable}`,
     deliverable_status_changed: `${actor} cambió el entregable ${deliverable} de ${statusLabels[payload.old_status] || payload.old_status || "otro estado"} a ${statusLabels[payload.new_status] || payload.new_status || "otro estado"}`,
@@ -49,6 +53,14 @@ export function formatProjectActivity(row) {
     evidence_removed: `${actor} eliminó evidencia de ${quoted(payload.label || "un requisito")}`,
   };
   return formats[row.event_type] || "Se registró actividad en el proyecto.";
+}
+
+function operationalReason(reason) {
+  if (reason === "assignee_not_project_member") return "el responsable ya no pertenece al proyecto";
+  if (reason === "creator_not_organization_member") return "su creador ya no pertenece a la organización";
+  if (reason === "template_unavailable") return "la regla original ya no está disponible";
+  if (reason === "project_unavailable") return "el proyecto ya no está disponible";
+  return "requiere revisión operativa";
 }
 
 export function formatActivityDate(value, now = new Date()) {

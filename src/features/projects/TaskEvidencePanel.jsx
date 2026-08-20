@@ -37,7 +37,7 @@ export default function TaskEvidencePanel({ task, projectId, organizationId, use
   const required = requirements.filter((item) => item.is_required);
   const fulfilled = required.filter((item) => item.evidence.length >= item.min_count);
   const complete = fulfilled.length === required.length;
-  const stateLabel = !requirements.length ? "No requiere evidencia" : task.status === "completed" ? "Evidencia verificada para finalización" : complete ? "Evidencia completa" : "Evidencia pendiente";
+  const stateLabel = task.is_recurrence_template ? "Requisitos para cada ejecución" : !requirements.length ? "No requiere evidencia" : task.status === "completed" ? "Evidencia verificada para finalización" : complete ? "Evidencia completa" : "Evidencia pendiente";
 
   async function act(operation) { try { reportError(""); await operation(); await onChange(); return true; } catch (reason) { reportError(reason.message || "No se pudo completar la acción."); return false; } }
   async function addRequirement(event) {
