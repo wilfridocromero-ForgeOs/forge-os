@@ -36,7 +36,7 @@ export default function ProjectModal({ open, project, divisions, clients, users,
         <label className="text-sm text-zinc-400">Fecha de inicio<input type="date" className={fieldClass} value={form.starts_at} onChange={(e) => set("starts_at", e.target.value)} /></label>
         <label className="text-sm text-zinc-400">Fecha límite<input type="date" className={fieldClass} value={form.due_at} onChange={(e) => set("due_at", e.target.value)} /></label>
       </div>
-      {!project && <p className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-500">Después de crear el proyecto podrás añadir tareas, checklist, hitos, revisiones y entregables. El progreso se calculará automáticamente.</p>}
+      {!project && <p className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-500">Después de crear el proyecto podrás añadir tareas, requisitos y evidencias. El progreso se calculará automáticamente.</p>}
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" loading={saving}>Guardar proyecto</Button></div>
     </form>
   </Modal>;

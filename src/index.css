@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Resolve Tailwind's dark variant from ORVESEN's explicit theme, not the device. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --app-header-height: 4.5rem;
 }
@@ -57,6 +60,10 @@ html[data-theme="light"] .bg-zinc-900 {
 }
 
 html[data-theme="light"] [class*="bg-zinc-900/"] {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] [class*="bg-zinc-950/"] {
   background-color: #ffffff !important;
 }
 

@@ -5,7 +5,7 @@ import { getProjectActivity } from "../../services/ProjectService";
 import { formatActivityDate, formatProjectActivity } from "./projectActivityFormatter";
 
 const PAGE_SIZE = 30;
-const filters = [["all", "Todo"], ["project", "Proyecto"], ["task", "Tareas"], ["deliverable", "Entregables"], ["project_member", "Miembros"], ["comment", "Comentarios"]];
+const filters = [["all", "Todo"], ["project", "Proyecto"], ["task", "Tareas"], ["project_member", "Miembros"], ["comment", "Comentarios"]];
 
 export default function ProjectActivityPanel({ projectId }) {
   const [rows, setRows] = useState([]);

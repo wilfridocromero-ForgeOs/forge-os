@@ -1,24 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, Pencil, Plus, Repeat2, Trash2, UserRound } from "lucide-react";
 import {
-  createProjectDeliverable,
-  deleteProjectDeliverable,
   deleteProjectTask,
   getProjectWork,
-  updateProjectDeliverable,
   updateProjectTask,
 } from "../../services/ProjectService";
 import TaskEvidencePanel from "./TaskEvidencePanel";
 import TaskEditor from "./TaskEditor";
 import { compactTaskDate, recurrenceSummary } from "./taskScheduleConfig";
 
-const field = "min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-zinc-600";
 const taskStatusLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", cancelled: "Cancelada" };
 
 export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, canSubmit, onProgressChange }) {
   const [work, setWork] = useState({ tasks: [], deliverables: [] });
   const [editingTask, setEditingTask] = useState(undefined);
-  const [deliverable, setDeliverable] = useState({ title: "", due_at: "" });
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -38,13 +33,6 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
 
   useEffect(() => { onProgressChange?.(progress); }, [progress, onProgressChange]);
 
-  async function addDeliverable(event) {
-    event.preventDefault();
-    if (!deliverable.title.trim()) return;
-    try { setError(""); await createProjectDeliverable(projectId, deliverable, userId); setDeliverable({ title: "", due_at: "" }); await load(); }
-    catch (reason) { setError(reason.message); }
-  }
-
   async function mutate(action) {
     try { setError(""); await action(); await load(); } catch (reason) { setError(reason.message); }
   }
@@ -57,7 +45,7 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
   return (
     <section className="space-y-5 border-t border-zinc-800 pt-6">
       <div className="flex items-end justify-between gap-4">
-        <div><h3 className="font-semibold text-white">Trabajo y progreso</h3><p className="mt-1 text-sm text-zinc-500">Se calcula con tareas, checklist, hitos, revisiones y entregables reales.</p></div>
+        <div><h3 className="font-semibold text-white">Trabajo y progreso</h3><p className="mt-1 text-sm text-zinc-500">El progreso se calcula automáticamente según el trabajo completado del proyecto.</p></div>
         <strong className="text-xl text-white">{progress}%</strong>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className="h-full bg-white transition-[width]" style={{ width: `${progress}%` }} /></div>
@@ -75,18 +63,6 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
         </div>; })}
       </div>
 
-      <form onSubmit={addDeliverable} className="grid gap-2 rounded-2xl border border-zinc-800 p-3 sm:grid-cols-[1fr_170px_auto]">
-        <input aria-label="Título del entregable" className={field} placeholder="Nuevo entregable" value={deliverable.title} onChange={(e) => setDeliverable({ ...deliverable, title: e.target.value })} />
-        <input aria-label="Fecha límite del entregable" type="date" className={field} value={deliverable.due_at} onChange={(e) => setDeliverable({ ...deliverable, due_at: e.target.value })} />
-        <button type="submit" className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm text-white"><Plus size={16} /> Entregable</button>
-      </form>
-      <div className="space-y-2">
-        {work.deliverables.map((item) => <div key={item.id} className="grid items-center gap-2 rounded-xl border border-zinc-800 px-3 py-3 sm:grid-cols-[1fr_150px_auto]">
-          <span className="truncate text-sm text-white">{item.title}</span>
-          <select aria-label={`Estado de ${item.title}`} className={field} value={item.status} onChange={(e) => mutate(() => updateProjectDeliverable(item.id, { status: e.target.value }))}><option value="pending">Pendiente</option><option value="in_review">En revisión</option><option value="approved">Aprobado</option><option value="delivered">Entregado</option><option value="rejected">Rechazado</option></select>
-          <button type="button" aria-label="Eliminar entregable" onClick={() => mutate(() => deleteProjectDeliverable(item.id))} className="p-2 text-zinc-600 hover:text-red-300"><Trash2 size={15} /></button>
-        </div>)}
-      </div>
     </section>
   );
 }
