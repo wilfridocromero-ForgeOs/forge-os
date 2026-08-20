@@ -50,7 +50,10 @@ export default function ProjectPage() {
 
   async function archive() {
     if (!window.confirm(`¿Archivar “${project.name}”?`)) return;
-    try { setProject(await archiveProject(project.id)); }
+    try {
+      await archiveProject(project.id);
+      navigate("/proyectos?view=archived", { replace: true });
+    }
     catch (reason) { setError(reason.message || "No se pudo archivar el proyecto."); }
   }
 
