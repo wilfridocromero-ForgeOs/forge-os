@@ -223,7 +223,6 @@ export function DiscoveryRunner() {
   const [finalizing, setFinalizing] = useState(false);
   const responsesRef = useRef({});
   const savedValuesRef = useRef({});
-  const timersRef = useRef({});
   const queuesRef = useRef({});
 
   const hydrate = useCallback(async () => {
@@ -252,24 +251,22 @@ export function DiscoveryRunner() {
   }, [assessmentId, navigate]);
 
   useEffect(() => {
-    const timers = timersRef.current;
     // Data loading is the external synchronization performed by this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     hydrate();
-    return () => Object.values(timers).forEach(clearTimeout);
   }, [hydrate]);
 
   function enqueueSave(question, value) {
+    setSaving((count) => count + 1);
     const previous = queuesRef.current[question.id] || Promise.resolve();
     const next = previous.catch(() => undefined).then(() => persist(question, value));
     queuesRef.current[question.id] = next;
-    return next;
+    return next.finally(() => setSaving((count) => Math.max(0, count - 1)));
   }
 
   async function persist(question, value) {
     const existing = responsesRef.current[question.id];
     if (Object.is(savedValuesRef.current[question.id], value)) return;
-    setSaving((count) => count + 1);
     try {
       if (!isAnswered(value)) {
         if (existing?.id) await deleteDiscoveryResponse(existing.id);
@@ -290,22 +287,16 @@ export function DiscoveryRunner() {
     } catch (reason) {
       setError(friendlyError(reason, "No se pudo guardar una respuesta."));
       throw reason;
-    } finally {
-      setSaving((count) => Math.max(0, count - 1));
     }
   }
 
   function changeAnswer(question, value) {
     setAnswers((current) => ({ ...current, [question.id]: value }));
-    clearTimeout(timersRef.current[question.id]);
-    timersRef.current[question.id] = setTimeout(() => enqueueSave(question, value), 700);
+    void enqueueSave(question, value).catch(() => undefined);
   }
 
   async function flushQuestions(questions) {
-    const saves = questions.map((question) => {
-      clearTimeout(timersRef.current[question.id]);
-      return enqueueSave(question, answers[question.id]);
-    });
+    const saves = questions.map((question) => enqueueSave(question, answers[question.id]));
     await Promise.all(saves);
   }
 
