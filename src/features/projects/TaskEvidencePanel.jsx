@@ -17,45 +17,49 @@ const field = "min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 t
 
 export function EvidenceRequirementFields({ value, onChange, onRemove, error = "" }) {
   function changeType(evidenceType) { onChange({ ...value, evidence_type: evidenceType, ...evidenceTypeDefaults[evidenceType] }); }
-  return <div className="grid min-w-0 gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 sm:grid-cols-2">
-    <label className="min-w-0 sm:col-span-2"><span className="mb-1 block text-xs text-zinc-400">Nombre</span><input required minLength={2} maxLength={120} className={`${field} w-full`} placeholder="Ej. Foto después" value={value.label} onChange={(event) => onChange({ ...value, label: event.target.value })} /></label>
-    <label className="min-w-0"><span className="mb-1 block text-xs text-zinc-400">Tipo</span><select className={`${field} w-full`} value={value.evidence_type} onChange={(event) => changeType(event.target.value)}>{Object.entries(evidenceTypeLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><span className="mt-1 block text-[11px] text-zinc-600">{evidenceTypeHints[value.evidence_type]}</span></label>
-    <label className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-800 px-3 text-sm text-zinc-300"><input type="checkbox" checked={value.is_required} onChange={(event) => onChange({ ...value, is_required: event.target.checked, min_count: event.target.checked ? Math.max(1, value.min_count) : 0 })} /> Obligatorio</label>
-    <label className="text-xs text-zinc-500">Mínimo<input type="number" min="0" max="20" disabled={!value.is_required} className={`${field} mt-1 w-full`} value={value.min_count} onChange={(event) => onChange({ ...value, min_count: Number(event.target.value) })} /></label>
-    <label className="text-xs text-zinc-500">Máximo<input type="number" min="1" max="20" className={`${field} mt-1 w-full`} value={value.max_count} onChange={(event) => onChange({ ...value, max_count: Number(event.target.value) })} /></label>
-    <label className="min-w-0 sm:col-span-2"><span className="mb-1 block text-xs text-zinc-400">Descripción opcional</span><textarea maxLength={1000} rows={2} className={`${field} w-full resize-y`} placeholder="Explica qué debe demostrar esta evidencia" value={value.description} onChange={(event) => onChange({ ...value, description: event.target.value })} /></label>
+  function changeQuantity(quantity) { const next = Math.max(1, Math.min(20, Number(quantity) || 1)); onChange({ ...value, min_count: value.is_required ? next : 0, max_count: next }); }
+  return <div className="grid min-w-0 gap-3 rounded-xl border border-zinc-800 p-3 sm:grid-cols-2">
+    <fieldset className="min-w-0 sm:col-span-2"><legend className="mb-2 text-xs text-zinc-500">¿Qué debe entregar la persona para demostrar que completó la tarea?</legend><div className="grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 sm:grid-cols-5">{Object.entries(evidenceTypeLabels).map(([key, label]) => <button type="button" key={key} onClick={() => changeType(key)} className={`min-h-11 rounded-xl border px-2 text-xs ${value.evidence_type === key ? "border-zinc-400 bg-zinc-800 text-white" : "border-zinc-800 text-zinc-500 hover:border-zinc-600"}`}>{label}</button>)}</div><span className="mt-2 block text-[11px] text-zinc-500">{evidenceTypeHints[value.evidence_type]}</span></fieldset>
+    <label className="min-w-0 sm:col-span-2"><span className="mb-1 block text-xs text-zinc-500">Nombre</span><input required minLength={2} maxLength={120} className={`${field} w-full`} placeholder={`Ej. ${evidenceTypeLabels[value.evidence_type]} del trabajo terminado`} value={value.label} onChange={(event) => onChange({ ...value, label: event.target.value })} /></label>
+    <label className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-800 px-3 text-sm text-zinc-400"><input type="checkbox" checked={value.is_required} onChange={(event) => onChange({ ...value, is_required: event.target.checked, min_count: event.target.checked ? Math.max(1, value.max_count) : 0 })} /> Obligatoria</label>
+    <label className="text-xs text-zinc-500">Cantidad<input type="number" min="1" max="20" className={`${field} mt-1 w-full`} value={value.max_count} onChange={(event) => changeQuantity(event.target.value)} /></label>
+    <label className="min-w-0 sm:col-span-2"><span className="mb-1 block text-xs text-zinc-500">Descripción opcional</span><textarea maxLength={1000} rows={2} className={`${field} w-full resize-y`} placeholder="Añade instrucciones breves" value={value.description} onChange={(event) => onChange({ ...value, description: event.target.value })} /></label>
+    <details className="sm:col-span-2"><summary className="cursor-pointer text-xs text-zinc-500">Más opciones</summary><div className="mt-2 grid gap-3 sm:grid-cols-2"><label className="text-xs text-zinc-500">Mínimo<input type="number" min="0" max="20" disabled={!value.is_required} className={`${field} mt-1 w-full`} value={value.min_count} onChange={(event) => onChange({ ...value, min_count: Number(event.target.value) })} /></label><label className="text-xs text-zinc-500">Máximo<input type="number" min="1" max="20" className={`${field} mt-1 w-full`} value={value.max_count} onChange={(event) => onChange({ ...value, max_count: Number(event.target.value) })} /></label></div></details>
     {error && <p role="alert" className="text-xs text-red-300 sm:col-span-2">{error}</p>}
-    {onRemove && <button type="button" onClick={onRemove} className="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-red-300"><Trash2 size={14} /> Quitar requisito</button>}
+    {onRemove && <button type="button" onClick={onRemove} className="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-red-400"><Trash2 size={14} /> Eliminar</button>}
   </div>;
 }
 
 export default function TaskEvidencePanel({ task, projectId, organizationId, userId, canManage, canSubmit, onChange, reportError }) {
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState(blankEvidenceRequirement());
   const [draftError, setDraftError] = useState("");
   const requirements = task.evidence_requirements || [];
   const required = requirements.filter((item) => item.is_required);
   const fulfilled = required.filter((item) => item.evidence.length >= item.min_count);
   const complete = fulfilled.length === required.length;
-  const stateLabel = task.is_recurrence_template ? "Requisitos para cada ejecución" : !requirements.length ? "No requiere evidencia" : task.status === "completed" ? "Evidencia verificada para finalización" : complete ? "Evidencia completa" : "Evidencia pendiente";
+  const submittedCount = required.reduce((total, item) => total + Math.min(item.evidence.length, item.min_count), 0);
+  const requiredCount = required.reduce((total, item) => total + item.min_count, 0);
+  const stateLabel = task.is_recurrence_template ? "Evidencia para cada ejecución" : !requirements.length ? "Sin evidencia requerida" : complete ? "Evidencia completa" : `Evidencia pendiente · ${submittedCount}/${requiredCount}`;
 
   async function act(operation) { try { reportError(""); await operation(); await onChange(); return true; } catch (reason) { reportError(reason.message || "No se pudo completar la acción."); return false; } }
   async function addRequirement(event) {
     event.preventDefault(); const validation = validateEvidenceRequirement(draft); setDraftError(validation); if (validation) return;
-    if (await act(() => createTaskEvidenceRequirement(task.id, { ...draft, position: requirements.length }, userId))) setDraft(blankEvidenceRequirement());
+    if (await act(() => createTaskEvidenceRequirement(task.id, { ...draft, position: requirements.length }, userId))) { setDraft(blankEvidenceRequirement()); setAdding(false); }
   }
 
   return <div className="min-w-0 sm:col-start-2 sm:col-span-2">
-    <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 text-left">
-      <span className="min-w-0"><span className={`block text-xs font-medium ${complete ? "text-emerald-300" : "text-amber-300"}`}>{stateLabel}</span>{required.length > 0 && <span className="mt-0.5 block text-[11px] text-zinc-500">{fulfilled.length} / {required.length} requisitos obligatorios</span>}</span>
+    <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-800 px-3 py-2 text-left">
+      <span className={`min-w-0 truncate text-xs font-medium ${requirements.length && !complete ? "text-amber-600" : complete && requirements.length ? "text-emerald-600" : "text-zinc-500"}`}>{stateLabel}</span>
       <ChevronDown size={16} className={`shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`} />
     </button>
-    {!complete && <div className="mt-2 rounded-lg border border-amber-900/40 bg-amber-950/15 px-3 py-2 text-xs text-amber-200"><strong>Falta evidencia obligatoria:</strong><ul className="mt-1 list-disc space-y-0.5 pl-4">{required.filter((item) => item.evidence.length < item.min_count).map((item) => <li key={item.id}>{item.label} — {item.evidence.length} de {item.min_count}</li>)}</ul></div>}
     {open && <div className="mt-2 space-y-3 rounded-xl border border-zinc-800 p-3 sm:p-4">
       {task.status === "completed" && <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-3"><p className="text-sm font-medium text-emerald-200">Tarea completada</p><p className="mt-1 text-xs text-zinc-400">La evidencia utilizada para completar esta tarea está bloqueada. Reabre la tarea para realizar cambios.</p></div>}
       {!requirements.length && <p className="text-sm text-zinc-500">Esta tarea puede completarse sin evidencia.</p>}
+      {!complete && <div className="rounded-lg border border-amber-700/40 px-3 py-2 text-xs text-amber-700"><strong>Falta:</strong> {required.filter((item) => item.evidence.length < item.min_count).map((item) => item.label).join(", ")}</div>}
       {requirements.map((requirement) => <Requirement key={requirement.id} requirement={requirement} task={task} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} canSubmit={canSubmit} onChange={onChange} reportError={reportError} />)}
-      {canManage && task.status !== "completed" && <form onSubmit={addRequirement} className="space-y-2 border-t border-zinc-800 pt-3"><p className="text-sm font-medium text-zinc-300">Añadir requisito</p><EvidenceRequirementFields value={draft} onChange={(next) => { setDraft(next); setDraftError(""); }} error={draftError} /><button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-white hover:border-zinc-500"><Plus size={14} /> Guardar requisito</button></form>}
+      {canManage && task.status !== "completed" && (adding ? <form onSubmit={addRequirement} className="space-y-2 border-t border-zinc-800 pt-3"><p className="text-sm font-medium text-zinc-300">Solicitar evidencia</p><EvidenceRequirementFields value={draft} onChange={(next) => { setDraft(next); setDraftError(""); }} error={draftError} /><div className="flex flex-wrap gap-2"><button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-white hover:border-zinc-500"><Plus size={14} /> Añadir requisito</button><button type="button" onClick={() => setAdding(false)} className="px-3 py-2 text-xs text-zinc-500">Cancelar</button></div></form> : <button type="button" onClick={() => setAdding(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-white"><Plus size={14} /> Solicitar evidencia</button>)}
     </div>}
   </div>;
 }

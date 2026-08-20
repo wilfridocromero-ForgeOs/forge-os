@@ -319,6 +319,41 @@ export async function createProjectTask(projectId, values, userId) {
   return data;
 }
 
+export async function createProjectTaskConfigured(projectId, details, schedule, evidenceRequirements) {
+  const recurrenceEnabled = schedule.mode !== "none";
+  const timezone = schedule.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const { data, error } = await supabase.rpc("create_project_task_with_configuration", {
+    target_project_id: projectId,
+    requested_title: details.title.trim(),
+    requested_description: details.description?.trim() || null,
+    requested_assigned_to: details.assigned_to || null,
+    requested_priority: details.priority || "medium",
+    requested_work_type: details.work_type || "task",
+    requested_starts_at: details.starts_at ? new Date(details.starts_at).toISOString() : null,
+    requested_due_at: details.due_at ? new Date(details.due_at).toISOString() : null,
+    requested_evidence_requirements: evidenceRequirements.map((requirement) => ({
+      evidence_type: requirement.evidence_type,
+      label: requirement.label.trim(),
+      description: requirement.description?.trim() || null,
+      is_required: requirement.is_required,
+      min_count: requirement.is_required ? Number(requirement.min_count) : 0,
+      max_count: Number(requirement.max_count),
+    })),
+    requested_schedule_active: recurrenceEnabled,
+    requested_unit: recurrenceEnabled ? schedule.recurrence_unit : null,
+    requested_interval: recurrenceEnabled ? Number(schedule.interval_count) : null,
+    requested_weekday: recurrenceEnabled && schedule.recurrence_unit === "week" ? Number(schedule.weekday) : null,
+    requested_day_of_month: recurrenceEnabled && schedule.recurrence_unit === "month" ? Number(schedule.day_of_month) : null,
+    requested_first_run: recurrenceEnabled ? `${schedule.first_run}:00` : null,
+    requested_timezone: recurrenceEnabled ? timezone : null,
+  });
+  if (error) {
+    console.error("create_project_task_with_configuration failed", error);
+    throw new Error("No pudimos guardar la tarea. Inténtalo nuevamente.");
+  }
+  return data;
+}
+
 export async function updateProjectTask(taskId, changes) {
   const { data, error } = await supabase.from("project_tasks").update(changes).eq("id", taskId).select("*").single();
   if (error) {
@@ -351,6 +386,30 @@ export async function saveProjectTaskSchedule(taskId, details, schedule, schedul
   return data;
 }
 
+export async function saveProjectTaskConfiguration(taskId, details, schedule, scheduleActive) {
+  const timezone = schedule.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const recurrenceEnabled = schedule.mode !== "none";
+  const { data, error } = await supabase.rpc("save_project_task_configuration", {
+    target_task_id: taskId,
+    requested_title: details.title.trim(),
+    requested_assigned_to: details.assigned_to || null,
+    requested_priority: details.priority,
+    requested_work_type: details.work_type,
+    requested_description: details.description.trim() || null,
+    requested_starts_at: details.starts_at ? new Date(details.starts_at).toISOString() : null,
+    requested_due_at: details.due_at ? new Date(details.due_at).toISOString() : null,
+    requested_schedule_active: recurrenceEnabled && scheduleActive,
+    requested_unit: recurrenceEnabled ? schedule.recurrence_unit : null,
+    requested_interval: recurrenceEnabled ? Number(schedule.interval_count) : null,
+    requested_weekday: recurrenceEnabled && schedule.recurrence_unit === "week" ? Number(schedule.weekday) : null,
+    requested_day_of_month: recurrenceEnabled && schedule.recurrence_unit === "month" ? Number(schedule.day_of_month) : null,
+    requested_first_run: recurrenceEnabled ? `${schedule.first_run}:00` : null,
+    requested_timezone: recurrenceEnabled ? timezone : null,
+  });
+  if (error) throw friendlyTaskScheduleError(error);
+  return data;
+}
+
 function friendlyTaskScheduleError(error) {
   const message = String(error?.message || "").toLowerCase();
   if (message.includes("not allowed")) return new Error("No tienes permiso para configurar esta tarea.");
@@ -365,8 +424,14 @@ function friendlyTaskScheduleError(error) {
 }
 
 export async function deleteProjectTask(taskId) {
-  const { error } = await supabase.from("project_tasks").delete().eq("id", taskId);
-  if (error) throw error;
+  const { error } = await supabase.rpc("delete_project_task_safely", { target_task_id: taskId });
+  if (error) {
+    console.error("delete_project_task_safely failed", error);
+    const message = String(error.message || "").toLowerCase();
+    if (message.includes("evidence") || message.includes("project history") || message.includes("executions")) throw new Error("Esta tarea conserva evidencia o historial de ejecuciones y no puede eliminarse.");
+    if (message.includes("not allowed")) throw new Error("No tienes permiso para eliminar esta tarea.");
+    throw new Error("No pudimos eliminar la tarea. Inténtalo nuevamente.");
+  }
 }
 
 export async function createTaskEvidenceRequirement(taskId, requirement, userId) {
