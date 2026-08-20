@@ -17,10 +17,12 @@ import {
   OrganizationProvider
 } from "./Context/OrganizationContext";
 import { ThemeProvider } from "./Context/ThemeContext";
+import { installVersionGuard } from "./versionGuard";
 
 const savedTheme = localStorage.getItem("orvesen-theme") || "dark";
 document.documentElement.dataset.theme = savedTheme;
 document.documentElement.style.colorScheme = savedTheme;
+installVersionGuard();
 
 
 ReactDOM.createRoot(
