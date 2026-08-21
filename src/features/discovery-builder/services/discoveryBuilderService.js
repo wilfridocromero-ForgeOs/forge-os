@@ -20,6 +20,8 @@ const librarySelect = `
   score_library_categories(id, name, organization_id, division_id, is_official)
 `;
 
+const LIBRARY_PAGE_SIZE = 200;
+
 function libraryResponseType(responseType) {
   return responseType === "yes_no" ? "boolean" : responseType;
 }
@@ -86,19 +88,16 @@ export function normalizeTemplate(template) {
 }
 
 export async function getDiscoveryBuilderData() {
-  const [templatesResult, scoresResult, libraryResult] = await Promise.all([
+  const [templatesResult, scoresResult] = await Promise.all([
     supabase.from("discovery_templates").select(templateSelect).order("updated_at", { ascending: false }),
     supabase.from("score_templates")
       .select("id, name, status, score_categories(id, name, position, score_questions(id, prompt, response_type, position, scale_min, scale_max, options, scoring_config))")
       .eq("status", "published")
       .order("name"),
-    supabase.from("score_library_questions").select(librarySelect)
-      .eq("active", true).order("title"),
   ]);
 
   if (templatesResult.error) throw templatesResult.error;
   if (scoresResult.error) throw scoresResult.error;
-  if (libraryResult.error) throw libraryResult.error;
 
   return {
     templates: (templatesResult.data || []).map(normalizeTemplate),
@@ -111,8 +110,43 @@ export async function getDiscoveryBuilderData() {
           score_questions: [...(category.score_questions || [])].sort((a, b) => a.position - b.position),
         })),
     })),
-    libraryQuestions: libraryResult.data || [],
   };
+}
+
+export async function getDiscoveryLibraryQuestions({ organizationId, divisionId }) {
+  if (!organizationId || !divisionId) return { categories: [], questions: [] };
+
+  const categoriesResult = await supabase.from("score_library_categories")
+    .select("id, name, organization_id, division_id, is_official, position")
+    .eq("division_id", divisionId)
+    .or(`is_official.eq.true,organization_id.eq.${organizationId}`)
+    .order("position")
+    .order("name");
+  if (categoriesResult.error) throw categoriesResult.error;
+
+  const categories = categoriesResult.data || [];
+  if (!categories.length) return { categories: [], questions: [] };
+
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const questions = [];
+  for (let from = 0; ; from += LIBRARY_PAGE_SIZE) {
+    const page = await supabase.from("score_library_questions")
+      .select("id, category_id, title, description, response_type, options, active")
+      .in("category_id", categories.map((category) => category.id))
+      .eq("active", true)
+      .order("title")
+      .order("id")
+      .range(from, from + LIBRARY_PAGE_SIZE - 1);
+    if (page.error) throw page.error;
+    const rows = page.data || [];
+    questions.push(...rows.map((question) => ({
+      ...question,
+      score_library_categories: categoryById.get(question.category_id),
+    })));
+    if (rows.length < LIBRARY_PAGE_SIZE) break;
+  }
+
+  return { categories, questions };
 }
 
 export async function saveDiscoveryQuestionToLibrary({ question, organizationId, divisionId, categoryName, createdBy }) {
