@@ -270,6 +270,7 @@ html[data-theme="light"] .calendar-status-dot { box-shadow: 0 0 0 1px rgb(24 24 
 
 @media (max-width: 767px) {
   html[data-theme="light"] .calendar-event-pill { box-shadow: 0 0 0 1px rgb(24 24 27 / 0.22); }
+  html[data-theme="light"] .calendar-event-pill[class*="calendar-status-"] { background-color: var(--calendar-status-color); }
 }
 
 input {
