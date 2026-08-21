@@ -6,11 +6,10 @@ import Card from "../components/ui/Card";
 import Page from "../components/ui/Page";
 import { useAuth } from "../Context/AuthContext";
 import { supabase } from "../lib/supabase";
-import { buildCalendarDay, filterCalendarFeed, getCalendarFeed, groupCalendarAgenda } from "../services/CalendarService";
+import { buildCalendarDay, CALENDAR_STATUS_META, filterCalendarFeed, getCalendarFeed, getCalendarStatusMeta, groupCalendarAgenda } from "../services/CalendarService";
 
 const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const typeLabels = { meeting: "Reunión", task: "Tarea", reminder: "Recordatorio", deadline: "Entrega", note: "Nota" };
-const monthStateLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", overdue: "Vencida", event: "Evento" };
 const MAX_MONTH_INDICATORS = 3;
 
 function dateKey(date) {
@@ -30,20 +29,14 @@ function emptyEvent(date = new Date()) {
   return { title: "", description: "", starts_at: toLocalInput(start), ends_at: toLocalInput(end), event_type: "task", priority: "normal", visibility: "personal", assigned_to: "", remind: "30" };
 }
 
-function monthVisualState(item) {
-  if (item.sourceType === "event") return "event";
-  if (item.isOverdue) return "overdue";
-  return ["in_progress", "blocked", "completed"].includes(item.status) ? item.status : "pending";
-}
-
 function describeDayItems(dayItems) {
   if (!dayItems.length) return "sin trabajo programado";
   const counts = dayItems.reduce((result, item) => {
-    const state = monthVisualState(item);
+    const { status: state } = getCalendarStatusMeta(item);
     result[state] = (result[state] || 0) + 1;
     return result;
   }, {});
-  return Object.entries(counts).map(([state, count]) => `${count} ${monthStateLabels[state].toLowerCase()}`).join(", ");
+  return Object.entries(counts).map(([state, count]) => `${count} ${CALENDAR_STATUS_META[state].label.toLowerCase()}`).join(", ");
 }
 
 export default function Calendar() {
@@ -68,6 +61,12 @@ export default function Calendar() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyEvent());
   const [message, setMessage] = useState("");
+  const [statusClock, setStatusClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setStatusClock(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
@@ -101,7 +100,7 @@ export default function Calendar() {
     const start = new Date(first); start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
     return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; });
   }, [month]);
-  const visibleItems = useMemo(() => filterCalendarFeed(items, { scope, source, status, userId: user.id }), [items, scope, source, status, user.id]);
+  const visibleItems = useMemo(() => filterCalendarFeed(items, { scope, source, status, userId: user.id, now: new Date(statusClock) }), [items, scope, source, status, user.id, statusClock]);
   const itemsByDate = useMemo(() => {
     const index = new Map();
     const visibleStart = calendarDays[0];
@@ -169,11 +168,11 @@ export default function Calendar() {
 }
 
 function MonthView({ days, month, itemsByDate, selectedDay, onSelectDay }) {
-  return <div className="calendar-month-scroll mt-5"><div className="calendar-month-shell"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{days.map((day) => { const dayItems = itemsByDate.get(dateKey(day)) || []; const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); const selected = selectedDay && dateKey(day) === dateKey(selectedDay); const accessibleDate = day.toLocaleDateString("es-ES", { day: "numeric", month: "long" }); const remaining = Math.max(dayItems.length - MAX_MONTH_INDICATORS, 0); return <button key={day.toISOString()} onClick={() => onSelectDay(day)} aria-label={`${accessibleDate}, ${dayItems.length} ${dayItems.length === 1 ? "elemento" : "elementos"}: ${describeDayItems(dayItems)}`} aria-pressed={Boolean(selected)} className={`calendar-day ${outside ? "calendar-day-outside" : ""} ${selected ? "calendar-day-selected" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="calendar-day-events mt-2 space-y-1" aria-hidden="true">{dayItems.slice(0, MAX_MONTH_INDICATORS).map((item) => { const visualState = monthVisualState(item); return <span key={item.key} title={`${monthStateLabels[visualState]}: ${item.title}`} className={`calendar-event-pill calendar-indicator-${visualState}`}>{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]} · {new Date(item.startsAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>; })}{remaining > 0 && <span className="calendar-day-count">+{remaining}</span>}</span></button>; })}</div></div></div>;
+  return <div className="calendar-month-scroll mt-5"><div className="calendar-month-shell"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{days.map((day) => { const dayItems = itemsByDate.get(dateKey(day)) || []; const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); const selected = selectedDay && dateKey(day) === dateKey(selectedDay); const accessibleDate = day.toLocaleDateString("es-ES", { day: "numeric", month: "long" }); const remaining = Math.max(dayItems.length - MAX_MONTH_INDICATORS, 0); return <button key={day.toISOString()} onClick={() => onSelectDay(day)} aria-label={`${accessibleDate}, ${dayItems.length} ${dayItems.length === 1 ? "elemento" : "elementos"}: ${describeDayItems(dayItems)}`} aria-pressed={Boolean(selected)} className={`calendar-day ${outside ? "calendar-day-outside" : ""} ${selected ? "calendar-day-selected" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="calendar-day-events mt-2 space-y-1" aria-hidden="true">{dayItems.slice(0, MAX_MONTH_INDICATORS).map((item) => { const visual = getCalendarStatusMeta(item); return <span key={item.key} title={`${visual.label}: ${item.title}`} className={`calendar-event-pill ${visual.className}`}>{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]} · {new Date(item.startsAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>; })}{remaining > 0 && <span className="calendar-day-count">+{remaining}</span>}</span></button>; })}</div></div></div>;
 }
 
 function CalendarLegend() {
-  return <div className="calendar-month-legend" aria-label="Leyenda de estados">{Object.entries(monthStateLabels).map(([state, label]) => <span key={state} className="calendar-legend-item"><span className={`calendar-legend-dot calendar-indicator-${state}`} aria-hidden="true" />{label}</span>)}</div>;
+  return <div className="calendar-month-legend" aria-label="Leyenda de estados">{Object.entries(CALENDAR_STATUS_META).map(([state, meta]) => <span key={state} className="calendar-legend-item"><span className={`calendar-legend-dot ${meta.className}`} aria-hidden="true" />{meta.label}</span>)}</div>;
 }
 
 function DayWorkspace({ day, data, members, scope, userId, canManage, onClose, onNewEvent, onOpenTask, onComplete, onDelete }) {
@@ -187,7 +186,8 @@ function DayWorkspace({ day, data, members, scope, userId, canManage, onClose, o
 function DayItem({ item, members = [], userId, canManage, onOpenTask, onComplete, onDelete }) {
   const owner = item.assigneeName || members.find((member) => member.id === item.assignedTo)?.first_name;
   const canEditEvent = item.sourceType === "event" && (canManage || item.createdBy === userId);
-  return <article className={`calendar-day-item source-${item.sourceType} status-${item.status} ${item.isOverdue ? "is-overdue" : ""}`}><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="calendar-type">{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]}</span>{item.isOverdue && <span className="calendar-status-badge"><AlertTriangle size={12} /> Vencida</span>}<span className="calendar-state-label">{statusLabel(item.status)}</span></div><h5 className={`mt-2 break-words text-sm font-medium text-white ${item.status === "completed" ? "line-through opacity-60" : ""}`}>{item.title}</h5>{item.projectName && <p className="mt-1 text-xs font-medium text-zinc-400">{item.projectName}</p>}<p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500"><Clock size={13} /><span>{formatItemTime(item)}</span>{owner && <span>· {owner}</span>}<span>· {priorityLabel(item.priority)}</span></p></div>{item.sourceType === "task" ? <button type="button" onClick={() => onOpenTask(item)} className="calendar-day-action">Abrir tarea</button> : canEditEvent && <div className="flex shrink-0 gap-2"><button type="button" onClick={() => onComplete(item)} className="calendar-icon-button" aria-label={item.status === "completed" ? "Reabrir evento" : "Completar evento"}><Check size={17} /></button><button type="button" onClick={() => onDelete(item)} className="calendar-icon-button" aria-label="Eliminar evento"><Trash2 size={17} /></button></div>}</article>;
+  const visual = getCalendarStatusMeta(item);
+  return <article className={`calendar-day-item ${visual.className}`}><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="calendar-type">{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]}</span><span className={`calendar-status-dot ${visual.className}`} aria-hidden="true" />{visual.status === "overdue" && <AlertTriangle size={13} className="text-red-400" aria-hidden="true" />}<span className="calendar-state-label">{visual.label}</span></div><h5 className={`mt-2 break-words text-sm font-medium text-white ${item.status === "completed" ? "line-through opacity-60" : ""}`}>{item.title}</h5>{item.projectName && <p className="mt-1 text-xs font-medium text-zinc-400">{item.projectName}</p>}<p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500"><Clock size={13} /><span>{formatItemTime(item)}</span>{owner && <span>· {owner}</span>}<span>· {priorityLabel(item.priority)}</span></p></div>{item.sourceType === "task" ? <button type="button" onClick={() => onOpenTask(item)} className="calendar-day-action">Abrir tarea</button> : canEditEvent && <div className="flex shrink-0 gap-2"><button type="button" onClick={() => onComplete(item)} className="calendar-icon-button" aria-label={item.status === "completed" ? "Reabrir evento" : "Completar evento"}><Check size={17} /></button><button type="button" onClick={() => onDelete(item)} className="calendar-icon-button" aria-label="Eliminar evento"><Trash2 size={17} /></button></div>}</article>;
 }
 
 function formatItemTime(item) {
@@ -218,11 +218,11 @@ function Agenda({ groups, members, onComplete, onDelete, onOpenTask, canManage, 
 function AgendaItem({ item, members, onComplete, onDelete, onOpenTask, canManage, userId }) {
   const owner = item.assigneeName || members.find((member) => member.id === item.assignedTo)?.first_name;
   const canEdit = item.sourceType === "event" && (canManage || item.createdBy === userId);
-  const Icon = item.isOverdue ? AlertTriangle : item.sourceType === "task" ? BriefcaseBusiness : Clock;
-  return <div className={`calendar-list-item source-${item.sourceType} status-${item.status} ${item.isOverdue ? "is-overdue" : ""}`}><button type="button" onClick={item.sourceType === "task" ? () => onOpenTask(item) : undefined} className={`min-w-0 flex-1 text-left ${item.sourceType === "task" ? "cursor-pointer" : "cursor-default"}`}><div className="flex flex-wrap items-center gap-2"><span className="calendar-type">{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]}</span>{item.isOverdue && <span className="calendar-status-badge"><AlertTriangle size={12} /> Vencida</span>}<h4 className={`min-w-0 break-words font-medium text-white ${item.status === "completed" ? "line-through opacity-60" : ""}`}>{item.title}</h4></div>{item.projectName && <p className="mt-2 text-sm font-medium text-zinc-300">{item.projectName}</p>}<p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-400"><Icon size={15} /><span>{new Date(item.startsAt).toLocaleString("es-ES", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>{item.endsAt && <span>→ {new Date(item.endsAt).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}{owner && <span>· {owner}</span>}<span>· {statusLabel(item.status)}</span></p>{item.description && <p className="mt-2 line-clamp-2 text-sm text-zinc-500">{item.description}</p>}</button>{canEdit && <div className="flex shrink-0 gap-2"><button onClick={() => onComplete(item)} className="calendar-icon-button" title="Completar"><Check size={18} /></button><button onClick={() => onDelete(item)} className="calendar-icon-button" title="Eliminar"><Trash2 size={18} /></button></div>}</div>;
+  const visual = getCalendarStatusMeta(item);
+  const Icon = visual.status === "overdue" ? AlertTriangle : item.sourceType === "task" ? BriefcaseBusiness : Clock;
+  return <div className={`calendar-list-item ${visual.className}`}><button type="button" onClick={item.sourceType === "task" ? () => onOpenTask(item) : undefined} className={`min-w-0 flex-1 text-left ${item.sourceType === "task" ? "cursor-pointer" : "cursor-default"}`}><div className="flex flex-wrap items-center gap-2"><span className={`calendar-status-dot ${visual.className}`} aria-hidden="true" /><span className="calendar-type">{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]}</span><span className="calendar-state-label">{visual.label}</span><h4 className={`min-w-0 break-words font-medium text-white ${item.status === "completed" ? "line-through opacity-60" : ""}`}>{item.title}</h4></div>{item.projectName && <p className="mt-2 text-sm font-medium text-zinc-300">{item.projectName}</p>}<p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-400"><Icon size={15} /><span>{new Date(item.startsAt).toLocaleString("es-ES", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>{item.endsAt && <span>→ {new Date(item.endsAt).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}{owner && <span>· {owner}</span>}<span>· {visual.label}</span></p>{item.description && <p className="mt-2 line-clamp-2 text-sm text-zinc-500">{item.description}</p>}</button>{canEdit && <div className="flex shrink-0 gap-2"><button onClick={() => onComplete(item)} className="calendar-icon-button" title="Completar"><Check size={18} /></button><button onClick={() => onDelete(item)} className="calendar-icon-button" title="Eliminar"><Trash2 size={18} /></button></div>}</div>;
 }
 
-function statusLabel(status) { return { scheduled: "Programado", pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada" }[status] || status; }
 function Filter({ label, value, onChange, options }) { return <label className="min-w-0 flex-1"><span className="mb-1 block text-xs text-zinc-500">{label}</span><select className="field min-h-11 py-2" value={value} onChange={(event) => onChange(event.target.value)}>{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>; }
 function Field({ label, children }) { return <label><span className="mb-2 block text-sm text-zinc-400">{label}</span>{children}</label>; }
 

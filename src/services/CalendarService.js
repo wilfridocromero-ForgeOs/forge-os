@@ -4,6 +4,28 @@ const EVENT_COLUMNS = "id, organization_id, created_by, assigned_to, title, desc
 const TASK_COLUMNS = "id, project_id, title, description, status, priority, assigned_to, starts_at, due_at, recurrence_schedule_id, scheduled_for, is_recurrence_template, project:projects!inner(id, name, division_id, organization_id), assignee:users!project_tasks_assigned_to_fkey(id, first_name)";
 const OPEN_TASK_STATUSES = ["pending", "in_progress", "blocked"];
 
+export const CALENDAR_STATUS_META = Object.freeze({
+  pending: Object.freeze({ label: "Pendiente", className: "calendar-status-pending" }),
+  in_progress: Object.freeze({ label: "En progreso", className: "calendar-status-in-progress" }),
+  blocked: Object.freeze({ label: "Bloqueada", className: "calendar-status-blocked" }),
+  completed: Object.freeze({ label: "Completada", className: "calendar-status-completed" }),
+  overdue: Object.freeze({ label: "Vencida", className: "calendar-status-overdue" }),
+  event: Object.freeze({ label: "Evento", className: "calendar-status-event" }),
+});
+
+export function getCalendarItemStatus(item, now = new Date()) {
+  if (item.sourceType === "event") return "event";
+  if (item.status === "completed") return "completed";
+  if (item.dueAt && new Date(item.dueAt) < now && OPEN_TASK_STATUSES.includes(item.status)) return "overdue";
+  if (OPEN_TASK_STATUSES.includes(item.status)) return item.status;
+  return "pending";
+}
+
+export function getCalendarStatusMeta(item, now = new Date()) {
+  const status = getCalendarItemStatus(item, now);
+  return { status, ...CALENDAR_STATUS_META[status] };
+}
+
 function iso(value) {
   return new Date(value).toISOString();
 }
@@ -16,11 +38,10 @@ export function normalizeCalendarEvent(event) {
     dueAt: null, status: event.status, priority: event.priority, assignedTo: event.assigned_to,
     assigneeName: null, createdBy: event.created_by, allDay: event.all_day,
     eventType: event.event_type, visibility: event.visibility, remindAt: event.remind_at,
-    isOverdue: false,
   };
 }
 
-export function normalizeProjectTask(task, now = new Date()) {
+export function normalizeProjectTask(task) {
   const project = Array.isArray(task.project) ? task.project[0] : task.project;
   const assignee = Array.isArray(task.assignee) ? task.assignee[0] : task.assignee;
   return {
@@ -32,7 +53,6 @@ export function normalizeProjectTask(task, now = new Date()) {
     assignedTo: task.assigned_to, assigneeName: assignee?.first_name || null, createdBy: null,
     allDay: false, eventType: "project_task", visibility: null, remindAt: null,
     recurrenceScheduleId: task.recurrence_schedule_id, scheduledFor: task.scheduled_for,
-    isOverdue: Boolean(task.due_at && new Date(task.due_at) < now && OPEN_TASK_STATUSES.includes(task.status)),
   };
 }
 
@@ -66,18 +86,22 @@ export async function getCalendarFeed({ organizationId, rangeStart, rangeEnd, no
   if (tasksResult.error) throw tasksResult.error;
   return [
     ...(eventsResult.data || []).filter(isCalendarEvent).map(normalizeCalendarEvent),
-    ...(tasksResult.data || []).filter(isCalendarTask).map((task) => normalizeProjectTask(task, now)),
+    ...(tasksResult.data || []).filter(isCalendarTask).map(normalizeProjectTask),
   ]
     .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
 }
 
-export function filterCalendarFeed(items, { scope = "mine", source = "all", status = "all", userId } = {}) {
+export function filterCalendarFeed(items, { scope = "mine", source = "all", status = "all", userId, now = new Date() } = {}) {
   return items.filter((item) => {
     if (scope === "mine" && item.assignedTo !== userId && !(item.sourceType === "event" && item.createdBy === userId)) return false;
     if (source !== "all" && item.sourceType !== source) return false;
-    if (status === "active" && item.status === "completed") return false;
-    if (status === "completed" && item.status !== "completed") return false;
-    if (status === "overdue" && !item.isOverdue) return false;
+    const semanticStatus = getCalendarItemStatus(item, now);
+    if (status === "active") {
+      if (item.sourceType === "event") return item.status !== "completed";
+      return ["pending", "in_progress", "blocked"].includes(semanticStatus);
+    }
+    if (status === "completed") return item.status === "completed";
+    if (status === "overdue") return semanticStatus === "overdue";
     return true;
   });
 }
@@ -89,7 +113,7 @@ export function groupCalendarAgenda(items, now = new Date()) {
   const groups = { overdue: [], previous: [], today: [], tomorrow: [], upcoming: [] };
   items.forEach((item) => {
     const date = new Date(item.startsAt);
-    if (item.isOverdue) groups.overdue.push(item);
+    if (getCalendarItemStatus(item, now) === "overdue") groups.overdue.push(item);
     else if (date < today) groups.previous.push(item);
     else if (date < tomorrow) groups.today.push(item);
     else if (date < afterTomorrow) groups.tomorrow.push(item);
