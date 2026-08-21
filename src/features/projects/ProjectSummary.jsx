@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, History, UsersRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, History, Repeat2, UsersRound } from "lucide-react";
 import { formatActivityDate, formatProjectActivity } from "./projectActivityFormatter";
 
 const roleLabels = { owner: "Propietario", member: "Miembro", observer: "Observador" };
@@ -24,12 +24,20 @@ function getOperationalTasks(tasks) {
   });
 }
 
+function nextRecurrence(tasks) {
+  return tasks
+    .map((task) => task.recurrence_schedule)
+    .filter((schedule) => schedule?.active)
+    .sort((a, b) => new Date(a.next_run_at || "9999-12-31") - new Date(b.next_run_at || "9999-12-31"))[0] || null;
+}
+
 export default function ProjectSummary({ project, work, activity, members, loading, onViewWork, onViewActivity, onViewTeam }) {
   const tasks = work.tasks.filter((task) => !task.is_recurrence_template && task.status !== "cancelled");
   const completed = tasks.filter((task) => task.status === "completed").length;
   const overdue = tasks.filter((task) => task.due_at && new Date(task.due_at) < new Date() && task.status !== "completed").length;
   const today = tasks.filter((task) => task.due_at && dayKey(task.due_at) === dayKey(new Date()) && task.status !== "completed").length;
   const next = getOperationalTasks(work.tasks).slice(0, 4);
+  const recurrence = nextRecurrence(work.tasks);
   const progress = Math.min(100, Math.max(0, Number(project.progress || 0)));
 
   if (loading) return <p className="text-sm text-zinc-500">Preparando el espacio de trabajo…</p>;
@@ -43,7 +51,7 @@ export default function ProjectSummary({ project, work, activity, members, loadi
 
       <section className="rounded-2xl border border-zinc-800 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4"><div><p className="text-xs uppercase tracking-[.18em] text-zinc-600">Ejecución</p><h2 className="mt-1 text-xl font-semibold text-white">Próximo trabajo</h2></div><button type="button" onClick={onViewWork} className="inline-flex min-h-10 items-center gap-1 text-sm text-zinc-400 hover:text-white">Ver todo <ArrowRight size={15} /></button></div>
-        {!next.length ? <div className="mt-5 rounded-xl border border-dashed border-zinc-800 p-6 text-center"><p className="font-medium text-white">Este proyecto está listo para comenzar.</p><p className="mt-2 text-sm text-zinc-500">Crea la primera tarea para empezar a trabajar.</p><button type="button" onClick={onViewWork} className="mt-4 min-h-10 rounded-xl bg-white px-4 text-sm font-medium text-black">Nueva tarea</button></div> : <div className="mt-4 space-y-2">{next.map((task) => <button type="button" key={task.id} onClick={onViewWork} className="flex min-h-16 w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-800 px-4 py-3 text-left hover:border-zinc-600"><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{task.title}</p><p className="mt-1 truncate text-xs text-zinc-500">{task.assignee?.first_name || "Sin asignar"} · {taskDate(task.due_at || task.starts_at)}</p></div><span className="shrink-0 text-xs text-zinc-500">{statusLabels[task.status] || task.status}</span></button>)}</div>}
+        {next.length ? <div className="mt-4 space-y-2">{next.map((task) => <button type="button" key={task.id} onClick={onViewWork} className="flex min-h-16 w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-800 px-4 py-3 text-left hover:border-zinc-600"><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{task.title}</p><p className="mt-1 truncate text-xs text-zinc-500">{task.assignee?.first_name || "Sin asignar"} · {taskDate(task.due_at || task.starts_at)}</p></div><span className="shrink-0 text-xs text-zinc-500">{statusLabels[task.status] || task.status}</span></button>)}</div> : tasks.length ? <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-900/40 dark:bg-emerald-950/15"><CheckCircle2 className="mx-auto text-emerald-600 dark:text-emerald-300" size={24} /><p className="mt-3 font-medium text-emerald-800 dark:text-emerald-200">{recurrence ? "El trabajo actual está completado" : "Todo el trabajo está completado"}</p><p className="mt-2 text-sm text-zinc-500">{recurrence ? recurrence.next_run_at ? `La próxima ejecución recurrente está prevista para ${taskDate(recurrence.next_run_at)}.` : "No hay ejecuciones pendientes ahora; la recurrencia sigue activa." : "Las tareas de este proyecto están terminadas."}</p>{progress === 100 && <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">Proyecto completado al 100%.</p>}</div> : recurrence ? <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-5 text-center dark:border-blue-900/40 dark:bg-blue-950/15"><Repeat2 className="mx-auto text-blue-600 dark:text-blue-300" size={24} /><p className="mt-3 font-medium text-blue-800 dark:text-blue-200">Próxima ejecución recurrente</p><p className="mt-2 text-sm text-zinc-500">{recurrence.next_run_at ? `Prevista para ${taskDate(recurrence.next_run_at)}.` : "La recurrencia está activa y no hay una ejecución pendiente ahora."}</p></div> : <div className="mt-5 rounded-xl border border-dashed border-zinc-800 p-6 text-center"><p className="font-medium text-white">Este proyecto está listo para comenzar.</p><p className="mt-2 text-sm text-zinc-500">Crea la primera tarea para empezar a trabajar.</p><button type="button" onClick={onViewWork} className="mt-4 min-h-10 rounded-xl bg-white px-4 text-sm font-medium text-black">Nueva tarea</button></div>}
       </section>
     </div>
 
