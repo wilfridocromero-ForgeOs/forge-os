@@ -475,7 +475,8 @@ export async function submitTaskEvidenceFile({ projectId, organizationId, taskId
   onProgress?.(75, "Guardando");
   const metadata = await supabase.from("task_evidence").insert({ id, task_id: taskId, requirement_id: requirement.id, evidence_type: requirement.evidence_type, storage_path: path, file_name: file.name.trim(), mime_type: file.type, size_bytes: file.size, submitted_by: userId }).select("*").single();
   if (metadata.error) {
-    await supabase.storage.from("project-files").remove([path]);
+    const cleanup = await supabase.storage.from("project-files").remove([path]);
+    if (cleanup.error) throw friendlyFileError(cleanup.error, "No se pudo registrar la evidencia ni retirar el archivo incompleto.");
     throw friendlyFileError(metadata.error, "No se pudo registrar la evidencia.");
   }
   onProgress?.(100, "Completado");
