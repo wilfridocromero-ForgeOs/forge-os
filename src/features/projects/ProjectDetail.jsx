@@ -22,8 +22,7 @@ function dateRange(project) {
   return "Sin fechas definidas";
 }
 
-export default function ProjectDetail({ project, organizationId, users, projectMembers = [], onMembersChange, userId, canEdit, canManageMembers, canComment, onClose, onEdit, onArchive, onProjectChange, embedded = false }) {
-  const [tab, setTab] = useState("summary");
+export default function ProjectDetail({ project, organizationId, users, projectMembers = [], onMembersChange, userId, canEdit, canManageMembers, canComment, onClose, onEdit, onArchive, onProjectChange, tab = "summary", taskId = null, onTabChange, onTaskChange, embedded = false }) {
   const [showActions, setShowActions] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [work, setWork] = useState({ tasks: [], deliverables: [] });
@@ -93,14 +92,14 @@ export default function ProjectDetail({ project, organizationId, users, projectM
       </div>
     </header>
 
-    <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-1" aria-label="Secciones del proyecto">{tabs.map(([key, label]) => <button type="button" key={key} onClick={() => setTab(key)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-medium transition sm:flex-1 ${tab === key ? "bg-white text-black" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"}`}>{label}</button>)}</nav>
+    <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-1" aria-label="Secciones del proyecto">{tabs.map(([key, label]) => <button type="button" key={key} onClick={() => onTabChange?.(key)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-medium transition sm:flex-1 ${tab === key ? "bg-white text-black" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"}`}>{label}</button>)}</nav>
 
     {workspaceError && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{workspaceError}</p>}
     {tab === "summary" && <>
-      <ProjectSummary project={project} work={work} activity={recentActivity} members={projectMembers} loading={workspaceLoading} onViewWork={() => setTab("work")} onViewActivity={() => setTab("activity")} onViewTeam={() => setShowTeam((value) => !value)} />
+      <ProjectSummary project={project} work={work} activity={recentActivity} members={projectMembers} loading={workspaceLoading} onViewWork={() => onTabChange?.("work")} onViewActivity={() => onTabChange?.("activity")} onViewTeam={() => setShowTeam((value) => !value)} />
       {showTeam && <div className="rounded-2xl border border-zinc-800 p-4 sm:p-6"><ProjectMembersPanel projectId={project.id} members={projectMembers} organizationUsers={users} actorId={userId} canManage={canManageMembers} onChange={onMembersChange} /></div>}
     </>}
-    {tab === "work" && <ProjectWorkPanel projectId={project.id} organizationId={organizationId} users={projectUsers} userId={userId} canManage={canManageMembers} canSubmit={canComment} work={work} loading={workspaceLoading} projectProgress={project.progress} onReload={loadWorkspace} onProgressChange={(nextProgress) => onProjectChange?.({ ...project, progress: nextProgress })} />}
+    {tab === "work" && <ProjectWorkPanel projectId={project.id} organizationId={organizationId} users={projectUsers} userId={userId} canManage={canManageMembers} canSubmit={canComment} work={work} loading={workspaceLoading} projectProgress={project.progress} selectedTaskId={taskId} onSelectedTaskChange={onTaskChange} onReload={loadWorkspace} onProgressChange={(nextProgress) => onProjectChange?.({ ...project, progress: nextProgress })} />}
     {tab === "files" && <ProjectFilesPanel projectId={project.id} organizationId={organizationId} userId={userId} canUpload={canComment} canManage={canManageMembers} />}
     {tab === "activity" && <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]"><div><h2 className="mb-4 text-lg font-semibold text-white">Historia del proyecto</h2><ProjectActivityPanel projectId={project.id} /></div><aside><h2 className="mb-4 text-lg font-semibold text-white">Conversación</h2><ProjectCommentsPanel projectId={project.id} userId={userId} canComment={canComment} canModerate={canManageMembers} /></aside></div>}
   </div>;

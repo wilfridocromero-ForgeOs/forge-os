@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, CheckCircle2, Edit3, Repeat2, Settings2, UserRound, X } from "lucide-react";
 import { deleteProjectTask, updateProjectTask } from "../../services/ProjectService";
 import TaskEvidencePanel from "./TaskEvidencePanel";
@@ -9,10 +9,18 @@ function fullDate(value) { return value ? new Intl.DateTimeFormat("es", { dateSt
 
 export default function TaskWorkspace({ task, projectId, organizationId, userId, canManage, canSubmit, onClose, onEdit, onChange, reportError }) {
   const [manageEvidence, setManageEvidence] = useState(false);
+  const workspaceRef = useRef(null);
   const required = (task.evidence_requirements || []).filter((item) => item.is_required);
   const missing = required.reduce((total, item) => total + Math.max(0, item.min_count - item.evidence.length), 0);
   const canEditTask = canManage || task.created_by === userId || task.assigned_to === userId;
   const canDeleteTask = canManage || task.created_by === userId;
+
+  useEffect(() => {
+    workspaceRef.current?.focus();
+    function closeOnEscape(event) { if (event.key === "Escape") onClose(); }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
 
   async function changeStatus(status) {
     try { reportError(""); await updateProjectTask(task.id, { status }); await onChange(); }
@@ -25,7 +33,7 @@ export default function TaskWorkspace({ task, projectId, organizationId, userId,
   }
 
   return <div role="dialog" aria-modal="true" aria-label={`Tarea ${task.title}`} className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-0 backdrop-blur-sm sm:p-5" onClick={onClose}>
-    <article className="ml-auto min-h-full w-full max-w-2xl border-l border-zinc-800 bg-[#111113] shadow-2xl sm:min-h-0 sm:rounded-3xl sm:border" onClick={(event) => event.stopPropagation()}>
+    <article ref={workspaceRef} tabIndex={-1} className="ml-auto min-h-full w-full max-w-2xl border-l border-zinc-800 bg-[#111113] shadow-2xl outline-none sm:min-h-0 sm:rounded-3xl sm:border" onClick={(event) => event.stopPropagation()}>
       <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-zinc-800 bg-[#111113]/95 px-4 py-4 backdrop-blur sm:px-6">
         <div className="min-w-0"><p className="text-xs uppercase tracking-[.18em] text-zinc-600">Tarea</p><h2 className="mt-2 break-words text-xl font-semibold text-white sm:text-2xl">{task.title}</h2></div>
         <button type="button" aria-label="Cerrar tarea" onClick={onClose} className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-900 hover:text-white"><X size={19} /></button>

@@ -49,6 +49,12 @@ function describeDayItems(dayItems) {
 export default function Calendar() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  function openProjectTask(item) {
+    if (item.sourceType !== "task" || !item.projectId || !item.taskId) return;
+    const params = new URLSearchParams({ tab: "work", task: item.taskId });
+    navigate(`/proyectos/${item.projectId}?${params.toString()}`);
+  }
   const { profile, user, canManageUsers, isInternalOrganization } = useAuth();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [view, setView] = useState(() => window.matchMedia("(max-width: 767px)").matches ? "list" : "month");
@@ -155,9 +161,9 @@ export default function Calendar() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center justify-between gap-1 sm:gap-2"><button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="calendar-icon-button"><ChevronLeft size={19} /></button><h2 className="min-w-0 text-center text-lg font-semibold capitalize text-white sm:min-w-[190px]">{month.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</h2><button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="calendar-icon-button"><ChevronRight size={19} /></button></div><div className="flex rounded-xl border border-zinc-800 p-1"><button onClick={() => setView("month")} className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm ${view === "month" ? "bg-white text-black" : "text-zinc-400"}`}><CalendarDays size={17} /> Mes</button><button onClick={() => setView("list")} className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm ${view === "list" ? "bg-white text-black" : "text-zinc-400"}`}><List size={17} /> Agenda</button></div></div>
       <div className="calendar-filters mt-4" aria-label="Filtros del calendario"><Filter label="Alcance" value={scope} onChange={setScope} options={[["mine", "Mi trabajo"], ["team", "Equipo"]]} /><Filter label="Tipo" value={source} onChange={setSource} options={[["all", "Todo"], ["task", "Trabajo"], ["event", "Eventos"]]} /><Filter label="Estado" value={status} onChange={setStatus} options={[["all", "Todos"], ["active", "Activos"], ["overdue", "Vencidos"], ["completed", "Completados"]]} /></div>
       {view === "month" && <CalendarLegend />}
-      {loading ? <p className="py-16 text-center text-zinc-500">Cargando calendario...</p> : view === "month" ? <MonthView days={calendarDays} month={month} itemsByDate={itemsByDate} selectedDay={selectedDay} onSelectDay={setSelectedDay} /> : <Agenda groups={agenda} members={members} onComplete={completeEvent} onDelete={deleteEvent} onOpenTask={(item) => navigate(`/proyectos/${item.projectId}`)} canManage={canManageUsers} userId={user.id} />}
+      {loading ? <p className="py-16 text-center text-zinc-500">Cargando calendario...</p> : view === "month" ? <MonthView days={calendarDays} month={month} itemsByDate={itemsByDate} selectedDay={selectedDay} onSelectDay={setSelectedDay} /> : <Agenda groups={agenda} members={members} onComplete={completeEvent} onDelete={deleteEvent} onOpenTask={openProjectTask} canManage={canManageUsers} userId={user.id} />}
     </Card>
-    {selectedDay && <DayWorkspace day={selectedDay} data={selectedDayData} members={members} scope={scope} userId={user.id} canManage={canManageUsers} onClose={() => setSelectedDay(null)} onNewEvent={() => { const day = selectedDay; setSelectedDay(null); openNew(day); }} onOpenTask={(item) => navigate(`/proyectos/${item.projectId}`)} onComplete={completeEvent} onDelete={deleteEvent} />}
+    {selectedDay && <DayWorkspace day={selectedDay} data={selectedDayData} members={members} scope={scope} userId={user.id} canManage={canManageUsers} onClose={() => setSelectedDay(null)} onNewEvent={() => { const day = selectedDay; setSelectedDay(null); openNew(day); }} onOpenTask={openProjectTask} onComplete={completeEvent} onDelete={deleteEvent} />}
     {modalOpen && <EventModal form={form} setForm={setForm} onSubmit={createEvent} onClose={() => setModalOpen(false)} members={members} />}
   </Page>;
 }

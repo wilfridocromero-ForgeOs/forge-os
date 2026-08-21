@@ -26,9 +26,8 @@ function evidenceSummary(task) {
   };
 }
 
-export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, canSubmit, work, loading, projectProgress, onReload, onProgressChange }) {
+export default function ProjectWorkPanel({ projectId, organizationId, users, userId, canManage, canSubmit, work, loading, projectProgress, selectedTaskId, onSelectedTaskChange, onReload, onProgressChange }) {
   const [editingTask, setEditingTask] = useState(undefined);
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [error, setError] = useState("");
 
   const progress = useMemo(() => {
@@ -66,13 +65,14 @@ export default function ProjectWorkPanel({ projectId, organizationId, users, use
       const Icon = group.icon;
       return <section key={group.key} className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-3 sm:p-4">
         <h3 className="flex items-center gap-2 px-1 text-sm font-semibold text-white"><Icon size={16} className="text-zinc-500" /> {group.title} <span className="text-zinc-600">({items.length})</span></h3>
-        <div className="mt-3 space-y-3">{items.map((task) => <TaskCard key={task.id} task={task} onOpen={() => setSelectedTaskId(task.id)} />)}{!items.length && <p className="rounded-xl border border-dashed border-zinc-800 px-3 py-6 text-center text-xs text-zinc-600">Sin tareas en esta etapa.</p>}</div>
+        <div className="mt-3 space-y-3">{items.map((task) => <TaskCard key={task.id} task={task} onOpen={() => onSelectedTaskChange?.(task.id)} />)}{!items.length && <p className="rounded-xl border border-dashed border-zinc-800 px-3 py-6 text-center text-xs text-zinc-600">Sin tareas en esta etapa.</p>}</div>
       </section>;
     })}</div>}
 
-    {recurrenceRules.length > 0 && <details className="rounded-2xl border border-zinc-800 p-4"><summary className="cursor-pointer text-sm font-medium text-zinc-400">Reglas de repetición ({recurrenceRules.length})</summary><div className="mt-3 space-y-2">{recurrenceRules.map((task) => <button type="button" key={task.id} onClick={() => setSelectedTaskId(task.id)} className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-zinc-800 px-3 text-left text-sm text-zinc-300"><Repeat2 size={15} className="text-blue-400" /><span className="min-w-0 flex-1 truncate">{task.title}</span><span className="text-xs text-zinc-600">{task.recurrence_schedule?.active ? "Activa" : "Pausada"}</span></button>)}</div></details>}
+    {recurrenceRules.length > 0 && <details className="rounded-2xl border border-zinc-800 p-4"><summary className="cursor-pointer text-sm font-medium text-zinc-400">Reglas de repetición ({recurrenceRules.length})</summary><div className="mt-3 space-y-2">{recurrenceRules.map((task) => <button type="button" key={task.id} onClick={() => onSelectedTaskChange?.(task.id)} className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-zinc-800 px-3 text-left text-sm text-zinc-300"><Repeat2 size={15} className="text-blue-400" /><span className="min-w-0 flex-1 truncate">{task.title}</span><span className="text-xs text-zinc-600">{task.recurrence_schedule?.active ? "Activa" : "Pausada"}</span></button>)}</div></details>}
 
-    {selectedTask && <TaskWorkspace task={selectedTask} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} canSubmit={canSubmit} onClose={() => setSelectedTaskId(null)} onEdit={() => { setSelectedTaskId(null); setEditingTask(selectedTask); }} onChange={reload} reportError={setError} />}
+    {selectedTaskId && !selectedTask && <p className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-sm text-zinc-400">La tarea ya no está disponible en este proyecto.</p>}
+    {selectedTask && <TaskWorkspace task={selectedTask} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage} canSubmit={canSubmit} onClose={() => onSelectedTaskChange?.(null)} onEdit={() => { onSelectedTaskChange?.(null); setEditingTask(selectedTask); }} onChange={reload} reportError={setError} />}
     {editingTask !== undefined && <TaskEditor projectId={projectId} task={editingTask} users={users} onClose={() => setEditingTask(undefined)} onSaved={reload} reportError={setError} />}
   </section>;
 }

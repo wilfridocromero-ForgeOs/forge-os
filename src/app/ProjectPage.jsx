@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Button from "../components/ui/Button";
 import Page from "../components/ui/Page";
 import { useAuth } from "../Context/AuthContext";
@@ -13,6 +13,7 @@ import { archiveProject, getProject, getProjectMembers, getProjectOptions, updat
 export default function ProjectPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeOrganization } = useOrganization();
   const { user, canManageUsers } = useAuth();
   const { divisions } = useDivisions(activeOrganization?.id);
@@ -22,6 +23,20 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  const requestedTab = searchParams.get("tab");
+  const tab = ["summary", "work", "files", "activity"].includes(requestedTab) ? requestedTab : "summary";
+  const taskId = tab === "work" ? searchParams.get("task") : null;
+
+  function changeWorkspaceLocation(nextTab, nextTaskId = null) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (nextTab === "summary") next.delete("tab");
+      else next.set("tab", nextTab);
+      if (nextTab === "work" && nextTaskId) next.set("task", nextTaskId);
+      else next.delete("task");
+      return next;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -61,7 +76,7 @@ export default function ProjectPage() {
     {loading && <p className="text-sm text-zinc-500">Cargando proyecto…</p>}
     {error && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{error}</p>}
     {!loading && !error && !project && <div className="rounded-2xl border border-zinc-800 p-8 text-center"><h2 className="font-semibold text-white">Proyecto no encontrado</h2><p className="mt-2 text-sm text-zinc-500">No existe o no tienes acceso desde la organización activa.</p></div>}
-    {project && <ProjectDetail embedded project={project} organizationId={activeOrganization.id} users={options.users} projectMembers={members} onMembersChange={setMembers} userId={user.id} canEdit={canEdit} canManageMembers={canManageMembers} canComment={canComment} onEdit={() => setEditing(true)} onArchive={archive} onProjectChange={setProject} />}
+    {project && <ProjectDetail embedded project={project} organizationId={activeOrganization.id} users={options.users} projectMembers={members} onMembersChange={setMembers} userId={user.id} canEdit={canEdit} canManageMembers={canManageMembers} canComment={canComment} onEdit={() => setEditing(true)} onArchive={archive} onProjectChange={setProject} tab={tab} taskId={taskId} onTabChange={(nextTab) => changeWorkspaceLocation(nextTab)} onTaskChange={(nextTaskId) => changeWorkspaceLocation("work", nextTaskId)} />}
     {editing && <ProjectModal key={project.id} open project={project} divisions={divisions} clients={options.clients} users={options.users} onClose={() => setEditing(false)} onSave={save} />}
   </Page>;
 }
