@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu as HeadlessMenu } from "@headlessui/react";
 import {
-  Bell,
   Search,
   Plus,
   ChevronDown,
@@ -18,6 +17,7 @@ import { useAuth } from "../../Context/AuthContext";
 import ProfileModal from "./ProfileModal";
 import { useTheme } from "../../Context/ThemeContext";
 import { quickCreateItems } from "../../config/navigation";
+import NotificationBell from "../notifications/NotificationBell";
 
 export default function Header({ setSidebarOpen }) {
   const { logout, displayName, initial, displayTitle } = useAuth();
@@ -183,28 +183,7 @@ export default function Header({ setSidebarOpen }) {
           </HeadlessMenu.Items>
         </HeadlessMenu>
 
-        <button
-          className="
-            hidden
-            sm:flex
-            h-11
-            w-11
-            items-center
-            justify-center
-
-            rounded-xl
-
-            border
-            border-zinc-800
-
-            bg-zinc-900
-
-            transition-colors
-            hover:bg-zinc-800
-          "
-        >
-          <Bell size={18} />
-        </button>
+        <NotificationBell />
 
         <HeadlessMenu as="div" className="relative">
 
