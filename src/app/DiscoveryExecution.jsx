@@ -215,15 +215,27 @@ export function DiscoveryRunner() {
   const navigate = useNavigate();
   const [assessment, setAssessment] = useState(null);
   const [answers, setAnswers] = useState({});
+  const [persistedAnswers, setPersistedAnswers] = useState({});
   const [sectionIndex, setSectionIndex] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(0);
+  const [saveErrors, setSaveErrors] = useState(0);
   const [error, setError] = useState("");
   const [finalizing, setFinalizing] = useState(false);
   const responsesRef = useRef({});
   const savedValuesRef = useRef({});
   const queuesRef = useRef({});
+  const failedSavesRef = useRef(new Set());
+
+  function markQuestionSaveFailed(questionId, failed) {
+    const next = new Set(failedSavesRef.current);
+    if (failed) next.add(questionId);
+    else next.delete(questionId);
+    failedSavesRef.current = next;
+    setSaveErrors(next.size);
+    return next.size;
+  }
 
   const hydrate = useCallback(async () => {
     setLoading(true);
@@ -238,6 +250,9 @@ export function DiscoveryRunner() {
       responsesRef.current = responseMap;
       savedValuesRef.current = valueMap;
       setAnswers(valueMap);
+      setPersistedAnswers(valueMap);
+      failedSavesRef.current = new Set();
+      setSaveErrors(0);
       setAssessment(next);
       const sections = next.discovery_templates.discovery_sections;
       const firstIncomplete = sections.findIndex((section) => section.discovery_questions.some((question) => questionIsRequiredAndIncomplete(question, valueMap)));
@@ -266,12 +281,20 @@ export function DiscoveryRunner() {
 
   async function persist(question, value) {
     const existing = responsesRef.current[question.id];
-    if (Object.is(savedValuesRef.current[question.id], value)) return;
+    if (Object.is(savedValuesRef.current[question.id], value)) {
+      if (markQuestionSaveFailed(question.id, false) === 0) setError("");
+      return;
+    }
     try {
       if (!isAnswered(value)) {
         if (existing?.id) await deleteDiscoveryResponse(existing.id);
         delete responsesRef.current[question.id];
         delete savedValuesRef.current[question.id];
+        setPersistedAnswers((current) => {
+          const next = { ...current };
+          delete next[question.id];
+          return next;
+        });
       } else {
         const saved = await saveDiscoveryResponse({
           assessmentId,
@@ -282,9 +305,11 @@ export function DiscoveryRunner() {
         });
         responsesRef.current[question.id] = saved;
         savedValuesRef.current[question.id] = value;
+        setPersistedAnswers((current) => ({ ...current, [question.id]: saved.response_value }));
       }
-      setError("");
+      if (markQuestionSaveFailed(question.id, false) === 0) setError("");
     } catch (reason) {
+      markQuestionSaveFailed(question.id, true);
       setError(friendlyError(reason, "No se pudo guardar una respuesta."));
       throw reason;
     }
@@ -296,7 +321,12 @@ export function DiscoveryRunner() {
   }
 
   async function flushQuestions(questions) {
-    const saves = questions.map((question) => enqueueSave(question, answers[question.id]));
+    const saves = questions.map(async (question) => {
+      await (queuesRef.current[question.id] || Promise.resolve()).catch(() => undefined);
+      if (!Object.is(savedValuesRef.current[question.id], answers[question.id])) {
+        await enqueueSave(question, answers[question.id]);
+      }
+    });
     await Promise.all(saves);
   }
 
@@ -338,14 +368,15 @@ export function DiscoveryRunner() {
   const sections = template.discovery_sections;
   const section = sections[sectionIndex];
   const questions = allQuestions(template);
-  const answeredCount = questions.filter((question) => isAnswered(answers[question.id])).length;
-  const completedSections = sections.filter((item) => item.discovery_questions.every((question) => !questionIsRequiredAndIncomplete(question, answers))).length;
+  const answeredCount = questions.filter((question) => isAnswered(persistedAnswers[question.id])).length;
+  const completedSections = sections.filter((item) => item.discovery_questions.every((question) => !questionIsRequiredAndIncomplete(question, persistedAnswers))).length;
   const percentage = questions.length ? Math.round(answeredCount / questions.length * 100) : 0;
+  const saveStatus = saving > 0 ? "saving" : saveErrors > 0 ? "error" : "saved";
 
   return <div className="dx-runner-page">
     <header className="dx-runner-topbar">
       <Link to="/discovery" className="dx-back"><ArrowLeft size={17} /> Evaluaciones</Link>
-      <div className={`dx-save-state ${saving ? "saving" : ""}`}>{saving ? <><LoaderCircle className="dx-spin" size={14} /> Guardando...</> : <><Check size={14} /> Guardado</>}</div>
+      <div className={`dx-save-state ${saveStatus}`}>{saveStatus === "saving" ? <><LoaderCircle className="dx-spin" size={14} /> Guardando...</> : saveStatus === "error" ? <><CircleAlert size={14} /> Error al guardar</> : <><Check size={14} /> Guardado</>}</div>
     </header>
     <main className="dx-runner-shell">
       <div className="dx-runner-intro">

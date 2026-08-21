@@ -52,6 +52,7 @@ html:not([data-theme="light"]) .dx-page,html:not([data-theme="light"]) .dx-runne
 .dx-runner-page .dx-back:hover,.dx-page .dx-back:hover{color:var(--dx-text)}
 .dx-runner-page .dx-save-state{color:var(--dx-success-text)}
 .dx-runner-page .dx-save-state.saving{color:var(--dx-gold-hover)}
+.dx-runner-page .dx-save-state.error{color:var(--dx-danger-text)}
 .dx-runner-page .dx-progress>div,.dx-runner-page .dx-section-heading p,.dx-runner-page .dx-question-body>p,.dx-runner-page .dx-review>p,.dx-runner-page .dx-review-stats span{color:var(--dx-muted)}
 .dx-runner-page .dx-progress>div b,.dx-runner-page .dx-question-body>label{color:var(--dx-text)}
 .dx-runner-page .dx-section-heading>b{background:var(--dx-soft);color:var(--dx-muted)}
