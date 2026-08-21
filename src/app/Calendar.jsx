@@ -10,6 +10,8 @@ import { buildCalendarDay, filterCalendarFeed, getCalendarFeed, groupCalendarAge
 
 const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const typeLabels = { meeting: "Reunión", task: "Tarea", reminder: "Recordatorio", deadline: "Entrega", note: "Nota" };
+const monthStateLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", overdue: "Vencida", event: "Evento" };
+const MAX_MONTH_INDICATORS = 3;
 
 function dateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -26,6 +28,22 @@ function emptyEvent(date = new Date()) {
   start.setHours(Math.max(start.getHours() + 1, 9));
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   return { title: "", description: "", starts_at: toLocalInput(start), ends_at: toLocalInput(end), event_type: "task", priority: "normal", visibility: "personal", assigned_to: "", remind: "30" };
+}
+
+function monthVisualState(item) {
+  if (item.sourceType === "event") return "event";
+  if (item.isOverdue) return "overdue";
+  return ["in_progress", "blocked", "completed"].includes(item.status) ? item.status : "pending";
+}
+
+function describeDayItems(dayItems) {
+  if (!dayItems.length) return "sin trabajo programado";
+  const counts = dayItems.reduce((result, item) => {
+    const state = monthVisualState(item);
+    result[state] = (result[state] || 0) + 1;
+    return result;
+  }, {});
+  return Object.entries(counts).map(([state, count]) => `${count} ${monthStateLabels[state].toLowerCase()}`).join(", ");
 }
 
 export default function Calendar() {
@@ -136,6 +154,7 @@ export default function Calendar() {
     <Card hover={false} contentClassName="min-w-0 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center justify-between gap-1 sm:gap-2"><button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="calendar-icon-button"><ChevronLeft size={19} /></button><h2 className="min-w-0 text-center text-lg font-semibold capitalize text-white sm:min-w-[190px]">{month.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}</h2><button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="calendar-icon-button"><ChevronRight size={19} /></button></div><div className="flex rounded-xl border border-zinc-800 p-1"><button onClick={() => setView("month")} className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm ${view === "month" ? "bg-white text-black" : "text-zinc-400"}`}><CalendarDays size={17} /> Mes</button><button onClick={() => setView("list")} className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm ${view === "list" ? "bg-white text-black" : "text-zinc-400"}`}><List size={17} /> Agenda</button></div></div>
       <div className="calendar-filters mt-4" aria-label="Filtros del calendario"><Filter label="Alcance" value={scope} onChange={setScope} options={[["mine", "Mi trabajo"], ["team", "Equipo"]]} /><Filter label="Tipo" value={source} onChange={setSource} options={[["all", "Todo"], ["task", "Trabajo"], ["event", "Eventos"]]} /><Filter label="Estado" value={status} onChange={setStatus} options={[["all", "Todos"], ["active", "Activos"], ["overdue", "Vencidos"], ["completed", "Completados"]]} /></div>
+      {view === "month" && <CalendarLegend />}
       {loading ? <p className="py-16 text-center text-zinc-500">Cargando calendario...</p> : view === "month" ? <MonthView days={calendarDays} month={month} itemsByDate={itemsByDate} selectedDay={selectedDay} onSelectDay={setSelectedDay} /> : <Agenda groups={agenda} members={members} onComplete={completeEvent} onDelete={deleteEvent} onOpenTask={(item) => navigate(`/proyectos/${item.projectId}`)} canManage={canManageUsers} userId={user.id} />}
     </Card>
     {selectedDay && <DayWorkspace day={selectedDay} data={selectedDayData} members={members} scope={scope} userId={user.id} canManage={canManageUsers} onClose={() => setSelectedDay(null)} onNewEvent={() => { const day = selectedDay; setSelectedDay(null); openNew(day); }} onOpenTask={(item) => navigate(`/proyectos/${item.projectId}`)} onComplete={completeEvent} onDelete={deleteEvent} />}
@@ -144,7 +163,11 @@ export default function Calendar() {
 }
 
 function MonthView({ days, month, itemsByDate, selectedDay, onSelectDay }) {
-  return <div className="calendar-month-scroll mt-6"><div className="calendar-month-shell"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{days.map((day) => { const dayItems = itemsByDate.get(dateKey(day)) || []; const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); const selected = selectedDay && dateKey(day) === dateKey(selectedDay); const accessibleDate = day.toLocaleDateString("es-ES", { day: "numeric", month: "long" }); return <button key={day.toISOString()} onClick={() => onSelectDay(day)} aria-label={`${accessibleDate}, ${dayItems.length} ${dayItems.length === 1 ? "elemento" : "elementos"}`} aria-pressed={Boolean(selected)} className={`calendar-day ${outside ? "calendar-day-outside" : ""} ${selected ? "calendar-day-selected" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="calendar-day-events mt-2 space-y-1">{dayItems.slice(0, 2).map((item) => <span key={item.key} className={`calendar-event-pill source-${item.sourceType} status-${item.status} ${item.isOverdue ? "is-overdue" : ""}`}>{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]} · {new Date(item.startsAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>)}{dayItems.length > 2 && <span className="calendar-day-count">{dayItems.length} elementos</span>}</span></button>; })}</div></div></div>;
+  return <div className="calendar-month-scroll mt-5"><div className="calendar-month-shell"><div className="grid grid-cols-7">{weekDays.map((day) => <div key={day} className="p-2 text-center text-xs uppercase tracking-wider text-zinc-500">{day}</div>)}</div><div className="calendar-grid">{days.map((day) => { const dayItems = itemsByDate.get(dateKey(day)) || []; const outside = day.getMonth() !== month.getMonth(); const today = dateKey(day) === dateKey(new Date()); const selected = selectedDay && dateKey(day) === dateKey(selectedDay); const accessibleDate = day.toLocaleDateString("es-ES", { day: "numeric", month: "long" }); const remaining = Math.max(dayItems.length - MAX_MONTH_INDICATORS, 0); return <button key={day.toISOString()} onClick={() => onSelectDay(day)} aria-label={`${accessibleDate}, ${dayItems.length} ${dayItems.length === 1 ? "elemento" : "elementos"}: ${describeDayItems(dayItems)}`} aria-pressed={Boolean(selected)} className={`calendar-day ${outside ? "calendar-day-outside" : ""} ${selected ? "calendar-day-selected" : ""}`}><span className={`calendar-day-number ${today ? "calendar-today" : ""}`}>{day.getDate()}</span><span className="calendar-day-events mt-2 space-y-1" aria-hidden="true">{dayItems.slice(0, MAX_MONTH_INDICATORS).map((item) => { const visualState = monthVisualState(item); return <span key={item.key} title={`${monthStateLabels[visualState]}: ${item.title}`} className={`calendar-event-pill calendar-indicator-${visualState}`}>{item.sourceType === "task" ? "Trabajo" : typeLabels[item.eventType]} · {new Date(item.startsAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {item.title}</span>; })}{remaining > 0 && <span className="calendar-day-count">+{remaining}</span>}</span></button>; })}</div></div></div>;
+}
+
+function CalendarLegend() {
+  return <div className="calendar-month-legend" aria-label="Leyenda de estados">{Object.entries(monthStateLabels).map(([state, label]) => <span key={state} className="calendar-legend-item"><span className={`calendar-legend-dot calendar-indicator-${state}`} aria-hidden="true" />{label}</span>)}</div>;
 }
 
 function DayWorkspace({ day, data, members, scope, userId, canManage, onClose, onNewEvent, onOpenTask, onComplete, onDelete }) {
