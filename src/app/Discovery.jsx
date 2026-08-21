@@ -10,7 +10,7 @@ import { useAuth } from "../Context/AuthContext";
 import { useDivisions } from "../hooks/useDivisions";
 import {
   createDiscoveryTemplate, createQuestion, createSection, deleteDiscoveryTemplate, duplicateDiscoveryTemplate,
-  deleteQuestion, deleteSection, getDiscoveryBuilderData, getDiscoveryLibraryQuestions, replaceScoreLink, saveDiscoveryQuestionToLibrary,
+  deleteQuestion, deleteSection, getDiscoveryBuilderData, getDiscoveryLibraryQuestions, getDiscoveryScoreQuestions, replaceScoreLink, saveDiscoveryQuestionToLibrary,
   updateDiscoveryTemplate, updateQuestion, updateSection,
 } from "../features/discovery-builder/services/discoveryBuilderService";
 import {
@@ -99,8 +99,9 @@ export default function Discovery() {
   const { canManageUsers, profile, user } = useAuth();
   const { divisions } = useDivisions(profile?.organization_id);
   const [templates, setTemplates] = useState([]);
-  const [scoreTemplates, setScoreTemplates] = useState([]);
+  const [scoreContext, setScoreContext] = useState({ divisionId: "", templates: [], loading: false, error: "" });
   const [libraryQuestions, setLibraryQuestions] = useState([]);
+  const [libraryDivisionId, setLibraryDivisionId] = useState("");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -121,7 +122,6 @@ export default function Discovery() {
     try {
       const data = await getDiscoveryBuilderData();
       setTemplates(data.templates);
-      setScoreTemplates(data.scoreTemplates);
       setSelectedId(data.templates.some((item) => item.id === preferredId) ? preferredId : data.templates[0]?.id || "");
     } catch (error) {
       setNotice({ type: "error", text: friendlyError(error, "No se pudo cargar Discovery Builder.") });
@@ -138,21 +138,38 @@ export default function Discovery() {
 
   useEffect(() => {
     let active = true;
-    async function loadLibrary() {
+    const divisionId = selected?.division_id || "";
+    async function loadDivisionQuestions() {
       setLibraryLoading(true); setLibraryError(""); setLibraryQuestions([]);
+      setLibraryDivisionId("");
+      setScoreContext({ divisionId: "", templates: [], loading: true, error: "" });
       try {
-        const result = await getDiscoveryLibraryQuestions({
-          organizationId: profile?.organization_id,
-          divisionId: selected?.division_id,
-        });
-        if (active) setLibraryQuestions(result.questions);
+        const [libraryResult, scoreTemplates] = await Promise.all([
+          getDiscoveryLibraryQuestions({
+            organizationId: profile?.organization_id,
+            divisionId,
+          }),
+          getDiscoveryScoreQuestions({
+            organizationId: profile?.organization_id,
+            divisionId,
+          }),
+        ]);
+        if (active) {
+          setLibraryQuestions(libraryResult.questions);
+          setLibraryDivisionId(divisionId);
+          setScoreContext({ divisionId, templates: scoreTemplates, loading: false, error: "" });
+        }
       } catch (error) {
-        if (active) setLibraryError(friendlyError(error, "No se pudo cargar la biblioteca de esta división."));
+        const message = friendlyError(error, "No se pudieron cargar las preguntas de esta división.");
+        if (active) {
+          setLibraryError(message);
+          setScoreContext({ divisionId, templates: [], loading: false, error: message });
+        }
       } finally {
         if (active) setLibraryLoading(false);
       }
     }
-    loadLibrary();
+    loadDivisionQuestions();
     return () => { active = false; };
   }, [profile?.organization_id, selected?.division_id]);
 
@@ -380,8 +397,8 @@ export default function Discovery() {
               <div className="db-stage" key={`${selected.id}-${activeStep}`}>
                 {activeStep === 0 && <Information template={selected} divisions={divisions} saveField={saveTemplateField} />}
                 {activeStep === 1 && <Sections template={selected} addSection={addSection} saveField={saveSectionField} removeSection={removeSection} />}
-                {activeStep === 2 && <Questions template={selected} libraryQuestions={libraryQuestions} libraryLoading={libraryLoading} libraryError={libraryError} organizationId={profile.organization_id} action={action} addQuestion={addNewQuestion} addLibraryQuestion={addLibraryQuestion} saveToLibrary={saveQuestionToLibrary} saveAll={saveAllQuestionsToLibrary} saveField={saveQuestionField} removeQuestion={removeQuestion} />}
-                {activeStep === 3 && <Connections template={selected} scoreTemplates={scoreTemplates} connect={connectQuestion} />}
+                {activeStep === 2 && <Questions template={selected} libraryQuestions={libraryDivisionId === selected.division_id ? libraryQuestions : []} libraryLoading={libraryLoading} libraryError={libraryError} organizationId={profile.organization_id} action={action} addQuestion={addNewQuestion} addLibraryQuestion={addLibraryQuestion} saveToLibrary={saveQuestionToLibrary} saveAll={saveAllQuestionsToLibrary} saveField={saveQuestionField} removeQuestion={removeQuestion} />}
+                {activeStep === 3 && <Connections template={selected} scoreTemplates={scoreContext.divisionId === selected.division_id ? scoreContext.templates : []} loading={scoreContext.loading} error={scoreContext.error} connect={connectQuestion} />}
                 {activeStep === 4 && <Preview template={selected} />}
                 {activeStep === 5 && <Publish template={selected} publish={publish} action={action} />}
               </div>
@@ -453,25 +470,35 @@ function LibraryModal({ template, questions, loading, error, onAdd, onClose }) {
     return result;
   }, []);
   const divisionName = template.divisions?.name || "División seleccionada";
-  return <div className="db-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="db-modal db-library-modal" role="dialog" aria-modal="true" aria-label={`Biblioteca de preguntas de ${divisionName}`}><div className="db-modal-head"><div><span className="db-eyebrow">Biblioteca · {divisionName}</span><h2>Añadir pregunta</h2></div><button onClick={onClose} aria-label="Cerrar biblioteca">×</button></div><div className="db-search db-library-search"><Search size={16} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar en todas las preguntas" /></div><div className="db-library-list">{loading && <p className="db-empty-mini"><LoaderCircle className="spin" size={18} /> Cargando preguntas...</p>}{error && <p className="db-empty-mini db-library-error">{error}</p>}{!loading && !error && grouped.map((category) => <section className="db-library-category" key={category.id}><header><div><span>{category.is_official ? "Biblioteca oficial" : divisionName}</span><h3>{category.name}</h3></div><b>{category.questions.length}</b></header>{category.questions.map((question) => { const selected = selectedKeys.has(`${normalizedQuestionText(question.title)}::${normalizeDiscoveryResponseType(question.response_type)}`); return <article key={question.id}><div><strong>{question.title}</strong><small>{getDiscoveryResponseType(question.response_type)?.label || question.response_type}</small></div><button className="db-button" disabled={selected} onClick={() => onAdd(question)}>{selected ? "Añadida" : "Añadir"}</button></article>; })}</section>)}{!loading && !error && !grouped.length && <p className="db-empty-mini">{normalizedSearch ? "No encontramos preguntas que coincidan con tu búsqueda." : "No hay preguntas disponibles para esta división."}</p>}</div></div></div>;
+  return <div className="db-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="db-modal db-library-modal" role="dialog" aria-modal="true" aria-label={`Biblioteca de preguntas de ${divisionName}`}><div className="db-modal-head"><div><span className="db-eyebrow">Biblioteca · {divisionName}</span><h2>Añadir pregunta</h2></div><button onClick={onClose} aria-label="Cerrar biblioteca">×</button></div><div className="db-search db-library-search"><Search size={16} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar en todas las preguntas" /></div><div className="db-library-list">{loading && <p className="db-empty-mini"><LoaderCircle className="spin" size={18} /> Cargando preguntas...</p>}{error && <p className="db-empty-mini db-library-error">{error}</p>}{!loading && !error && grouped.map((category, index) => <details className="db-library-category" key={`${category.id}-${normalizedSearch ? "search" : "browse"}`} open={Boolean(normalizedSearch) || index === 0}><summary><div><span>{category.is_official ? "Biblioteca oficial" : divisionName}</span><h3>{category.name}</h3></div><b>{category.questions.length} preguntas</b></summary>{category.questions.map((question) => { const selected = selectedKeys.has(`${normalizedQuestionText(question.title)}::${normalizeDiscoveryResponseType(question.response_type)}`); return <article key={question.id}><div><strong>{question.title}</strong><small>{getDiscoveryResponseType(question.response_type)?.label || question.response_type}</small></div><button className="db-button" disabled={selected} onClick={() => onAdd(question)}>{selected ? "Añadida" : "Añadir"}</button></article>; })}</details>)}{!loading && !error && !grouped.length && <p className="db-empty-mini">{normalizedSearch ? "No encontramos preguntas que coincidan con tu búsqueda." : "No hay preguntas disponibles para esta división."}</p>}</div></div></div>;
 }
 
-function Connections({ template, scoreTemplates, connect }) {
+function Connections({ template, scoreTemplates, loading, error, connect }) {
+  const [connecting, setConnecting] = useState(null);
   const questions = template.discovery_sections.flatMap((section) => section.discovery_questions.map((question) => ({ section, question }))).filter(({ question }) => question.question_kind === "evaluative");
   return <div><StageTitle number="04" title="Conecta con Score" text="Cada pregunta evaluativa puede alimentar una pregunta del Score sin modificar su motor." />
     <div className="db-connection-note"><Link2 size={18} /><p><strong>Score sigue siendo la fuente canónica.</strong><br />Discovery solo declara la relación; no cambia pesos, escalas ni cálculos.</p></div>
     <div className="db-stack">{questions.map(({ section, question }) => {
-      const compatibleScores = scoreTemplates.map((score) => ({
-        ...score,
-        score_categories: score.score_categories.map((category) => ({
-          ...category,
-          score_questions: category.score_questions.filter((scoreQuestion) => scoreQuestionIsCompatible(question, scoreQuestion)),
-        })).filter((category) => category.score_questions.length),
-      })).filter((score) => score.score_categories.length);
-      return <article className="db-card db-link-row" key={question.id}><div><small>{section.title}</small><h3>{question.prompt}</h3></div><ChevronRight size={18} /><label>Pregunta Score<select value={question.discovery_question_score_links[0]?.score_question_id || ""} onChange={(e) => connect(section, question, e.target.value)}><option value="">Sin conexión</option>{compatibleScores.map((score) => <optgroup key={score.id} label={score.name}>{score.score_categories.map((category) => category.score_questions.map((scoreQuestion) => <option key={scoreQuestion.id} value={scoreQuestion.id}>{category.name} · {scoreQuestion.prompt}</option>))}</optgroup>)}</select>{!compatibleScores.length && <small>No hay preguntas Score compatibles con este tipo y configuración.</small>}</label></article>;
+      const linkedId = question.discovery_question_score_links[0]?.score_question_id || "";
+      const linked = scoreTemplates.flatMap((score) => score.score_categories).flatMap((category) => category.score_questions.map((scoreQuestion) => ({ ...scoreQuestion, categoryName: category.name }))).find((scoreQuestion) => scoreQuestion.id === linkedId);
+      return <article className="db-card db-link-row" key={question.id}><div><small>{section.title}</small><h3>{question.prompt}</h3></div><ChevronRight size={18} /><div className="db-connection-picker"><small>PREGUNTA SCORE</small><button className="db-button" disabled={loading} onClick={() => setConnecting({ section, question })}>{loading ? "Cargando preguntas..." : linked ? `${linked.categoryName} · ${linked.prompt}` : linkedId ? "Conexión existente fuera de esta división" : "Seleccionar pregunta"}</button>{linkedId && <button className="db-library-save" onClick={() => connect(section, question, "")}>Quitar conexión</button>}{error && <small className="db-library-error">{error}</small>}</div></article>;
     })}
       {!questions.length && <EmptyInline title="No hay preguntas evaluativas" text="Marca al menos una pregunta como evaluativa para conectarla con Score." />}</div>
+    {connecting && <ScoreConnectionModal template={template} scoreTemplates={scoreTemplates} discoveryQuestion={connecting.question} onSelect={(scoreQuestionId) => { connect(connecting.section, connecting.question, scoreQuestionId); setConnecting(null); }} onClose={() => setConnecting(null)} />}
   </div>;
+}
+
+function ScoreConnectionModal({ template, scoreTemplates, discoveryQuestion, onSelect, onClose }) {
+  const [search, setSearch] = useState("");
+  const normalizedSearch = search.trim().toLocaleLowerCase("es");
+  const linkedId = discoveryQuestion.discovery_question_score_links[0]?.score_question_id || "";
+  const categories = scoreTemplates.flatMap((score) => score.score_categories).map((category) => ({
+    ...category,
+    score_questions: category.score_questions.filter((question) => question.prompt.toLocaleLowerCase("es").includes(normalizedSearch)),
+  })).filter((category) => category.score_questions.length);
+  const total = scoreTemplates.reduce((sum, score) => sum + score.score_categories.reduce((categorySum, category) => categorySum + category.score_questions.length, 0), 0);
+  const divisionName = template.divisions?.name || "División seleccionada";
+  return <div className="db-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="db-modal db-library-modal" role="dialog" aria-modal="true" aria-label={`Preguntas Score de ${divisionName}`}><div className="db-modal-head"><div><span className="db-eyebrow">Score · {divisionName}</span><h2>Conectar pregunta</h2></div><button onClick={onClose} aria-label="Cerrar selector">×</button></div><p className="db-connection-context">{discoveryQuestion.prompt}</p><div className="db-search db-library-search"><Search size={16} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Buscar entre ${total} preguntas`} /></div><div className="db-library-list">{categories.map((category, index) => <details className="db-library-category" key={`${category.id}-${normalizedSearch ? "search" : "browse"}`} open={Boolean(normalizedSearch) || index === 0}><summary><div><span>{divisionName}</span><h3>{category.name}</h3></div><b>{category.score_questions.length} preguntas</b></summary>{category.score_questions.map((question) => { const compatible = scoreQuestionIsCompatible(discoveryQuestion, question); const linked = question.id === linkedId; return <article key={question.id}><div><strong>{question.prompt}</strong><small>{getDiscoveryResponseType(question.response_type)?.label || question.response_type}{!compatible && " · Tipo incompatible"}</small></div><button className="db-button" disabled={!compatible || linked} onClick={() => onSelect(question.id)}>{linked ? "Conectada" : compatible ? "Conectar" : "No compatible"}</button></article>; })}</details>)}{!categories.length && <p className="db-empty-mini">{normalizedSearch ? "No encontramos preguntas que coincidan con tu búsqueda." : "No hay preguntas Score disponibles para esta división."}</p>}</div></div></div>;
 }
 
 function Preview({ template }) {

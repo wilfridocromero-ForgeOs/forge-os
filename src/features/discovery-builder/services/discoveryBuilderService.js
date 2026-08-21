@@ -88,29 +88,59 @@ export function normalizeTemplate(template) {
 }
 
 export async function getDiscoveryBuilderData() {
-  const [templatesResult, scoresResult] = await Promise.all([
-    supabase.from("discovery_templates").select(templateSelect).order("updated_at", { ascending: false }),
-    supabase.from("score_templates")
-      .select("id, name, status, score_categories(id, name, position, score_questions(id, prompt, response_type, position, scale_min, scale_max, options, scoring_config))")
-      .eq("status", "published")
-      .order("name"),
-  ]);
+  const templatesResult = await supabase.from("discovery_templates")
+    .select(templateSelect).order("updated_at", { ascending: false });
 
   if (templatesResult.error) throw templatesResult.error;
-  if (scoresResult.error) throw scoresResult.error;
 
   return {
     templates: (templatesResult.data || []).map(normalizeTemplate),
-    scoreTemplates: (scoresResult.data || []).map((template) => ({
-      ...template,
-      score_categories: [...(template.score_categories || [])]
-        .sort((a, b) => a.position - b.position)
-        .map((category) => ({
-          ...category,
-          score_questions: [...(category.score_questions || [])].sort((a, b) => a.position - b.position),
-        })),
-    })),
   };
+}
+
+export async function getDiscoveryScoreQuestions({ organizationId, divisionId }) {
+  if (!organizationId || !divisionId) return [];
+
+  const templatesResult = await supabase.from("score_templates")
+    .select("id, name, status, organization_id, division_id")
+    .eq("organization_id", organizationId)
+    .eq("division_id", divisionId)
+    .eq("status", "published")
+    .order("name");
+  if (templatesResult.error) throw templatesResult.error;
+  const templates = templatesResult.data || [];
+  if (!templates.length) return [];
+
+  const categoriesResult = await supabase.from("score_categories")
+    .select("id, template_id, name, position")
+    .in("template_id", templates.map((template) => template.id))
+    .order("position")
+    .order("name");
+  if (categoriesResult.error) throw categoriesResult.error;
+  const categories = categoriesResult.data || [];
+  if (!categories.length) return templates.map((template) => ({ ...template, score_categories: [] }));
+
+  const questions = [];
+  for (let from = 0; ; from += LIBRARY_PAGE_SIZE) {
+    const page = await supabase.from("score_questions")
+      .select("id, category_id, prompt, response_type, position, scale_min, scale_max, options, scoring_config")
+      .in("category_id", categories.map((category) => category.id))
+      .order("position")
+      .order("id")
+      .range(from, from + LIBRARY_PAGE_SIZE - 1);
+    if (page.error) throw page.error;
+    const rows = page.data || [];
+    questions.push(...rows);
+    if (rows.length < LIBRARY_PAGE_SIZE) break;
+  }
+
+  return templates.map((template) => ({
+    ...template,
+    score_categories: categories.filter((category) => category.template_id === template.id).map((category) => ({
+      ...category,
+      score_questions: questions.filter((question) => question.category_id === category.id),
+    })),
+  }));
 }
 
 export async function getDiscoveryLibraryQuestions({ organizationId, divisionId }) {
