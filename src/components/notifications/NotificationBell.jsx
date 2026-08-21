@@ -1,6 +1,6 @@
 import { Popover as HeadlessPopover } from "@headlessui/react";
 import { Bell, BriefcaseBusiness, CheckCheck, CircleAlert, MessageSquareText, RefreshCw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../Context/AuthContext";
 import { getNotificationsPage, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead, NOTIFICATION_PAGE_SIZE } from "../../services/NotificationService";
@@ -31,6 +31,41 @@ function isSafeInternalPath(value) {
   return typeof value === "string" && value.startsWith("/") && !value.startsWith("//");
 }
 
+function useMobileNotificationSheet() {
+  const query = "(max-width: 639px)";
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia(query);
+    const update = () => setMobile(media.matches);
+    update();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
+  return mobile;
+}
+
+class PushControlBoundary extends Component {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <div className="push-control"><CircleAlert size={18} /><div><strong>Web Push no está disponible ahora</strong><span>Las notificaciones dentro de ORVESEN siguen funcionando. Intenta nuevamente más tarde.</span></div></div>;
+    }
+    return this.props.children;
+  }
+}
+
 export default function NotificationBell() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -42,6 +77,7 @@ export default function NotificationBell() {
   const [loaded, setLoaded] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
+  const mobileSheet = useMobileNotificationSheet();
 
   useEffect(() => {
     let active = true;
@@ -118,7 +154,7 @@ export default function NotificationBell() {
         <Bell size={18} />
         {unreadCount > 0 && <span className="notification-badge" aria-hidden="true">{badge}</span>}
       </HeadlessPopover.Button>
-      <HeadlessPopover.Panel className="notification-panel">
+      <HeadlessPopover.Panel portal={mobileSheet} className="notification-panel">
         <header className="notification-header">
           <div className="min-w-0"><p className="notification-eyebrow">Centro personal</p><h2>Notificaciones</h2><p>{unreadCount ? `${unreadCount} sin leer` : "Todo al día"}</p></div>
           <button type="button" onClick={close} className="notification-close" aria-label="Cerrar notificaciones"><X size={19} /></button>
@@ -126,11 +162,11 @@ export default function NotificationBell() {
         <div className="notification-toolbar">
           <button type="button" onClick={readAll} disabled={!unreadCount}><CheckCheck size={16} /> Marcar todas como leídas</button>
         </div>
-        <PushNotificationControl userId={user?.id} organizationId={organizationId} />
+        <PushControlBoundary><PushNotificationControl userId={user?.id} organizationId={organizationId} /></PushControlBoundary>
         <div className="notification-list">
           {loading && <p className="notification-state">Cargando notificaciones…</p>}
           {!loading && error && <p className="notification-error"><CircleAlert size={16} /> {error}</p>}
-          {!loading && loaded && !notifications.length && <div className="notification-empty"><Bell size={26} /><strong>No tienes notificaciones nuevas.</strong><span>Cuando algo requiera tu atención aparecerá aquí.</span></div>}
+          {!loading && loaded && !notifications.length && <div className="notification-empty"><Bell size={26} /><strong>No tienes notificaciones todavía.</strong><span>Cuando algo requiera tu atención aparecerá aquí.</span></div>}
           {!loading && notifications.map((notification) => <NotificationItem key={notification.id} notification={notification} onOpen={() => openNotification(notification, close)} />)}
           {hasMore && <button type="button" disabled={loadingMore} onClick={loadMore} className="notification-more">{loadingMore ? "Cargando…" : "Ver más"}</button>}
         </div>

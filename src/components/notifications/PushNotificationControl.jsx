@@ -11,7 +11,11 @@ export default function PushNotificationControl({ userId, organizationId }) {
     let active = true;
     getDevicePushState()
       .then((nextState) => { if (active) setState({ ...nextState, loading: false }); })
-      .catch(() => { if (active) setState((current) => ({ ...current, loading: false })); });
+      .catch(() => {
+        if (!active) return;
+        setState((current) => ({ ...current, loading: false, active: false }));
+        setError("No pudimos comprobar Web Push. Las notificaciones dentro de ORVESEN siguen disponibles.");
+      });
     return () => { active = false; };
   }, []);
 
@@ -22,7 +26,11 @@ export default function PushNotificationControl({ userId, organizationId }) {
       setState({ ...(await enableDevicePush(userId, organizationId)), loading: false });
     } catch (requestError) {
       setError(requestError.message || "No pudimos activar las notificaciones en este dispositivo.");
-      setState({ ...(await getDevicePushState()), loading: false });
+      try {
+        setState({ ...(await getDevicePushState()), loading: false });
+      } catch {
+        setState((current) => ({ ...current, loading: false, active: false }));
+      }
     } finally {
       setWorking(false);
     }
@@ -47,6 +55,8 @@ export default function PushNotificationControl({ userId, organizationId }) {
   if (!state.configured) return <div className="push-control"><CircleAlert size={18} /><div><strong>Configuración pendiente</strong><span>La clave pública de Web Push aún no está disponible en este entorno.</span></div></div>;
 
   if (state.permission === "denied") return <div className="push-control"><BellOff size={18} /><div><strong>Notificaciones bloqueadas</strong><span>Puedes habilitarlas desde la configuración del navegador o del dispositivo.</span></div></div>;
+
+  if (error && !state.active) return <div className="push-control"><CircleAlert size={18} /><div><strong>No pudimos comprobar Web Push</strong><span className="push-control-error">{error}</span></div><button type="button" disabled={working} onClick={enable}>Intentar de nuevo</button></div>;
 
   return <div className={`push-control ${state.active ? "is-active" : ""}`}>
     <BellRing size={18} />

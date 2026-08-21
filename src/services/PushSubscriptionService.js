@@ -4,10 +4,11 @@ const PUBLIC_VAPID_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 const SERVICE_WORKER_URL = "/sw.js";
 
 export function getPushSupport() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+  const hasBrowserApis = typeof window !== "undefined" && typeof navigator !== "undefined";
+  if (!hasBrowserApis || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
     return { supported: false, permission: "unsupported", configured: Boolean(PUBLIC_VAPID_KEY) };
   }
-  return { supported: true, permission: Notification.permission, configured: Boolean(PUBLIC_VAPID_KEY) };
+  return { supported: true, permission: window.Notification.permission, configured: Boolean(PUBLIC_VAPID_KEY) };
 }
 
 export async function getDevicePushState() {
@@ -55,7 +56,7 @@ export async function enableDevicePush(userId, organizationId) {
   if (!support.supported) throw new Error("Este navegador no admite notificaciones Web Push.");
   if (!support.configured) throw new Error("Web Push todavía no está configurado para este entorno.");
 
-  const permission = await Notification.requestPermission();
+  const permission = await window.Notification.requestPermission();
   if (permission !== "granted") return { ...support, permission, active: false };
 
   const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL, {
