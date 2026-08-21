@@ -30,8 +30,8 @@ export function EvidenceRequirementFields({ value, onChange, onRemove, error = "
   </div>;
 }
 
-export default function TaskEvidencePanel({ task, projectId, organizationId, userId, canManage, canSubmit, onChange, reportError }) {
-  const [open, setOpen] = useState(false);
+export default function TaskEvidencePanel({ task, projectId, organizationId, userId, canManage, canSubmit, onChange, reportError, initiallyOpen = false }) {
+  const [open, setOpen] = useState(initiallyOpen);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState(blankEvidenceRequirement());
   const [draftError, setDraftError] = useState("");
