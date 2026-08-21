@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "ORVESEN OS",
+  "short_name": "ORVESEN",
+  "description": "Sistema operativo para la gestión y evolución de organizaciones.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "1536x1536",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

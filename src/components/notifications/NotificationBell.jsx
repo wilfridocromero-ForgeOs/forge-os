@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../Context/AuthContext";
 import { getNotificationsPage, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead, NOTIFICATION_PAGE_SIZE } from "../../services/NotificationService";
+import PushNotificationControl from "./PushNotificationControl";
 import "./Notifications.css";
 
 const iconByType = {
@@ -125,6 +126,7 @@ export default function NotificationBell() {
         <div className="notification-toolbar">
           <button type="button" onClick={readAll} disabled={!unreadCount}><CheckCheck size={16} /> Marcar todas como leídas</button>
         </div>
+        <PushNotificationControl userId={user?.id} organizationId={organizationId} />
         <div className="notification-list">
           {loading && <p className="notification-state">Cargando notificaciones…</p>}
           {!loading && error && <p className="notification-error"><CircleAlert size={16} /> {error}</p>}
