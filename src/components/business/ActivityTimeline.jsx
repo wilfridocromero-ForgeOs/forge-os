@@ -1,8 +1,11 @@
 import { Circle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import Card from "../ui/Card";
 
-export default function ActivityTimeline({ activities = [] }) {
+export default function ActivityTimeline({ activities = [], loading = false, unavailable = false }) {
+  const recentActivities = activities.slice(0, 4);
+
   return (
     <Card className="h-full" contentClassName="p-5 sm:p-6">
 
@@ -11,11 +14,11 @@ export default function ActivityTimeline({ activities = [] }) {
       <div>
 
         <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
-          Actividad reciente
+          Actividad de proyectos
         </p>
 
         <h2 className="mt-2 text-xl font-semibold text-white">
-          Últimos movimientos
+          Movimientos recientes
         </h2>
 
       </div>
@@ -24,20 +27,22 @@ export default function ActivityTimeline({ activities = [] }) {
 
       <div className="mt-5 space-y-5">
 
-        {activities.length === 0 && (
+        {loading && <p className="rounded-xl border border-zinc-800 p-5 text-sm text-zinc-500">Cargando actividad…</p>}
+        {!loading && unavailable && <p className="rounded-xl border border-amber-900/50 p-5 text-sm text-amber-300">La actividad de proyectos no está disponible ahora.</p>}
+        {!loading && !unavailable && activities.length === 0 && (
           <p className="rounded-xl border border-dashed border-zinc-800 p-5 text-sm text-zinc-500">
             Todavía no hay movimientos reales para mostrar.
           </p>
         )}
 
-        {activities.map((activity, index) => (
+        {recentActivities.map((activity, index) => (
           <div
             key={index}
             className="relative flex gap-5"
           >
             {/* Línea */}
 
-            {index !== activities.length - 1 && (
+            {index !== recentActivities.length - 1 && (
               <div
                 className="
                   absolute
@@ -73,6 +78,7 @@ export default function ActivityTimeline({ activities = [] }) {
               <p className="mt-1 text-sm leading-6 text-zinc-500">
                 {activity.description}
               </p>
+              {activity.projectId && <Link to={`/proyectos/${activity.projectId}`} className="mt-2 inline-flex min-h-9 items-center text-xs font-medium text-zinc-300 underline underline-offset-4">Abrir proyecto</Link>}
 
             </div>
 

@@ -17,8 +17,9 @@ export async function getCompanyScoreDashboard(organizationId) {
   if (!model) return { model: null, snapshot: null, divisions: [] };
 
   const [snapshotResult, componentResult, divisionScoreResult] = await Promise.all([
-    supabase.from("current_company_master_score").select(COMPANY_SCORE_FIELDS)
-      .eq("organization_id", organizationId).eq("model_id", model.id).maybeSingle(),
+    supabase.from("company_score_snapshots").select(COMPANY_SCORE_FIELDS)
+      .eq("organization_id", organizationId).eq("model_id", model.id)
+      .order("calculated_at", { ascending: false }).order("created_at", { ascending: false }).limit(2),
     supabase.from("company_score_components")
       .select("division_id,weight,created_at,divisions(id,name,active,position)")
       .eq("organization_id", organizationId).eq("model_id", model.id).eq("active", true),
@@ -40,5 +41,6 @@ export async function getCompanyScoreDashboard(organizationId) {
     score: scoresByDivision.get(component.division_id) || null,
   })).sort((a, b) => b.weight - a.weight || a.position - b.position || a.configuredAt.localeCompare(b.configuredAt));
 
-  return { model, snapshot: snapshotResult.data || null, divisions };
+  const snapshots = snapshotResult.data || [];
+  return { model, snapshot: snapshots[0] || null, previousSnapshot: snapshots[1] || null, divisions };
 }

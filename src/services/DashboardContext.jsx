@@ -57,7 +57,10 @@ user.id
 
 const metrics =
 await getDashboardData(
-organization.id
+{
+organizationId: organization.id,
+userId: user.id
+}
 );
 
 
@@ -99,6 +102,8 @@ dashboard
 
 
 
+// Legacy provider kept compatible with the current dashboard service.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useDashboard(){
 
 return useContext(

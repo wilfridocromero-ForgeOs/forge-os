@@ -1,52 +1,59 @@
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3 } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import Card from "../ui/Card";
 import "./CompanyScoreOverview.css";
 
 const LABELS = { unevaluated: "Sin evaluar", insufficient_data: "Datos insuficientes", partial: "Parcial", current: "Actual", stale: "Datos por actualizar" };
-const percent = (value) => value == null ? null : `${Number(value).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
-const weightPercent = (value) => `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}%`;
+const percent = (value, digits = 1) => value == null ? "0%" : `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: digits })}%`;
+const clamp = (value) => Math.min(100, Math.max(0, Number(value) || 0));
 const statusIcon = (status) => status === "current" ? <CheckCircle2 size={15} /> : status === "stale" ? <Clock3 size={15} /> : <AlertCircle size={15} />;
 
 export default function CompanyScoreOverview({ data, loading, error, onEvaluate, detailPath = "/orvesen-score" }) {
-  if (loading) return <Card hover={false} contentClassName="company-score-state">Cargando Score de la organización…</Card>;
-  if (error) return <Card hover={false} contentClassName="company-score-state"><AlertCircle size={22} /><strong>No pudimos cargar el Score de la organización.</strong><span>El resto del Dashboard continúa disponible.</span></Card>;
-  if (!data?.model) return <Card hover={false} contentClassName="company-score-state"><strong>Configura el modelo de Score de tu organización.</strong><span>Cuando el modelo esté publicado, aquí aparecerán su Score y cobertura.</span></Card>;
+  if (loading) return <ScoreState>Cargando el estado empresarial…</ScoreState>;
+  if (error) return <ScoreState icon={<AlertCircle size={22} />} title="No pudimos cargar el Score.">El resto del Dashboard continúa disponible.</ScoreState>;
+  if (!data?.model) return <ScoreState title="Aún no existe un modelo de Score publicado.">Configura el modelo para comenzar a consolidar evidencia empresarial.</ScoreState>;
 
-  const { model, snapshot, divisions = [] } = data;
+  const { model, snapshot, previousSnapshot, divisions = [] } = data;
   const hasMasterScore = snapshot?.master_score != null;
-  const masterProgress = hasMasterScore ? Math.min(100, Math.max(0, Number(snapshot.master_score) / 10)) : 0;
-  const coverage = snapshot?.coverage_percentage ?? 0;
-  const threshold = model.minimum_publishable_coverage ?? 60;
+  const coverage = Number(snapshot?.coverage_percentage || 0);
+  const threshold = Number(model.minimum_publishable_coverage || 60);
   const status = snapshot?.status || "unevaluated";
-  const pendingCount = divisions.filter((division) => !division.score).length;
-  const descriptions = {
-    insufficient_data: "Aún no hay suficiente evidencia para calcular el Score de la organización.",
-    stale: "El Score existe, pero parte de la evidencia necesita actualizarse.",
-    unevaluated: "Aún no existen evaluaciones para calcular el Score de la organización.",
-  };
+  const evaluated = divisions.filter((division) => division.score).length;
+  const delta = hasMasterScore && previousSnapshot?.master_score != null
+    ? Number(snapshot.master_score) - Number(previousSnapshot.master_score)
+    : null;
+  const evaluationLabel = status === "unevaluated" ? "Comenzar diagnóstico" : status === "insufficient_data" ? "Continuar evaluación" : "Ver análisis completo";
 
   return (
-    <section className="company-score-layout" aria-label="Score de la organización">
-      <Card className="company-score-main" hover={false} contentClassName="company-score-card">
-        <div className="company-score-heading"><div><p className="company-score-eyebrow">{model.name}</p><h2>Salud general de la organización</h2><Link className="company-score-detail-link" to={detailPath}>Ver análisis <ArrowRight size={14} /></Link></div><span className={`company-score-status is-${status}`}>{statusIcon(status)} {LABELS[status] || status}</span></div>
-        <div className="company-score-summary">
-          <div className="company-score-ring" style={{ "--company-score-progress": `${masterProgress}%` }}><div><strong>{hasMasterScore ? Number(snapshot.master_score).toLocaleString("es-ES") : "—"}</strong><span>/ 1000</span></div></div>
-          <div className="company-score-context">
-            <p>{descriptions[status] || "Resultado consolidado a partir de la evidencia disponible."}</p>
-            {snapshot?.performance_percentage != null && <div className="company-score-observed"><span>Desempeño observado</span><strong>{percent(snapshot.performance_percentage)}</strong></div>}
-            <div className="company-score-coverage-copy"><span>Cobertura</span><strong>{percent(coverage)}</strong></div>
-            <div className="company-score-coverage" aria-label={`Cobertura ${percent(coverage)}`}><span style={{ width: `${Math.min(100, Math.max(0, Number(coverage)))}%` }} /></div>
-            <small>{percent(coverage)} de {percent(threshold)} mínimo requerido</small>
+    <Card className="company-score-main" hover={false} contentClassName="company-score-card">
+      <div className="company-score-heading">
+        <div><p className="company-score-eyebrow">ORVESEN SCORE</p><h2>Estado general de la empresa</h2></div>
+        <span className={`company-score-status is-${status}`}>{statusIcon(status)} {LABELS[status] || status}</span>
+      </div>
+      <div className="company-score-summary">
+        <div className={`company-score-ring ${hasMasterScore ? "" : "is-insufficient"}`} style={{ "--company-score-progress": `${hasMasterScore ? clamp(Number(snapshot.master_score) / 10) : clamp(coverage)}%` }}>
+          <div>{hasMasterScore ? <><strong>{Number(snapshot.master_score).toLocaleString("es-ES")}</strong><span>/ 1000</span></> : <><strong>Datos</strong><span>insuficientes</span></>}</div>
+        </div>
+        <div className="company-score-context">
+          <div className="company-score-facts">
+            {snapshot?.performance_percentage != null && <div><span>Desempeño observado</span><strong>{percent(snapshot.performance_percentage, 2)}</strong></div>}
+            <div><span>Cobertura</span><strong>{percent(coverage, 2)}</strong></div>
+            <div><span>Áreas evaluadas</span><strong>{evaluated} de {divisions.length}</strong></div>
+          </div>
+          <div className="company-score-coverage" aria-label={`Cobertura ${percent(coverage)}`}><span style={{ width: `${clamp(coverage)}%` }} /></div>
+          <p className="company-score-threshold">{percent(coverage, 2)} de {percent(threshold)} mínimo requerido</p>
+          {delta != null && delta !== 0 && <p className={`company-score-delta ${delta > 0 ? "is-up" : "is-down"}`}>{delta > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />} {delta > 0 ? "+" : ""}{delta.toLocaleString("es-ES")} puntos desde el snapshot anterior</p>}
+          <p className="company-score-updated">Actualizado {snapshot?.calculated_at ? new Date(snapshot.calculated_at).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" }) : "sin snapshot disponible"}</p>
+          <div className="company-score-actions">
+            <Link to={detailPath}>{status === "current" || status === "partial" || status === "stale" ? evaluationLabel : "Ver análisis"} <ArrowRight size={15} /></Link>
+            {(status === "unevaluated" || status === "insufficient_data") && onEvaluate && <button type="button" onClick={onEvaluate}>{evaluationLabel}</button>}
           </div>
         </div>
-        {(status === "insufficient_data" || status === "unevaluated") && <div className="company-score-next-step"><ArrowRight size={18} /><div><strong>Próximo paso</strong><p>Continúa evaluando las divisiones sin evidencia para aumentar la cobertura.</p>{pendingCount > 0 && <span>{pendingCount} {pendingCount === 1 ? "área pendiente" : "áreas pendientes"} de evaluación</span>}</div>{onEvaluate && <button onClick={onEvaluate}>Evaluar</button>}</div>}
-      </Card>
-
-      <Card hover={false} contentClassName="company-score-divisions-card">
-        <div className="company-score-divisions-heading"><div><p className="company-score-eyebrow">Divisiones</p><h2>Score por área</h2></div><span>{divisions.length} configuradas</span></div>
-        <div className="company-score-divisions">{divisions.map((division) => <article className="company-division-row" key={division.id}><div><strong>{division.name}</strong><span>Peso en el modelo: {weightPercent(division.weight)}</span></div>{division.score ? <div className="company-division-result"><strong>{Number(division.score.performance_percentage).toFixed(2)} <span>/ 100</span></strong><small>{LABELS[division.score.status] || division.score.status} · Cobertura {percent(division.score.coverage_percentage)}</small></div> : <span className="company-division-empty">Sin evaluar</span>}</article>)}</div>
-      </Card>
-    </section>
+      </div>
+    </Card>
   );
+}
+
+function ScoreState({ icon = null, title = null, children }) {
+  return <Card hover={false} contentClassName="company-score-state">{icon}{title && <strong>{title}</strong>}<span>{children}</span></Card>;
 }
