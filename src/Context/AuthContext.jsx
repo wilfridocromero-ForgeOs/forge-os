@@ -4,6 +4,7 @@ import { CAPABILITIES, getRoleCapabilities } from "../config/capabilities";
 import { updateOrganizationName as persistOrganizationName } from "../services/OrganizationService";
 
 const AuthContext = createContext();
+const IDENTITY_RETRY_DELAYS_MS = [0, 500, 1500];
 
 const ROLE_LABELS = {
   founder: "Fundador",
@@ -58,78 +59,106 @@ export function AuthProvider({ children }) {
 
     if (!userId) return undefined;
 
-    Promise.all([
-      supabase.rpc("get_my_authorization_context"),
-      supabase.from("member_module_access").select("module_key, enabled").eq("user_id", userId),
-    ])
-      .then(([contextResult, modulesResult]) => {
+    async function resolveIdentity() {
+      let lastError = null;
+
+      for (const delay of IDENTITY_RETRY_DELAYS_MS) {
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
         if (!active) return;
 
-        const requestError = contextResult.error || modulesResult.error;
-        if (requestError) {
-          console.error("No se pudo resolver la identidad activa:", requestError.message);
-          setIdentity({
-            status: "error",
-            userId,
-            profile: null,
-            moduleAccess: [],
-            error: requestError,
-          });
-          return;
-        }
+        try {
+          const [contextResult, modulesResult] = await Promise.all([
+            supabase.rpc("get_my_authorization_context"),
+            supabase.from("member_module_access").select("module_key, enabled").eq("user_id", userId),
+          ]);
+          if (!active) return;
 
-        if (!contextResult.data) {
+          const requestError = contextResult.error || modulesResult.error;
+          if (requestError) {
+            lastError = requestError;
+            continue;
+          }
+
+          if (!contextResult.data) {
+            setIdentity({
+              status: "unauthorized",
+              userId,
+              profile: null,
+              moduleAccess: [],
+              error: null,
+            });
+            return;
+          }
+
+          const context = contextResult.data;
+          const organization = context.organization;
+          const membership = context.membership;
+          const profile = {
+            ...context.profile,
+            organization_id: membership?.organization_id ?? null,
+            role: membership?.role ?? null,
+            organizations: organization,
+          };
+          const hasValidRole = Object.hasOwn(ROLE_LABELS, membership?.role);
+
           setIdentity({
-            status: "unauthorized",
+            status: !organization
+              ? "no_organization"
+              : hasValidRole
+                ? "authorized"
+                : "unauthorized",
             userId,
-            profile: null,
-            moduleAccess: [],
+            profile,
+            membership,
+            organizations: context.organizations || [],
+            moduleAccess: modulesResult.data || [],
             error: null,
           });
           return;
+        } catch (error) {
+          lastError = error;
         }
+      }
 
-        const context = contextResult.data;
-        const organization = context.organization;
-        const membership = context.membership;
-        const profile = {
-          ...context.profile,
-          organization_id: membership?.organization_id ?? null,
-          role: membership?.role ?? null,
-          organizations: organization,
-        };
-        const hasValidRole = Object.hasOwn(ROLE_LABELS, membership?.role);
-
-        setIdentity({
-          status: !organization
-            ? "no_organization"
-            : hasValidRole
-              ? "authorized"
-              : "unauthorized",
-          userId,
-          profile,
-          membership,
-          organizations: context.organizations || [],
-          moduleAccess: modulesResult.data || [],
-          error: null,
-        });
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error("No se pudo resolver la identidad activa:", error);
-        setIdentity({
-          status: "error",
-          userId,
-          profile: null,
-          moduleAccess: [],
-          error,
-        });
+      if (!active) return;
+      console.error("No se pudo resolver la identidad activa:", lastError);
+      setIdentity({
+        status: "error",
+        userId,
+        profile: null,
+        moduleAccess: [],
+        error: lastError,
       });
+    }
+
+    resolveIdentity();
 
     return () => {
       active = false;
     };
-  }, [session?.user?.id, identityRevision]);
+  }, [session?.access_token, session?.user?.id, identityRevision]);
+
+  useEffect(() => {
+    if (identity.status !== "error") return undefined;
+
+    const retryWhenOnline = () => {
+      setIdentity((current) => ({ ...current, status: "resolving", error: null }));
+      setIdentityRevision((current) => current + 1);
+    };
+    const retryWhenVisible = () => {
+      if (document.visibilityState === "visible") retryWhenOnline();
+    };
+
+    window.addEventListener("online", retryWhenOnline);
+    window.addEventListener("pageshow", retryWhenOnline);
+    document.addEventListener("visibilitychange", retryWhenVisible);
+
+    return () => {
+      window.removeEventListener("online", retryWhenOnline);
+      window.removeEventListener("pageshow", retryWhenOnline);
+      document.removeEventListener("visibilitychange", retryWhenVisible);
+    };
+  }, [identity.status]);
 
   const profile = identity.profile;
   const organization = profile?.organizations ?? null;
