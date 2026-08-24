@@ -1,264 +1,144 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Columns3, LayoutGrid, List, Mail, Search } from "lucide-react";
+import { Building2, Columns3, LayoutGrid, List, Search } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import PageHeader from "../components/ui/PageHeader";
-import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
-import CreateClientModal from "./Clients/CreateClientModal";
-import { getClients } from "../services/ClientService";
+import ClientActionsMenu from "../features/clients/components/ClientActionsMenu";
+import ClientDeleteModal from "../features/clients/components/ClientDeleteModal";
+import ClientEditorModal from "../features/clients/components/ClientEditorModal";
+import { archiveClient, getClients, restoreClient } from "../services/ClientService";
 import { useOrganization } from "../Context/OrganizationContext";
 import { useAuth } from "../Context/AuthContext";
-import InviteClientModal from "./Clients/InviteClientModal";
+import "./Clients.css";
 
-const views = [
+const VIEWS = [
   { id: "cards", label: "Tarjetas", icon: LayoutGrid },
   { id: "list", label: "Lista", icon: List },
   { id: "pipeline", label: "Pipeline", icon: Columns3 },
 ];
+const STATUS_LABELS = { lead: "Lead", active: "Activo", activo: "Activo", paused: "Pausado", pausado: "Pausado", closed: "Cerrado", cerrado: "Cerrado", archived: "Archivado" };
+const DISCOVERY_LABELS = { draft: "Borrador", in_progress: "En progreso", completed: "Completado", abandoned: "Abandonado" };
 
-const statusLabels = {
-  lead: "Lead",
-  active: "Activo",
-  activo: "Activo",
-  paused: "Pausado",
-  pausado: "Pausado",
-  closed: "Cerrado",
-  cerrado: "Cerrado",
-};
-
-function labelStatus(status) {
-  return statusLabels[String(status || "lead").toLowerCase()] || status || "Sin estado";
-}
-
-function ClientCard({ client, onInvite, canInvite, onOpen }) {
-  return (
-    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }} className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-[28px]">
-    <Card contentClassName="p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold text-white">{client.company_name}</h2>
-          <p className="mt-1 truncate text-sm text-zinc-400">{client.contact_name || "Sin contacto"}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
-          {labelStatus(client.status)}
-        </span>
-      </div>
-      <div className="mt-5 grid gap-1 text-sm text-zinc-500">
-        <p className="truncate">{client.email || "Sin correo"}</p>
-        <p>{client.phone || "Sin teléfono"}</p>
-      </div>
-      <div className="mt-5 flex items-center justify-between border-t border-zinc-800 pt-4 text-xs text-zinc-500">
-        <span>{client.industry || "Sin industria"}</span>
-        <span>{client.score > 0 ? `Score ${client.score}` : "Sin evaluación"}</span>
-      </div>
-      {canInvite && (
-        <button onClick={(event) => { event.stopPropagation(); onInvite(client); }} disabled={client.portal_enabled} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-default disabled:opacity-60">
-          <Mail size={16} /> {client.portal_enabled ? "Acceso ORVESEN activo" : "Invitar a ORVESEN"}
-        </button>
-      )}
-    </Card>
-    </div>
-  );
-}
+const labelStatus = (status) => STATUS_LABELS[String(status || "lead").toLowerCase()] || status || "Sin estado";
+const labelDiscovery = (status) => DISCOVERY_LABELS[status] || "Sin Discovery";
 
 export default function Clients() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { organization } = useOrganization();
-  const { role, isInternalOrganization } = useAuth();
+  const { user, canManageUsers } = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openModal, setOpenModal] = useState(false);
+  const [editor, setEditor] = useState(() => searchParams.get("new") === "1" ? { mode: "create" } : null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [lifecycle, setLifecycle] = useState("active");
   const [view, setView] = useState(() => localStorage.getItem("orvesen-client-view") || "cards");
-  const [inviteClient, setInviteClient] = useState(null);
-  const canInviteClients = role === "founder" && isInternalOrganization;
-
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
-    // Route state intentionally opens the existing creation flow.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOpenModal(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let active = true;
-
-    async function loadClients() {
-      if (!organization?.id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError("");
-        const data = await getClients(organization.id);
-        if (active) setClients(data);
-      } catch (loadError) {
-        console.error(loadError);
-        if (active) setError("No se pudieron cargar los clientes.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    loadClients();
-    return () => {
-      active = false;
-    };
+    if (!organization?.id) return undefined;
+    Promise.resolve().then(() => {
+      if (!active) return null;
+      setLoading(true);
+      setError("");
+      return getClients(organization.id);
+    })
+      .then((data) => active && setClients(data))
+      .catch(() => active && setError("No se pudieron cargar los clientes."))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
   }, [organization?.id]);
 
-  const statuses = useMemo(
-    () => [...new Set(clients.map((client) => client.status).filter(Boolean))],
-    [clients],
-  );
-
-  const filtered = useMemo(() => {
+  const statuses = useMemo(() => [...new Set(clients.filter((client) => client.status !== "archived").map((client) => client.status).filter(Boolean))], [clients]);
+  const visibleClients = useMemo(() => clients.filter((client) => {
+    const archived = client.status === "archived";
+    if (lifecycle === "active" && archived) return false;
+    if (lifecycle === "archived" && !archived) return false;
+    if (lifecycle !== "archived" && status !== "all" && client.status !== status) return false;
     const term = search.trim().toLowerCase();
-    return clients.filter((client) => {
-      const matchesStatus = status === "all" || client.status === status;
-      const haystack = [client.company_name, client.contact_name, client.email, client.phone, client.industry]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return matchesStatus && (!term || haystack.includes(term));
-    });
-  }, [clients, search, status]);
+    const haystack = [client.company_name, client.contact_name, client.email, client.phone, client.industry].filter(Boolean).join(" ").toLowerCase();
+    return !term || haystack.includes(term);
+  }), [clients, lifecycle, search, status]);
 
   function changeView(nextView) {
     setView(nextView);
     localStorage.setItem("orvesen-client-view", nextView);
   }
 
-  function handleCreated(client) {
-    setClients((previous) => [client, ...previous]);
+  function mergeClient(saved) {
+    setClients((current) => {
+      const existing = current.find((client) => client.id === saved.id);
+      return existing ? current.map((client) => client.id === saved.id ? { ...client, ...saved } : client) : [saved, ...current];
+    });
   }
 
+  async function archive(target) {
+    try { mergeClient(await archiveClient(target.id, organization.id)); }
+    catch (reason) { setError(reason.message || "No se pudo archivar el cliente."); }
+  }
+
+  async function restore(target) {
+    try { mergeClient(await restoreClient(target.id, organization.id)); }
+    catch (reason) { setError(reason.message || "No se pudo restaurar el cliente."); }
+  }
+
+  const actions = (client) => ({
+    client, canManage: canManageUsers,
+    onOpen: () => navigate(`/clientes/${client.id}`),
+    onEdit: () => setEditor({ mode: "edit", client }),
+    onArchive: archive, onRestore: restore, onDelete: setDeleteTarget,
+  });
+
   return (
-    <Page className="space-y-6 lg:space-y-7">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <PageHeader
-          eyebrow="CLIENTES"
-          title="Gestión de clientes"
-          description={`${clients.length} ${clients.length === 1 ? "cliente registrado" : "clientes registrados"}`}
-        />
-        <Button onClick={() => setOpenModal(true)} className="w-full sm:w-auto">+ Nuevo cliente</Button>
-      </div>
+    <Page className="clients-v2">
+      <div className="clients-header"><PageHeader eyebrow="CLIENTES" title="Expedientes empresariales" description={`${clients.length} ${clients.length === 1 ? "cliente registrado" : "clientes registrados"}`} /><Button onClick={() => setEditor({ mode: "create" })}>+ Nuevo cliente</Button></div>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-[#111113] p-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3">
-          <Search size={17} className="shrink-0 text-zinc-500" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar empresa, contacto o correo"
-            className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
-          />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto">
-          <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-300 outline-none">
-            <option value="all">Todos los estados</option>
-            {statuses.map((item) => <option key={item} value={item}>{labelStatus(item)}</option>)}
-          </select>
-          <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1">
-            {views.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => changeView(id)}
-                title={label}
-                aria-label={`Vista ${label}`}
-                className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${view === id ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
-              >
-                <Icon size={16} />
-              </button>
-            ))}
-          </div>
+      <section className="clients-toolbar" aria-label="Buscar y filtrar clientes">
+        <label className="clients-search"><Search size={17} /><span className="sr-only">Buscar clientes</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, contacto o correo" /></label>
+        <div className="clients-filter-group">
+          <select aria-label="Estado del expediente" value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="active">Activos</option><option value="archived">Archivados</option><option value="all">Todos</option></select>
+          <select aria-label="Estado comercial" value={status} disabled={lifecycle === "archived"} onChange={(event) => setStatus(event.target.value)}><option value="all">Todos los estados</option>{statuses.map((item) => <option key={item} value={item}>{labelStatus(item)}</option>)}</select>
+          <div className="clients-view-switch">{VIEWS.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => changeView(id)} title={label} aria-label={`Vista ${label}`} aria-pressed={view === id} className={view === id ? "is-active" : ""}><Icon size={16} /></button>)}</div>
         </div>
       </section>
 
-      {loading && <p className="text-sm text-zinc-500">Cargando clientes…</p>}
-      {error && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{error}</p>}
+      {loading && <ClientsSkeleton />}
+      {error && <p className="clients-error" role="alert">{error}</p>}
+      {!loading && !error && visibleClients.length === 0 && <EmptyState hasClients={clients.length > 0} lifecycle={lifecycle} />}
+      {!loading && view === "cards" && <div className="clients-card-grid">{visibleClients.map((client) => <ClientCard key={client.id} client={client} actions={actions(client)} />)}</div>}
+      {!loading && view === "list" && visibleClients.length > 0 && <ClientList clients={visibleClients} actions={actions} />}
+      {!loading && view === "pipeline" && visibleClients.length > 0 && <ClientPipeline clients={visibleClients} actions={actions} />}
 
-      {!loading && !error && filtered.length === 0 && (
-        <Card contentClassName="p-8 text-center">
-          <h3 className="text-lg font-semibold text-white">{clients.length ? "No hay coincidencias" : "No tienes clientes todavía"}</h3>
-          <p className="mt-2 text-sm text-zinc-500">{clients.length ? "Prueba otra búsqueda o filtro." : "Crea tu primer cliente para comenzar."}</p>
-        </Card>
-      )}
-
-      {!loading && view === "cards" && (
-        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {filtered.map((client) => <ClientCard key={client.id} client={client} canInvite={canInviteClients} onInvite={setInviteClient} onOpen={() => navigate(`/clientes/${client.id}`)} />)}
-        </div>
-      )}
-
-      {!loading && view === "list" && filtered.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#111113]">
-          <div className="hidden grid-cols-[1.3fr_1fr_1.3fr_.7fr_.6fr] gap-4 border-b border-zinc-800 px-5 py-3 text-xs uppercase tracking-wider text-zinc-600 md:grid">
-            <span>Empresa</span><span>Contacto</span><span>Correo</span><span>Estado</span><span>Score</span>
-          </div>
-          {filtered.map((client) => (
-            <button key={client.id} onClick={() => navigate(`/clientes/${client.id}`)} className="grid w-full gap-2 border-b border-zinc-800 px-5 py-4 text-left last:border-0 hover:bg-zinc-900/70 md:grid-cols-[1.3fr_1fr_1.3fr_.7fr_.6fr] md:items-center md:gap-4">
-              <p className="font-medium text-white">{client.company_name}</p>
-              <p className="text-sm text-zinc-400">{client.contact_name || "Sin contacto"}</p>
-              <p className="truncate text-sm text-zinc-500">{client.email || "Sin correo"}</p>
-              <span className="w-fit rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">{labelStatus(client.status)}</span>
-              <p className="text-sm text-zinc-400">{client.score > 0 ? client.score : "—"}</p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!loading && view === "pipeline" && filtered.length > 0 && (
-        <div className="grid gap-4 overflow-x-auto pb-2 lg:grid-cols-4">
-          {(statuses.length ? statuses : ["lead"]).map((pipelineStatus) => {
-            const group = filtered.filter((client) => client.status === pipelineStatus);
-            return (
-              <section key={pipelineStatus} className="min-w-[260px] rounded-2xl border border-zinc-800 bg-[#111113] p-3">
-                <div className="flex items-center justify-between px-2 py-2">
-                  <h2 className="text-sm font-semibold text-white">{labelStatus(pipelineStatus)}</h2>
-                  <span className="text-xs text-zinc-500">{group.length}</span>
-                </div>
-                <div className="mt-2 space-y-3">
-                  {group.map((client) => (
-                    <button key={client.id} onClick={() => navigate(`/clientes/${client.id}`)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-left hover:border-zinc-600">
-                      <p className="font-medium text-white">{client.company_name}</p>
-                      <p className="mt-1 text-sm text-zinc-500">{client.contact_name || "Sin contacto"}</p>
-                    </button>
-                  ))}
-                  {group.length === 0 && <p className="px-2 py-4 text-sm text-zinc-600">Sin clientes</p>}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      {openModal && (
-        <CreateClientModal
-          organizationId={organization?.id}
-          onCreated={handleCreated}
-          onClose={() => setOpenModal(false)}
-        />
-      )}
-
-      {inviteClient && (
-        <InviteClientModal
-          client={inviteClient}
-          onClose={() => setInviteClient(null)}
-          onInvited={async () => {
-            const data = await getClients(organization.id);
-            setClients(data);
-          }}
-        />
-      )}
+      {editor && <ClientEditorModal client={editor.client} organizationId={organization.id} userId={user.id} onClose={() => setEditor(null)} onSaved={mergeClient} />}
+      {deleteTarget && <ClientDeleteModal client={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={(target) => setClients((current) => current.filter((client) => client.id !== target.id))} onArchive={archive} />}
     </Page>
   );
 }
+
+function ClientCard({ client, actions }) {
+  return <article className="client-card"><a href={`/clientes/${client.id}`} onClick={(event) => { event.preventDefault(); actions.onOpen(); }} className="client-card-link" aria-label={`Abrir expediente de ${client.company_name}`}><div className="client-card-heading"><div><h2>{client.company_name}</h2><p>{client.contact_name || "Contacto pendiente"}</p></div><span>{labelStatus(client.status)}</span></div><div className="client-card-contact"><p>{client.email || "Sin correo"}</p><p>{client.phone || "Sin teléfono"}</p></div><dl className="client-card-context"><div><dt>Discovery</dt><dd>{client.contextPartial ? "No disponible" : labelDiscovery(client.discoveryStatus)}</dd></div><div><dt>Proyectos</dt><dd>{client.contextPartial ? "No disponible" : client.activeProjectCount ? `${client.activeProjectCount} activos` : "Sin proyectos activos"}</dd></div></dl></a><ClientActionsMenu {...actions} /></article>;
+}
+
+function ClientList({ clients, actions }) {
+  return <div className="clients-list"><div className="clients-list-head"><span>Cliente</span><span>Contacto</span><span>Estado</span><span>Discovery</span><span>Proyectos</span><span /></div>{clients.map((client) => <div className="clients-list-row" key={client.id}><button type="button" onClick={actions(client).onOpen}><strong>{client.company_name}</strong><small>{client.industry || "Industria pendiente"}</small></button><div className="clients-list-contact"><span>{client.contact_name || "Sin contacto"}</span>{client.phone && <small>{client.phone}</small>}</div><span>{labelStatus(client.status)}</span><span>{labelDiscovery(client.discoveryStatus)}</span><span>{client.projectCount || "Sin proyectos"}</span><ClientActionsMenu {...actions(client)} /></div>)}</div>;
+}
+
+function ClientPipeline({ clients, actions }) {
+  const columns = [...new Set(clients.map((client) => client.status || "lead"))];
+  return <div className="clients-pipeline">{columns.map((pipelineStatus) => { const group = clients.filter((client) => client.status === pipelineStatus); return <section key={pipelineStatus}><header><h2>{labelStatus(pipelineStatus)}</h2><span>{group.length}</span></header><div>{group.map((client) => <article key={client.id}><button type="button" onClick={actions(client).onOpen}><strong>{client.company_name}</strong><small>{client.contact_name || "Sin contacto"}</small></button><ClientActionsMenu {...actions(client)} /></article>)}{!group.length && <p>Sin clientes</p>}</div></section>; })}</div>;
+}
+
+function EmptyState({ hasClients, lifecycle }) {
+  return <div className="clients-empty"><Building2 size={24} /><h2>{hasClients ? lifecycle === "archived" ? "No hay clientes archivados" : "No hay coincidencias" : "Aún no tienes clientes"}</h2><p>{hasClients ? "Ajusta la búsqueda o los filtros para continuar." : "Crea el primer expediente empresarial para comenzar."}</p></div>;
+}
+
+function ClientsSkeleton() { return <div className="clients-card-grid" aria-label="Cargando clientes">{[0, 1, 2].map((item) => <div key={item} className="client-card client-card-skeleton" />)}</div>; }
