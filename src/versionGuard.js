@@ -16,36 +16,73 @@ function readUpdateAttempt() {
   try {
     return JSON.parse(sessionStorage.getItem(UPDATE_ATTEMPT_KEY) || "null");
   } catch {
-    sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+    removeUpdateAttempt();
     return null;
   }
 }
 
-function clearCompletedUpdate() {
-  sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+function writeUpdateAttempt(attempt) {
+  try {
+    sessionStorage.setItem(UPDATE_ATTEMPT_KEY, JSON.stringify(attempt));
+  } catch {
+    // The cache-busted navigation still works when session storage is unavailable.
+  }
+}
+
+function removeUpdateAttempt() {
+  try {
+    sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+  } catch {
+    // Storage can be unavailable in restrictive browsing modes.
+  }
+}
+
+function currentRelativeUrl() {
+  const currentUrl = new URL(window.location.href);
+  currentUrl.searchParams.delete("_appv");
+  return `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+}
+
+function safeReturnUrl(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
+  const target = new URL(value, window.location.origin);
+  return target.origin === window.location.origin
+    ? `${target.pathname}${target.search}${target.hash}`
+    : "/";
+}
+
+function clearCompletedUpdate(attempt = readUpdateAttempt()) {
+  removeUpdateAttempt();
   removeUpdateBanner();
 
   const currentUrl = new URL(window.location.href);
-  if (!currentUrl.searchParams.has("_appv")) return;
-  currentUrl.searchParams.delete("_appv");
+  const returnTo = attempt?.target === CURRENT_VERSION
+    ? safeReturnUrl(attempt.returnTo)
+    : `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  const cleanUrl = new URL(returnTo, window.location.origin);
+  cleanUrl.searchParams.delete("_appv");
+
+  if (`${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}` === `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`) return;
   window.history.replaceState(
     window.history.state,
     "",
-    `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+    `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
   );
 }
 
 function requestVersionUpdate(remoteVersion) {
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.set("_appv", remoteVersion.slice(0, 12));
-  sessionStorage.setItem(
-    UPDATE_ATTEMPT_KEY,
-    JSON.stringify({
-      from: CURRENT_VERSION,
-      target: remoteVersion,
-      attemptedAt: Date.now(),
-    }),
-  );
+  const previousAttempt = readUpdateAttempt();
+  const returnTo = previousAttempt?.target === remoteVersion
+    ? safeReturnUrl(previousAttempt.returnTo)
+    : currentRelativeUrl();
+  const nextUrl = new URL("/", window.location.origin);
+  nextUrl.searchParams.set("_appv", remoteVersion);
+  writeUpdateAttempt({
+    from: CURRENT_VERSION,
+    target: remoteVersion,
+    returnTo,
+    attemptedAt: Date.now(),
+  });
   window.location.replace(nextUrl.toString());
 }
 
@@ -132,6 +169,9 @@ async function checkForCurrentVersion() {
 export function installVersionGuard() {
   if (!import.meta.env.PROD || installed) return () => {};
   installed = true;
+
+  const updateAttempt = readUpdateAttempt();
+  if (updateAttempt?.target === CURRENT_VERSION) clearCompletedUpdate(updateAttempt);
 
   const checkWhenVisible = () => {
     if (document.visibilityState === "visible") checkForCurrentVersion();
