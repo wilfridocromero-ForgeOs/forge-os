@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, CheckCircle2, ClipboardCheck, FolderKanban, Globe, Mail, MessageSquarePlus, Phone, ShieldCheck, Target } from "lucide-react";
+import { ArrowLeft, Building2, CheckCircle2, ClipboardCheck, FolderKanban, Globe, Mail, MessageSquarePlus, Phone, Plus, ShieldCheck, Target } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import Card from "../components/ui/Card";
@@ -90,7 +90,7 @@ export default function ClientProfile() {
   return (
     <Page className="client-profile-v2">
       <button onClick={() => navigate("/clientes")} className="client-profile-back"><ArrowLeft size={17} />Volver a clientes</button>
-      <header className="client-profile-header"><div><p>Expediente empresarial</p><h1>{client.company_name}</h1><span>{client.contact_name || "Contacto pendiente"} · {client.industry || "Industria pendiente"}</span></div><div className="client-profile-header-actions"><span className="client-status-badge">{STATUS_LABELS[client.status] || client.status}</span><ClientActionsMenu {...actions} /></div></header>
+      <header className="client-profile-header"><div><p>Expediente empresarial</p><h1>{client.company_name}</h1><span>{client.contact_name || "Contacto pendiente"} · {client.industry || "Industria pendiente"}</span></div><div className="client-profile-header-actions"><Link className="client-discovery-action" to={`/discovery?new=1&client=${client.id}`}><Plus size={16} /> Nuevo diagnóstico</Link><span className="client-status-badge">{STATUS_LABELS[client.status] || client.status}</span><ClientActionsMenu {...actions} /></div></header>
       {error && <p className="clients-error" role="alert">{error}</p>}
       {client.contextPartial && <p className="clients-partial" role="status">Parte del contexto de Discovery, proyectos o portal no está disponible ahora.</p>}
 
@@ -124,7 +124,7 @@ function buildClientContext(client) {
   if (!client) return { attention: [] };
   const attention = [];
   const missing = [client.contact_name, client.email, client.phone, client.website, client.industry].filter((value) => !value).length;
-  if (!client.latestDiscovery) attention.push({ id: "discovery", title: "Discovery pendiente", description: "No existe evidencia Discovery vinculada a este cliente.", action: "Iniciar Discovery", to: "/discovery" });
+  if (!client.latestDiscovery) attention.push({ id: "discovery", title: "Discovery pendiente", description: "No existe evidencia Discovery vinculada a este cliente.", action: "Iniciar Discovery", to: `/discovery?new=1&client=${client.id}` });
   else if (client.latestDiscovery.status === "in_progress") attention.push({ id: "discovery", title: "Discovery en progreso", description: "La evaluación puede continuar desde la última respuesta guardada.", action: "Continuar evaluación", to: `/discovery/evaluaciones/${client.latestDiscovery.id}` });
   if (missing) attention.push({ id: "profile", title: "Perfil incompleto", description: `${missing} ${missing === 1 ? "dato importante está pendiente" : "datos importantes están pendientes"}.`, actionId: "edit" });
   const overdue = client.projects.flatMap((project) => project.project_tasks || []).filter((task) => ["pending", "in_progress", "blocked"].includes(task.status) && task.due_at && new Date(task.due_at) < new Date()).length;

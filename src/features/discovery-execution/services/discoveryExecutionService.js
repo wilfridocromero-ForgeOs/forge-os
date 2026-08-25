@@ -32,6 +32,18 @@ const assessmentSelect = `
   discovery_recommendations(id, category_id, title, reason, priority, status)
 `;
 
+const assessmentSummarySelect = `
+  id, organization_id, division_id, client_id, discovery_template_id, status,
+  score, max_score, completed_at, created_at, updated_at, started_at,
+  clients(id, company_name, contact_name, industry, division_id),
+  discovery_templates(
+    id, name, description, division_id,
+    divisions(name),
+    discovery_sections(id, discovery_questions(id))
+  ),
+  discovery_responses(discovery_question_id, response_value)
+`;
+
 function sortTemplate(template) {
   if (!template) return template;
   return {
@@ -65,53 +77,38 @@ export function normalizeAssessment(assessment) {
 }
 
 export async function getExecutionDashboardData(organizationId) {
-  const [templatesResult, clientsResult, assessmentsResult, modelsResult, scoresResult] = await Promise.all([
+  const [templatesResult, clientsResult, assessmentsResult] = await Promise.all([
     supabase.from("discovery_templates")
       .select(publishedTemplateSelect)
       .eq("organization_id", organizationId)
       .eq("status", "published")
       .order("published_at", { ascending: false }),
     supabase.from("clients")
-      .select("id, organization_id, workspace_organization_id, company_name, contact_name, industry, division_id, status")
+      .select("id, organization_id, workspace_organization_id, company_name, contact_name, email, industry, division_id, status")
       .eq("organization_id", organizationId)
       .order("company_name"),
     supabase.from("discovery_assessments")
-      .select(assessmentSelect)
+      .select(assessmentSummarySelect)
       .eq("organization_id", organizationId)
       .not("discovery_template_id", "is", null)
       .order("updated_at", { ascending: false }),
-    supabase.from("company_score_models")
-      .select("id,name,version,minimum_publishable_coverage,company_score_components(id,division_id,weight,active,created_at,divisions(id,name,position,active))")
-      .eq("organization_id", organizationId)
-      .eq("status", "published")
-      .order("version", { ascending: false })
-      .limit(1),
-    supabase.from("current_division_scores")
-      .select("id,division_id,performance_percentage,coverage_percentage,status,calculated_at")
-      .eq("organization_id", organizationId),
   ]);
 
-  const error = templatesResult.error || clientsResult.error || assessmentsResult.error || modelsResult.error || scoresResult.error;
+  const error = templatesResult.error || clientsResult.error || assessmentsResult.error;
   if (error) throw error;
 
-  const model = modelsResult.data?.[0] || null;
-  const scoresByDivision = new Map((scoresResult.data || []).map((score) => [score.division_id, score]));
-  const divisions = (model?.company_score_components || [])
-    .filter((component) => component.active)
-    .map((component) => ({
-      id: component.division_id,
-      name: component.divisions?.name || "División",
-      position: component.divisions?.position ?? Number.MAX_SAFE_INTEGER,
-      weight: Number(component.weight),
-      score: scoresByDivision.get(component.division_id) || null,
-    }))
-    .sort((a, b) => b.weight - a.weight || a.position - b.position);
+  const templates = (templatesResult.data || []).map(sortTemplate);
+  const divisions = [...new Map(templates
+    .filter((template) => template.division_id)
+    .map((template) => [template.division_id, {
+      id: template.division_id,
+      name: template.divisions?.name || "División",
+    }])).values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
 
   return {
-    templates: (templatesResult.data || []).map(sortTemplate),
+    templates,
     clients: clientsResult.data || [],
     assessments: (assessmentsResult.data || []).map(normalizeAssessment),
-    companyModel: model,
     divisions,
   };
 }
