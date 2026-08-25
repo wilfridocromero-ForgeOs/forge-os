@@ -78,7 +78,7 @@ export default function ProjectDetail({ project, organizationId, users, projectM
           <h1 className="mt-4 break-words text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-4xl">{project.name}</h1>
           <div className="mt-4 max-w-3xl"><p className="text-xs uppercase tracking-[.16em] text-zinc-600">Información del proyecto</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-400">{project.description || "Este proyecto todavía no tiene contexto ni instrucciones generales."}</p></div>
         </div>
-        {canEdit && <div className="relative shrink-0">
+        {canEdit && <div className="relative shrink-0 self-start">
           <button type="button" aria-expanded={showActions} onClick={() => setShowActions((value) => !value)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-800 px-4 text-sm text-zinc-400 hover:border-zinc-600 hover:text-white">Gestionar <ChevronDown size={15} /></button>
           {showActions && <div className="absolute right-0 top-12 z-20 w-48 rounded-xl border border-zinc-800 bg-zinc-950 p-1 shadow-2xl">
             <button type="button" onClick={() => { setShowActions(false); onEdit(); }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-zinc-300 hover:bg-zinc-900"><Edit3 size={15} /> Editar proyecto</button>
@@ -92,7 +92,7 @@ export default function ProjectDetail({ project, organizationId, users, projectM
       </div>
     </header>
 
-    <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-1" aria-label="Secciones del proyecto">{tabs.map(([key, label]) => <button type="button" key={key} onClick={() => onTabChange?.(key)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-medium transition sm:flex-1 ${tab === key ? "bg-white text-black" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"}`}>{label}</button>)}</nav>
+    <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Secciones del proyecto">{tabs.map(([key, label]) => <button type="button" key={key} onClick={() => onTabChange?.(key)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-medium transition sm:flex-1 ${tab === key ? "bg-white text-black" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"}`}>{label}</button>)}</nav>
 
     {workspaceError && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{workspaceError}</p>}
     {tab === "summary" && <>
