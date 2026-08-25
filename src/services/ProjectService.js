@@ -169,8 +169,8 @@ export async function getTaskReferenceFiles(taskId) {
   return data || [];
 }
 
-export async function uploadTaskReferenceFile({ projectId, organizationId, taskId, file, userId, onProgress }) {
-  const id = crypto.randomUUID();
+export async function uploadTaskReferenceFile({ projectId, organizationId, taskId, referenceId, file, userId, onProgress }) {
+  const id = referenceId || crypto.randomUUID();
   const safeName = sanitizeStorageFileName(file.name);
   const storagePath = `${organizationId}/${projectId}/files/${id}/${safeName}`;
   onProgress?.(10, "Validando");

@@ -13,8 +13,14 @@ export default function TaskReferenceFilesPanel({ taskId, projectId, organizatio
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setFiles(await getTaskReferenceFiles(taskId)); }
-    catch (reason) { reportError(reason.message || "No se pudieron cargar las referencias."); }
+    try {
+      setFiles(await getTaskReferenceFiles(taskId));
+      return true;
+    }
+    catch (reason) {
+      reportError(reason.message || "No se pudieron cargar las referencias.");
+      return false;
+    }
     finally { setLoading(false); }
   }, [reportError, taskId]);
 
@@ -25,18 +31,22 @@ export default function TaskReferenceFilesPanel({ taskId, projectId, organizatio
     event.target.value = "";
     if (!selected.length) return;
     const batch = selected.map((file) => ({ id: crypto.randomUUID(), name: file.name, progress: 0, status: "Pendiente", error: "" }));
+    const persistedIds = new Set();
     setUploading(batch); reportError("");
     for (let index = 0; index < selected.length; index += 1) {
       const file = selected[index]; const row = batch[index];
       try {
-        await uploadTaskReferenceFile({ projectId, organizationId, taskId, file, userId, onProgress(progress, status) {
+        await uploadTaskReferenceFile({ projectId, organizationId, taskId, referenceId: row.id, file, userId, onProgress(progress, status) {
           setUploading((current) => current.map((item) => item.id === row.id ? { ...item, progress, status } : item));
         } });
+        persistedIds.add(row.id);
       } catch (reason) {
         setUploading((current) => current.map((item) => item.id === row.id ? { ...item, status: "Error", error: reason.message || "No se pudo subir." } : item));
       }
     }
-    await load();
+    if (await load()) {
+      setUploading((current) => current.filter((item) => !persistedIds.has(item.id)));
+    }
   }
 
   async function act(action) {
@@ -47,7 +57,12 @@ export default function TaskReferenceFilesPanel({ taskId, projectId, organizatio
 
   async function remove(file) {
     if (!window.confirm(`¿Eliminar “${file.file_name}” de las referencias de esta tarea?`)) return;
-    await act(async () => { await deleteProjectFile(file); await load(); });
+    await act(async () => {
+      await deleteProjectFile(file);
+      setFiles((current) => current.filter((item) => item.id !== file.id));
+      setUploading((current) => current.filter((item) => item.id !== file.id));
+      await load();
+    });
   }
 
   return <section className="min-w-0 space-y-3" aria-labelledby="task-reference-title">
