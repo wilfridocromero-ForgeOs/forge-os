@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase";
 const typeLabels = { sop: "SOP", playbook: "Playbook", policy: "Política", template: "Plantilla", reference: "Referencia" };
 const statusLabels = { draft: "Borrador", review: "En revisión", approved: "Aprobado", archived: "Archivado" };
 const extractionLabels = { pending: "Pendiente", processing: "Procesando…", completed: "Listo", failed: "Error" };
+const chunkingLabels = { pending: "Pendiente", processing: "Procesando…", completed: "Listo", failed: "Error" };
 const emptyMetadata = { document_type: "reference", division_id: "", folder_id: "", category: "", tags: "" };
 
 function latestVersion(document) {
@@ -22,6 +23,7 @@ function latestVersion(document) {
     file_size: document.file_size,
     status: document.status,
     extraction_status: "pending",
+    chunking_status: "pending",
   };
 }
 
@@ -51,13 +53,16 @@ export default function Brain() {
   const [editingDocument, setEditingDocument] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [processingVersionIds, setProcessingVersionIds] = useState([]);
+  const [chunkingVersionIds, setChunkingVersionIds] = useState([]);
   const aborters = useRef(new Map());
   const extractionTimers = useRef(new Set());
+  const chunkingRequests = useRef(new Set());
+  const chunkingTimers = useRef(new Map());
 
   async function loadLibrary() {
     if (!profile?.organization_id) return;
     const [documentsResult, foldersResult] = await Promise.all([
-      supabase.from("knowledge_documents").select("*, divisions(name), knowledge_folders(name), latest_version:knowledge_document_versions!knowledge_documents_latest_version_fkey(id, version_number, file_path, file_name, mime_type, file_size, status, submitted_for_review_at, submitted_by, approved_at, approved_by, extraction_status, extraction_error, extracted_at, extractor_version), current_version:knowledge_document_versions!knowledge_documents_current_version_fkey(id, version_number, status, approved_at, approved_by)").eq("organization_id", profile.organization_id).order("created_at", { ascending: false }),
+      supabase.from("knowledge_documents").select("*, divisions(name), knowledge_folders(name), latest_version:knowledge_document_versions!knowledge_documents_latest_version_fkey(id, version_number, file_path, file_name, mime_type, file_size, status, submitted_for_review_at, submitted_by, approved_at, approved_by, extraction_status, extraction_error, extracted_at, extractor_version, chunking_status, chunking_error, chunked_at, chunker_version), current_version:knowledge_document_versions!knowledge_documents_current_version_fkey(id, version_number, status, approved_at, approved_by)").eq("organization_id", profile.organization_id).order("created_at", { ascending: false }),
       supabase.from("knowledge_folders").select("id, parent_id, name").eq("organization_id", profile.organization_id).order("name"),
     ]);
     const error = documentsResult.error || foldersResult.error;
@@ -72,6 +77,9 @@ export default function Brain() {
   useEffect(() => () => {
     extractionTimers.current.forEach((timer) => window.clearTimeout(timer));
     extractionTimers.current.clear();
+    chunkingTimers.current.forEach((timer) => window.clearTimeout(timer));
+    chunkingTimers.current.clear();
+    chunkingRequests.current.clear();
   }, []);
 
   const filtered = useMemo(() => documents.filter((document) => {
@@ -322,6 +330,85 @@ export default function Brain() {
     pollExtraction(version.id);
   }
 
+  function updateChunkingStatus(versionId, chunking) {
+    setDocuments((current) => current.map((document) => (
+      document.latest_version?.id === versionId
+        ? { ...document, latest_version: { ...document.latest_version, ...chunking } }
+        : document
+    )));
+  }
+
+  function finishChunkingRequest(versionId) {
+    chunkingRequests.current.delete(versionId);
+    const timer = chunkingTimers.current.get(versionId);
+    if (timer) window.clearTimeout(timer);
+    chunkingTimers.current.delete(versionId);
+    setChunkingVersionIds((current) => current.filter((id) => id !== versionId));
+  }
+
+  async function pollChunking(versionId, attempt = 0) {
+    const result = await supabase
+      .from("knowledge_document_versions")
+      .select("chunking_status, chunking_error, chunked_at, chunker_version")
+      .eq("id", versionId)
+      .single();
+    if (result.error) {
+      finishChunkingRequest(versionId);
+      setMessage("No se pudo actualizar el estado del conocimiento. Recarga la biblioteca para comprobarlo.");
+      return;
+    }
+
+    updateChunkingStatus(versionId, result.data);
+    if (result.data.chunking_status === "completed") {
+      finishChunkingRequest(versionId);
+      setMessage("Conocimiento generado correctamente.");
+      return;
+    }
+    if (result.data.chunking_status === "failed") {
+      finishChunkingRequest(versionId);
+      setMessage("No se pudo generar el conocimiento. Revisa el error antes de intentar cualquier reintento.");
+      return;
+    }
+    if (attempt >= 39) {
+      finishChunkingRequest(versionId);
+      setMessage("La solicitud fue aceptada y continúa en segundo plano. Recarga la biblioteca para consultar el estado final.");
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      chunkingTimers.current.delete(versionId);
+      pollChunking(versionId, attempt + 1);
+    }, 1500);
+    chunkingTimers.current.set(versionId, timer);
+  }
+
+  async function requestChunking(document) {
+    const version = latestVersion(document);
+    if (!version.id || !canManageUsers || chunkingRequests.current.has(version.id)) return;
+    if (version.extraction_status !== "completed" || version.chunking_status !== "pending") return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setMessage("La sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
+
+    chunkingRequests.current.add(version.id);
+    setChunkingVersionIds((current) => [...current, version.id]);
+    setMessage("Solicitando la generación de conocimiento…");
+    const chunking = await supabase.functions.invoke("process-knowledge-chunks", {
+      body: { version_id: version.id },
+    });
+    if (chunking.error) {
+      finishChunkingRequest(version.id);
+      setMessage("No se pudo iniciar la generación de conocimiento. Comprueba tu sesión y tus permisos.");
+      return;
+    }
+
+    setMessage("Solicitud aceptada. Esperando el resultado del conocimiento…");
+    pollChunking(version.id);
+  }
+
   return <Page className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Conocimiento empresarial</p><h1 className="mt-2 text-3xl font-semibold text-white">Cerebro ORVESEN</h1><p className="mt-2 text-zinc-400">Documentos versionados, organizados y listos para el equipo.</p></div>{canManageUsers && <button onClick={() => { setVersionTarget(null); setFiles([]); setQueue([]); setMetadata(emptyMetadata); setUploadOpen(true); }} className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-medium text-black"><Upload size={18}/> Carga masiva</button>}</div>
     {message && <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200">{message}</div>}
@@ -332,7 +419,11 @@ export default function Brain() {
       const extractionLabel = extractionBusy && version.extraction_status === "pending"
         ? "Pendiente · solicitud enviada"
         : extractionLabels[version.extraction_status] || version.extraction_status;
-      return <Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[version.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · última v{version.version_number}{document.current_version ? ` · vigente v${document.current_version.version_number}` : ""}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-500">Procesamiento: {extractionLabel}</span>{version.extraction_status === "pending" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document)} className="flex items-center gap-1 text-emerald-300 disabled:cursor-wait disabled:text-zinc-500"><Play size={13}/> {extractionBusy ? "Solicitado" : "Procesar"}</button>}{version.extraction_status === "failed" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document, true)} className="flex items-center gap-1 text-amber-300 disabled:cursor-wait disabled:text-zinc-500"><RefreshCw className={extractionBusy ? "animate-spin" : ""} size={13}/> {extractionBusy ? "Reintentando" : "Reintentar"}</button>}</div><div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<div className="flex gap-2"><button onClick={()=>beginNewVersion(document)} className="calendar-icon-button" aria-label="Subir nueva versión"><Upload size={16}/></button><button onClick={()=>beginEdit(document)} className="calendar-icon-button" aria-label="Editar documento"><Pencil size={16}/></button><button onClick={()=>archiveDocument(document)} className="calendar-icon-button" aria-label="Archivar versión"><Archive size={16}/></button></div>}</div></Card>;
+      const chunkingBusy = chunkingVersionIds.includes(version.id);
+      const chunkingLabel = chunkingBusy && version.chunking_status === "pending"
+        ? "Pendiente · solicitud enviada"
+        : chunkingLabels[version.chunking_status] || version.chunking_status;
+      return <Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[version.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · última v{version.version_number}{document.current_version ? ` · vigente v${document.current_version.version_number}` : ""}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-500">Procesamiento: {extractionLabel}</span>{version.extraction_status === "pending" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document)} className="flex items-center gap-1 text-emerald-300 disabled:cursor-wait disabled:text-zinc-500"><Play size={13}/> {extractionBusy ? "Solicitado" : "Procesar"}</button>}{version.extraction_status === "failed" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document, true)} className="flex items-center gap-1 text-amber-300 disabled:cursor-wait disabled:text-zinc-500"><RefreshCw className={extractionBusy ? "animate-spin" : ""} size={13}/> {extractionBusy ? "Reintentando" : "Reintentar"}</button>}</div>{version.extraction_status === "completed" && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-500">Conocimiento: {chunkingLabel}</span>{version.chunking_status === "pending" && canManageUsers && <button disabled={chunkingBusy} onClick={() => requestChunking(document)} className="flex items-center gap-1 text-emerald-300 disabled:cursor-wait disabled:text-zinc-500"><BookOpen size={13}/> {chunkingBusy ? "Solicitado" : "Generar conocimiento"}</button>}</div>}<div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<div className="flex gap-2"><button onClick={()=>beginNewVersion(document)} className="calendar-icon-button" aria-label="Subir nueva versión"><Upload size={16}/></button><button onClick={()=>beginEdit(document)} className="calendar-icon-button" aria-label="Editar documento"><Pencil size={16}/></button><button onClick={()=>archiveDocument(document)} className="calendar-icon-button" aria-label="Archivar versión"><Archive size={16}/></button></div>}</div></Card>;
     })}</div>}
     {uploadOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3"><Card hover={false} className="w-full max-w-3xl" contentClassName="max-h-[92vh] overflow-y-auto p-5"><div className="flex justify-between"><div><h2 className="text-xl font-semibold text-white">{versionTarget ? "Nueva versión" : "Carga masiva"}</h2><p className="mt-1 text-sm text-zinc-400">{versionTarget ? `El archivo anterior de ${versionTarget.title} permanecerá en el historial.` : "Hasta cientos de archivos, con cuatro cargas paralelas y tres reintentos."}</p></div><button onClick={()=>{setUploadOpen(false);setVersionTarget(null);}} className="calendar-icon-button"><X size={18}/></button></div>
       <div onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();addFiles(e.dataTransfer.files);}} className="mt-5 rounded-2xl border border-dashed border-zinc-700 p-7 text-center"><FolderUp className="mx-auto text-zinc-500"/><p className="mt-3 text-sm text-zinc-300">Arrastra {versionTarget ? "un archivo" : "archivos"} aquí</p><div className="mt-4 flex flex-wrap justify-center gap-2"><label className="cursor-pointer rounded-xl bg-white px-4 py-2 text-sm font-medium text-black">Seleccionar {versionTarget ? "archivo" : "archivos"}<input hidden multiple={!versionTarget} type="file" onChange={(e)=>addFiles(e.target.files)}/></label>{!versionTarget && <label className="cursor-pointer rounded-xl border border-zinc-700 px-4 py-2 text-sm text-white">Seleccionar carpeta<input hidden multiple type="file" webkitdirectory="" directory="" onChange={(e)=>addFiles(e.target.files)}/></label>}</div><p className="mt-3 text-xs text-zinc-500">{files.length} archivo(s) seleccionados</p></div>
