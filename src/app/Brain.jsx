@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BookOpen, Download, FileText, FolderUp, Pause, Pencil, RefreshCw, Search, Upload, X } from "lucide-react";
+import { Archive, BookOpen, Download, FileText, FolderUp, Pause, Pencil, Play, RefreshCw, Search, Upload, X } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import Card from "../components/ui/Card";
@@ -9,7 +9,7 @@ import { supabase } from "../lib/supabase";
 
 const typeLabels = { sop: "SOP", playbook: "Playbook", policy: "Política", template: "Plantilla", reference: "Referencia" };
 const statusLabels = { draft: "Borrador", review: "En revisión", approved: "Aprobado", archived: "Archivado" };
-const extractionLabels = { pending: "Pendiente", processing: "Procesando", completed: "Listo", failed: "Error" };
+const extractionLabels = { pending: "Pendiente", processing: "Procesando…", completed: "Listo", failed: "Error" };
 const emptyMetadata = { document_type: "reference", division_id: "", folder_id: "", category: "", tags: "" };
 
 function latestVersion(document) {
@@ -50,7 +50,9 @@ export default function Brain() {
   const [versionTarget, setVersionTarget] = useState(null);
   const [editingDocument, setEditingDocument] = useState(null);
   const [editForm, setEditForm] = useState(null);
+  const [processingVersionIds, setProcessingVersionIds] = useState([]);
   const aborters = useRef(new Map());
+  const extractionTimers = useRef(new Set());
 
   async function loadLibrary() {
     if (!profile?.organization_id) return;
@@ -66,6 +68,11 @@ export default function Brain() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLibrary(); }, [profile?.organization_id]);
+
+  useEffect(() => () => {
+    extractionTimers.current.forEach((timer) => window.clearTimeout(timer));
+    extractionTimers.current.clear();
+  }, []);
 
   const filtered = useMemo(() => documents.filter((document) => {
     const haystack = `${document.title} ${document.description || ""} ${document.category || ""} ${(document.tags || []).join(" ")} ${document.divisions?.name || ""}`.toLowerCase();
@@ -240,14 +247,79 @@ export default function Brain() {
     await loadLibrary();
   }
 
-  async function retryExtraction(document) {
+  function updateExtractionStatus(versionId, extraction) {
+    setDocuments((current) => current.map((document) => (
+      document.latest_version?.id === versionId
+        ? { ...document, latest_version: { ...document.latest_version, ...extraction } }
+        : document
+    )));
+  }
+
+  function finishExtractionRequest(versionId) {
+    setProcessingVersionIds((current) => current.filter((id) => id !== versionId));
+  }
+
+  async function pollExtraction(versionId, attempt = 0) {
+    const result = await supabase
+      .from("knowledge_document_versions")
+      .select("extraction_status, extraction_error, extracted_at, extractor_version")
+      .eq("id", versionId)
+      .single();
+    if (result.error) {
+      finishExtractionRequest(versionId);
+      setMessage("No se pudo actualizar el estado del procesamiento. Recarga la biblioteca para comprobarlo.");
+      return;
+    }
+
+    updateExtractionStatus(versionId, result.data);
+    if (result.data.extraction_status === "completed") {
+      finishExtractionRequest(versionId);
+      setMessage("Procesamiento terminado correctamente.");
+      return;
+    }
+    if (result.data.extraction_status === "failed") {
+      finishExtractionRequest(versionId);
+      setMessage("El procesamiento no pudo completarse. Puedes reintentarlo desde la tarjeta.");
+      return;
+    }
+    if (attempt >= 19) {
+      finishExtractionRequest(versionId);
+      setMessage("La solicitud fue aceptada y continúa en segundo plano. Recarga la biblioteca para consultar el estado final.");
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      extractionTimers.current.delete(timer);
+      pollExtraction(versionId, attempt + 1);
+    }, 1500);
+    extractionTimers.current.add(timer);
+  }
+
+  async function requestExtraction(document, retry = false) {
     const version = latestVersion(document);
-    const retry = await supabase.rpc("retry_knowledge_document_extraction", { target_version_id: version.id });
-    if (retry.error) return setMessage(retry.error.message);
+    if (!version.id || processingVersionIds.includes(version.id)) return;
+    if ((!retry && version.extraction_status !== "pending") || (retry && version.extraction_status !== "failed")) return;
+
+    setProcessingVersionIds((current) => [...current, version.id]);
+    setMessage(retry ? "Preparando el reintento…" : "Solicitando el procesamiento…");
+    if (retry) {
+      const retryResult = await supabase.rpc("retry_knowledge_document_extraction", { target_version_id: version.id });
+      if (retryResult.error) {
+        finishExtractionRequest(version.id);
+        setMessage("No se pudo preparar el reintento. Comprueba tus permisos e inténtalo nuevamente.");
+        return;
+      }
+      updateExtractionStatus(version.id, { extraction_status: "pending", extraction_error: null });
+    }
+
     const extraction = await supabase.functions.invoke("process-knowledge-document", { body: { version_id: version.id } });
-    if (extraction.error) return setMessage(`El reintento quedó pendiente: ${extraction.error.message}`);
-    setMessage("Reintento de procesamiento iniciado.");
-    await loadLibrary();
+    if (extraction.error) {
+      finishExtractionRequest(version.id);
+      setMessage("No se pudo iniciar el procesamiento. Comprueba tu sesión y tus permisos.");
+      return;
+    }
+    setMessage("Solicitud aceptada. Esperando el resultado del procesamiento…");
+    pollExtraction(version.id);
   }
 
   return <Page className="space-y-6">
@@ -256,7 +328,11 @@ export default function Brain() {
     <Card hover={false} contentClassName="p-3"><div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_200px]"><label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4"><Search size={18} className="text-zinc-500"/><input value={search} onChange={(e)=>setSearch(e.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none" placeholder="Buscar por nombre, etiqueta o categoría"/></label><select className="field" value={type} onChange={(e)=>setType(e.target.value)}><option value="all">Todos los tipos</option>{Object.entries(typeLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select><select className="field" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select><select className="field" value={folderId} onChange={(e)=>setFolderId(e.target.value)}><option value="all">Todas las carpetas</option>{folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></div></Card>
     {!filtered.length ? <Card hover={false} contentClassName="py-16 text-center"><BookOpen className="mx-auto text-zinc-600" size={42}/><h2 className="mt-4 font-semibold text-white">El Cerebro está listo</h2><p className="mt-2 text-sm text-zinc-400">Sube documentos o una carpeta completa para comenzar.</p></Card> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map((document) => {
       const version = latestVersion(document);
-      return <Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[version.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · última v{version.version_number}{document.current_version ? ` · vigente v${document.current_version.version_number}` : ""}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-3 flex items-center justify-between text-xs"><span className="text-zinc-500">Procesamiento: {extractionLabels[version.extraction_status] || version.extraction_status}</span>{version.extraction_status === "failed" && canManageUsers && <button onClick={() => retryExtraction(document)} className="flex items-center gap-1 text-amber-300"><RefreshCw size={13}/> Reintentar</button>}</div><div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<div className="flex gap-2"><button onClick={()=>beginNewVersion(document)} className="calendar-icon-button" aria-label="Subir nueva versión"><Upload size={16}/></button><button onClick={()=>beginEdit(document)} className="calendar-icon-button" aria-label="Editar documento"><Pencil size={16}/></button><button onClick={()=>archiveDocument(document)} className="calendar-icon-button" aria-label="Archivar versión"><Archive size={16}/></button></div>}</div></Card>;
+      const extractionBusy = processingVersionIds.includes(version.id);
+      const extractionLabel = extractionBusy && version.extraction_status === "pending"
+        ? "Pendiente · solicitud enviada"
+        : extractionLabels[version.extraction_status] || version.extraction_status;
+      return <Card key={document.id} hover={false} contentClassName="flex h-full flex-col p-5"><div className="flex items-center justify-between"><span className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300">{statusLabels[version.status]}</span><FileText size={20}/></div><h2 className="mt-4 text-lg font-semibold text-white">{document.title}</h2><p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">{document.divisions?.name || "General"} · última v{version.version_number}{document.current_version ? ` · vigente v${document.current_version.version_number}` : ""}</p><p className="mt-3 flex-1 text-sm text-zinc-400">{document.category || typeLabels[document.document_type]}{document.knowledge_folders?.name ? ` · ${document.knowledge_folders.name}` : ""}</p><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-500">Procesamiento: {extractionLabel}</span>{version.extraction_status === "pending" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document)} className="flex items-center gap-1 text-emerald-300 disabled:cursor-wait disabled:text-zinc-500"><Play size={13}/> {extractionBusy ? "Solicitado" : "Procesar"}</button>}{version.extraction_status === "failed" && canManageUsers && <button disabled={extractionBusy} onClick={() => requestExtraction(document, true)} className="flex items-center gap-1 text-amber-300 disabled:cursor-wait disabled:text-zinc-500"><RefreshCw className={extractionBusy ? "animate-spin" : ""} size={13}/> {extractionBusy ? "Reintentando" : "Reintentar"}</button>}</div><div className="mt-4 flex justify-between"><button onClick={()=>openDocument(document)} className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm"><Download size={16}/> Abrir</button>{canManageUsers&&<div className="flex gap-2"><button onClick={()=>beginNewVersion(document)} className="calendar-icon-button" aria-label="Subir nueva versión"><Upload size={16}/></button><button onClick={()=>beginEdit(document)} className="calendar-icon-button" aria-label="Editar documento"><Pencil size={16}/></button><button onClick={()=>archiveDocument(document)} className="calendar-icon-button" aria-label="Archivar versión"><Archive size={16}/></button></div>}</div></Card>;
     })}</div>}
     {uploadOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3"><Card hover={false} className="w-full max-w-3xl" contentClassName="max-h-[92vh] overflow-y-auto p-5"><div className="flex justify-between"><div><h2 className="text-xl font-semibold text-white">{versionTarget ? "Nueva versión" : "Carga masiva"}</h2><p className="mt-1 text-sm text-zinc-400">{versionTarget ? `El archivo anterior de ${versionTarget.title} permanecerá en el historial.` : "Hasta cientos de archivos, con cuatro cargas paralelas y tres reintentos."}</p></div><button onClick={()=>{setUploadOpen(false);setVersionTarget(null);}} className="calendar-icon-button"><X size={18}/></button></div>
       <div onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();addFiles(e.dataTransfer.files);}} className="mt-5 rounded-2xl border border-dashed border-zinc-700 p-7 text-center"><FolderUp className="mx-auto text-zinc-500"/><p className="mt-3 text-sm text-zinc-300">Arrastra {versionTarget ? "un archivo" : "archivos"} aquí</p><div className="mt-4 flex flex-wrap justify-center gap-2"><label className="cursor-pointer rounded-xl bg-white px-4 py-2 text-sm font-medium text-black">Seleccionar {versionTarget ? "archivo" : "archivos"}<input hidden multiple={!versionTarget} type="file" onChange={(e)=>addFiles(e.target.files)}/></label>{!versionTarget && <label className="cursor-pointer rounded-xl border border-zinc-700 px-4 py-2 text-sm text-white">Seleccionar carpeta<input hidden multiple type="file" webkitdirectory="" directory="" onChange={(e)=>addFiles(e.target.files)}/></label>}</div><p className="mt-3 text-xs text-zinc-500">{files.length} archivo(s) seleccionados</p></div>
