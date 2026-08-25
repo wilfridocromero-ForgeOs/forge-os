@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CalendarDays, CheckCircle2, Edit3, Repeat2, Settings2, UserRound, X } from "lucide-react";
 import { deleteProjectTask, updateProjectTask } from "../../services/ProjectService";
 import TaskEvidencePanel from "./TaskEvidencePanel";
+import TaskReferenceFilesPanel from "./TaskReferenceFilesPanel";
 import { recurrenceSummary } from "./taskScheduleConfig";
 
 const statusLabels = { pending: "Pendiente", in_progress: "En progreso", blocked: "Bloqueada", completed: "Completada", cancelled: "Cancelada" };
@@ -39,13 +40,14 @@ export default function TaskWorkspace({ task, projectId, organizationId, userId,
         <button type="button" aria-label="Cerrar tarea" onClick={onClose} className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-900 hover:text-white"><X size={19} /></button>
       </header>
       <div className="space-y-6 p-4 pb-28 sm:p-6 sm:pb-6">
-        <section><h3 className="text-xs uppercase tracking-[.18em] text-zinc-600">Qué tienes que hacer</h3><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">{task.description || "No hay instrucciones adicionales para esta tarea."}</p></section>
         <section className="grid gap-3 rounded-2xl border border-zinc-800 p-4 sm:grid-cols-3">
           <div><p className="text-xs text-zinc-600">Estado</p><p className="mt-2 text-sm text-white">{statusLabels[task.status] || task.status}</p></div>
           <div><p className="flex items-center gap-1 text-xs text-zinc-600"><UserRound size={12} /> Responsable</p><p className="mt-2 truncate text-sm text-white">{task.assignee?.first_name || "Sin asignar"}</p></div>
           <div><p className="flex items-center gap-1 text-xs text-zinc-600"><CalendarDays size={12} /> Vencimiento</p><p className="mt-2 text-sm text-white">{fullDate(task.due_at)}</p></div>
         </section>
+        <section><h3 className="text-xs uppercase tracking-[.18em] text-zinc-600">Qué tienes que hacer</h3><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">{task.description || "No hay instrucciones adicionales para esta tarea."}</p></section>
         {task.recurrence_schedule && <section className="rounded-2xl border border-blue-900/40 bg-blue-950/15 p-4"><p className="flex items-center gap-2 text-sm font-medium text-blue-300"><Repeat2 size={16} /> {task.recurrence_schedule.active ? recurrenceSummary(task.recurrence_schedule) : "Repetición pausada"}</p></section>}
+        <TaskReferenceFilesPanel taskId={task.id} projectId={projectId} organizationId={organizationId} userId={userId} canEdit={canEditTask} reportError={reportError} />
         <section><div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-lg font-semibold text-white">Para completar esta tarea</h3><p className="mt-1 text-sm text-zinc-500">Entrega únicamente la evidencia solicitada.</p></div>{canManage && task.status !== "completed" && <button type="button" onClick={() => setManageEvidence((value) => !value)} className="inline-flex min-h-10 items-center gap-2 self-start text-xs text-zinc-500 hover:text-white"><Settings2 size={14} /> {manageEvidence ? "Cerrar configuración" : "Configurar evidencia"}</button>}</div><TaskEvidencePanel task={task} projectId={projectId} organizationId={organizationId} userId={userId} canManage={canManage && manageEvidence} canSubmit={canSubmit && !task.is_recurrence_template} onChange={onChange} reportError={reportError} initiallyOpen alwaysOpen /></section>
         <div className="flex flex-col gap-2 border-t border-zinc-800 pt-5 sm:flex-row sm:flex-wrap">
           {canEditTask && task.status !== "completed" && <button type="button" disabled={missing > 0} title={missing > 0 ? `Falta ${missing} evidencia${missing === 1 ? "" : "s"} para completar esta tarea.` : undefined} onClick={() => changeStatus("completed")} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-600 disabled:opacity-100 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400"><CheckCircle2 size={17} /> Marcar como completada</button>}

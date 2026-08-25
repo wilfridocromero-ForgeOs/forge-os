@@ -162,6 +162,39 @@ export async function uploadProjectFile({ projectId, organizationId, file, userI
   return metadata.data;
 }
 
+export async function getTaskReferenceFiles(taskId) {
+  if (!taskId) return [];
+  const { data, error } = await supabase.rpc("get_task_reference_files", { target_task_id: taskId });
+  if (error) throw friendlyFileError(error, "No se pudieron cargar los archivos de referencia.");
+  return data || [];
+}
+
+export async function uploadTaskReferenceFile({ projectId, organizationId, taskId, file, userId, onProgress }) {
+  const id = crypto.randomUUID();
+  const safeName = sanitizeStorageFileName(file.name);
+  const storagePath = `${organizationId}/${projectId}/files/${id}/${safeName}`;
+  onProgress?.(10, "Validando");
+  validateProjectFile(file);
+  onProgress?.(25, "Subiendo");
+  const upload = await supabase.storage.from("project-files").upload(storagePath, file, {
+    cacheControl: "3600", contentType: file.type, upsert: false,
+  });
+  if (upload.error) throw friendlyFileError(upload.error, "No se pudo subir el archivo de referencia.");
+  onProgress?.(75, "Guardando referencia");
+  const metadata = await supabase.from("project_files").insert({
+    id, project_id: projectId, task_id: taskId, file_role: "task_reference",
+    storage_path: storagePath, file_name: file.name.trim(), mime_type: file.type,
+    size_bytes: file.size, uploaded_by: userId,
+  }).select("id").single();
+  if (metadata.error) {
+    const cleanup = await supabase.storage.from("project-files").remove([storagePath]);
+    const suffix = cleanup.error ? " El objeto requiere limpieza manual." : " El objeto temporal fue eliminado.";
+    throw friendlyFileError(metadata.error, `No se pudo registrar la referencia.${suffix}`);
+  }
+  onProgress?.(100, "Completado");
+  return metadata.data;
+}
+
 export async function downloadProjectFile(file) {
   const { data, error } = await supabase.storage.from("project-files").download(file.storage_path);
   if (error) throw friendlyFileError(error, "No se pudo descargar el archivo.");

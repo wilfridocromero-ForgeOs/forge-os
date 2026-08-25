@@ -46,6 +46,8 @@ export function formatProjectActivity(row) {
     comment_deleted: `${actor} eliminó un comentario`,
     file_uploaded: `${actor} subió ${quoted(payload.name || "un archivo")}`,
     file_deleted: `${actor} eliminó ${quoted(payload.name || "un archivo")}`,
+    task_reference_added: `${actor} añadió ${quoted(payload.name || "un archivo")} como referencia de una tarea`,
+    task_reference_removed: `${actor} eliminó ${quoted(payload.name || "un archivo")} de las referencias de una tarea`,
     evidence_requirement_added: `${actor} añadió el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,
     evidence_requirement_updated: `${actor} actualizó el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,
     evidence_requirement_removed: `${actor} eliminó el requisito de evidencia ${quoted(payload.label || "sin nombre")}`,

@@ -76,7 +76,7 @@ export default function ProjectDetail({ project, organizationId, users, projectM
             <span className="inline-flex items-center gap-1"><CalendarDays size={14} /> {dateRange(project)}</span>
           </div>
           <h1 className="mt-4 break-words text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-4xl">{project.name}</h1>
-          <p className="mt-3 max-w-3xl whitespace-pre-wrap break-words text-sm leading-6 text-zinc-400">{project.description || "Este proyecto todavía no tiene una descripción."}</p>
+          <div className="mt-4 max-w-3xl"><p className="text-xs uppercase tracking-[.16em] text-zinc-600">Información del proyecto</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-400">{project.description || "Este proyecto todavía no tiene contexto ni instrucciones generales."}</p></div>
         </div>
         {canEdit && <div className="relative shrink-0">
           <button type="button" aria-expanded={showActions} onClick={() => setShowActions((value) => !value)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-800 px-4 text-sm text-zinc-400 hover:border-zinc-600 hover:text-white">Gestionar <ChevronDown size={15} /></button>

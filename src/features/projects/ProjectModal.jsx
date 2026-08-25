@@ -26,7 +26,7 @@ export default function ProjectModal({ open, project, divisions, clients, users,
     <form onSubmit={submit} className="space-y-5">
       {error && <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-3 text-sm text-red-300">{error}</p>}
       <label className="block text-sm text-zinc-400">Nombre<input className={fieldClass} value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={160} /></label>
-      <label className="block text-sm text-zinc-400">Descripción<textarea className={`${fieldClass} min-h-24 resize-y`} value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></label>
+      <label className="block text-sm text-zinc-400">Información e instrucciones generales<textarea rows={5} className={`${fieldClass} min-h-32 resize-y leading-6`} placeholder="Objetivo, contexto, alcance, referencias e instrucciones importantes." value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm text-zinc-400">División<select className={fieldClass} value={form.division_id} onChange={(e) => set("division_id", e.target.value)}>{divisions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className="text-sm text-zinc-400">Cliente<select className={fieldClass} value={form.client_id} onChange={(e) => set("client_id", e.target.value)}><option value="">Sin cliente</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.company_name}</option>)}</select></label>
