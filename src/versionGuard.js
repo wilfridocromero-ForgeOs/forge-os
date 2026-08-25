@@ -1,9 +1,11 @@
 import "./versionGuard.css";
+import { hasUnsavedWork } from "./dirtyState";
 
 const CURRENT_VERSION = import.meta.env.VITE_APP_VERSION;
 const UPDATE_ATTEMPT_KEY = "orvesen-version-update-attempt";
 const UPDATE_BANNER_ID = "orvesen-version-update";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_UPDATE_ATTEMPTS = 2;
 
 let installed = false;
 let checking = false;
@@ -81,6 +83,19 @@ export function completeVersionUpdateBootstrap() {
 
 function requestVersionUpdate(remoteVersion) {
   const previousAttempt = readUpdateAttempt();
+  const attempts = previousAttempt?.target === remoteVersion
+    ? Number(previousAttempt.attempts || 0)
+    : 0;
+
+  if (attempts >= MAX_UPDATE_ATTEMPTS) {
+    showUpdateBanner(remoteVersion);
+    return false;
+  }
+
+  if (hasUnsavedWork() && !window.confirm("Hay trabajo sin guardar. Si actualizas ahora, esos cambios locales se perderán. ¿Continuar?")) {
+    return false;
+  }
+
   const returnTo = previousAttempt?.target === remoteVersion
     ? safeReturnUrl(previousAttempt.returnTo)
     : currentRelativeUrl();
@@ -90,9 +105,11 @@ function requestVersionUpdate(remoteVersion) {
     from: CURRENT_VERSION,
     target: remoteVersion,
     returnTo,
+    attempts: attempts + 1,
     attemptedAt: Date.now(),
   });
   window.location.replace(nextUrl.toString());
+  return true;
 }
 
 function showUpdateBanner(remoteVersion) {
@@ -101,6 +118,10 @@ function showUpdateBanner(remoteVersion) {
   const previousAttempt = readUpdateAttempt();
   const retryingSameVersion =
     previousAttempt?.from === CURRENT_VERSION && previousAttempt?.target === remoteVersion;
+  const attempts = previousAttempt?.target === remoteVersion
+    ? Number(previousAttempt.attempts || 0)
+    : 0;
+  const attemptsExhausted = attempts >= MAX_UPDATE_ATTEMPTS;
 
   let banner = document.getElementById(UPDATE_BANNER_ID);
   if (!banner) {
@@ -135,18 +156,29 @@ function showUpdateBanner(remoteVersion) {
   const description = banner.querySelector(".orvesen-version-update__description");
   const action = banner.querySelector(".orvesen-version-update__action");
 
-  title.textContent = retryingSameVersion
+  title.textContent = attemptsExhausted
+    ? "No pudimos completar la actualización"
+    : retryingSameVersion
     ? "La actualización no terminó"
     : "Hay una nueva versión de ORVESEN";
-  description.textContent = retryingSameVersion
+  description.textContent = attemptsExhausted
+    ? "Puedes continuar con esta versión y recargar manualmente cuando estés listo."
+    : retryingSameVersion
     ? "Guarda tu trabajo y vuelve a intentarlo."
     : "Guarda tu trabajo antes de actualizar.";
-  action.disabled = false;
-  action.textContent = retryingSameVersion ? "Reintentar actualización" : "Actualizar ahora";
+  action.disabled = attemptsExhausted;
+  action.textContent = attemptsExhausted
+    ? "Actualización pendiente"
+    : retryingSameVersion
+      ? "Reintentar actualización"
+      : "Actualizar ahora";
   action.onclick = () => {
     action.disabled = true;
     action.textContent = "Actualizando…";
-    requestVersionUpdate(remoteVersion);
+    if (!requestVersionUpdate(remoteVersion)) {
+      action.disabled = false;
+      showUpdateBanner(remoteVersion);
+    }
   };
 }
 

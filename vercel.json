@@ -26,9 +26,22 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/register", "destination": "/index.html" },
+    { "source": "/reset-password", "destination": "/index.html" },
+    { "source": "/clientes", "destination": "/index.html" },
+    { "source": "/clientes/:path*", "destination": "/index.html" },
+    { "source": "/discovery", "destination": "/index.html" },
+    { "source": "/discovery/:path*", "destination": "/index.html" },
+    { "source": "/proyectos", "destination": "/index.html" },
+    { "source": "/proyectos/:path*", "destination": "/index.html" },
+    { "source": "/orvesen-score", "destination": "/index.html" },
+    { "source": "/business-score", "destination": "/index.html" },
+    { "source": "/configuracion", "destination": "/index.html" },
+    { "source": "/configuracion/:path*", "destination": "/index.html" },
+    { "source": "/calendario", "destination": "/index.html" },
+    { "source": "/cerebro", "destination": "/index.html" },
+    { "source": "/construir", "destination": "/index.html" },
+    { "source": "/score-builder", "destination": "/index.html" }
   ]
 }

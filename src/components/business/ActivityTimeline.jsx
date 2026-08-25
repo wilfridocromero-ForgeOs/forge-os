@@ -65,7 +65,7 @@ export default function ActivityTimeline({ activities = [], loading = false, una
 
             {/* Contenido */}
 
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
 
               <p className="text-sm text-zinc-500">
                 {activity.time}
