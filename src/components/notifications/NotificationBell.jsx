@@ -51,6 +51,15 @@ function useMobileNotificationSheet() {
   return mobile;
 }
 
+function MobileModalScrollLock() {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+  return null;
+}
+
 class PushControlBoundary extends Component {
   state = { failed: false };
 
@@ -154,7 +163,9 @@ export default function NotificationBell() {
         <Bell size={18} />
         {unreadCount > 0 && <span className="notification-badge" aria-hidden="true">{badge}</span>}
       </HeadlessPopover.Button>
-      <HeadlessPopover.Panel portal={mobileSheet} className="notification-panel">
+      {open && mobileSheet && <MobileModalScrollLock />}
+      {open && mobileSheet && <HeadlessPopover.Backdrop className="notification-backdrop" />}
+      <HeadlessPopover.Panel portal={mobileSheet} className="notification-panel" role={mobileSheet ? "dialog" : undefined} aria-modal={mobileSheet ? "true" : undefined} aria-label={mobileSheet ? "Centro personal de notificaciones" : undefined}>
         <header className="notification-header">
           <div className="min-w-0"><p className="notification-eyebrow">Centro personal</p><h2>Notificaciones</h2><p>{unreadCount ? `${unreadCount} sin leer` : "Todo al día"}</p></div>
           <button type="button" onClick={close} className="notification-close" aria-label="Cerrar notificaciones"><X size={19} /></button>

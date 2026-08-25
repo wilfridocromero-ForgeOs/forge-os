@@ -504,6 +504,16 @@ function HistoryRow({ assessment }) {
 
 function StartModal({ templates, clients, selection, setSelection, onClose, onSubmit, busy }) {
   const [clientSearch, setClientSearch] = useState("");
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
   const filteredClients = clients.filter((client) => [client.company_name, client.contact_name, client.email, client.industry]
     .filter(Boolean).join(" ").toLocaleLowerCase("es").includes(clientSearch.trim().toLocaleLowerCase("es")));
   const availableTemplates = templates.filter((template) => !selection.divisionId || template.division_id === selection.divisionId);
