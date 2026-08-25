@@ -27,6 +27,13 @@ function relativeTime(value) {
   return new Intl.DateTimeFormat("es", { day: "numeric", month: "short" }).format(new Date(value));
 }
 
+function assignmentDueDate(notification) {
+  if (!["task_assigned", "task_reassigned"].includes(notification.type) || !notification.metadata?.due_at) return null;
+  const date = new Date(notification.metadata.due_at);
+  if (Number.isNaN(date.getTime())) return null;
+  return `Vence ${new Intl.DateTimeFormat("es", { day: "numeric", month: "short" }).format(date)}`;
+}
+
 function isSafeInternalPath(value) {
   return typeof value === "string" && value.startsWith("/") && !value.startsWith("//");
 }
@@ -188,9 +195,10 @@ export default function NotificationBell() {
 
 function NotificationItem({ notification, onOpen }) {
   const Icon = iconByType[notification.type] || Bell;
+  const dueDate = assignmentDueDate(notification);
   return <button type="button" onClick={onOpen} className={`notification-item ${notification.read_at ? "is-read" : "is-unread"}`}>
     <span className="notification-icon"><Icon size={17} /></span>
-    <span className="notification-copy"><strong>{notification.title}</strong>{notification.body && <span>{notification.body}</span>}<time dateTime={notification.created_at}>{relativeTime(notification.created_at)}</time></span>
+    <span className="notification-copy"><strong>{notification.title}</strong>{notification.body && <span>{notification.body}</span>}{dueDate && <small>{dueDate}</small>}<time dateTime={notification.created_at}>{relativeTime(notification.created_at)}</time></span>
     {!notification.read_at && <span className="notification-unread-dot" aria-label="Sin leer" />}
   </button>;
 }
