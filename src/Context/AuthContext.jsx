@@ -2,9 +2,18 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { CAPABILITIES, getRoleCapabilities } from "../config/capabilities";
 import { updateOrganizationName as persistOrganizationName } from "../services/OrganizationService";
+import { completeVersionUpdateBootstrap } from "../versionGuard";
 
 const AuthContext = createContext();
 const IDENTITY_RETRY_DELAYS_MS = [0, 500, 1500];
+
+function isSessionAuthorizationError(error, status) {
+  if (status === 401) return true;
+
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+  return code === "PGRST301" || message.includes("jwt") || message.includes("token");
+}
 
 const ROLE_LABELS = {
   founder: "Fundador",
@@ -36,7 +45,10 @@ export function AuthProvider({ children }) {
       setSessionResolved(true);
       setIdentity((current) => {
         const nextUserId = nextSession?.user?.id ?? null;
-        if (current.userId === nextUserId) return current;
+        if (current.userId === nextUserId) {
+          if (!nextUserId || current.status === "authorized") return current;
+          return { ...current, status: "resolving", error: null };
+        }
         return {
           status: nextUserId ? "resolving" : "idle",
           userId: nextUserId,
@@ -61,6 +73,13 @@ export function AuthProvider({ children }) {
 
     async function resolveIdentity() {
       let lastError = null;
+      let refreshedSession = false;
+
+      setIdentity((current) => (
+        current.userId === userId
+          ? { ...current, status: "resolving", error: null }
+          : current
+      ));
 
       for (const delay of IDENTITY_RETRY_DELAYS_MS) {
         if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
@@ -76,6 +95,36 @@ export function AuthProvider({ children }) {
           const requestError = contextResult.error || modulesResult.error;
           if (requestError) {
             lastError = requestError;
+
+            const requestStatus = contextResult.error
+              ? contextResult.status
+              : modulesResult.status;
+            if (!refreshedSession && isSessionAuthorizationError(requestError, requestStatus)) {
+              refreshedSession = true;
+              const refreshResult = await supabase.auth.refreshSession();
+              if (!active) return;
+
+              if (refreshResult.data.session) {
+                setSession(refreshResult.data.session);
+                setSessionResolved(true);
+                continue;
+              }
+
+              if (!refreshResult.error) {
+                setSession(null);
+                setSessionResolved(true);
+                setIdentity({
+                  status: "idle",
+                  userId: null,
+                  profile: null,
+                  moduleAccess: [],
+                  error: null,
+                });
+                return;
+              }
+
+              lastError = refreshResult.error;
+            }
             continue;
           }
 
@@ -159,6 +208,13 @@ export function AuthProvider({ children }) {
       document.removeEventListener("visibilitychange", retryWhenVisible);
     };
   }, [identity.status]);
+
+  useEffect(() => {
+    if (!sessionResolved) return;
+    if (session && ["idle", "resolving"].includes(identity.status)) return;
+
+    completeVersionUpdateBootstrap();
+  }, [identity.status, session, sessionResolved]);
 
   const profile = identity.profile;
   const organization = profile?.organizations ?? null;

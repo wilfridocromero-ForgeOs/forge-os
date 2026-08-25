@@ -51,7 +51,7 @@ function safeReturnUrl(value) {
     : "/";
 }
 
-function clearCompletedUpdate(attempt = readUpdateAttempt()) {
+function clearCompletedUpdate(attempt = readUpdateAttempt(), notifyRouter = false) {
   removeUpdateAttempt();
   removeUpdateBanner();
 
@@ -68,6 +68,15 @@ function clearCompletedUpdate(attempt = readUpdateAttempt()) {
     "",
     `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
   );
+  if (notifyRouter) window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function completeVersionUpdateBootstrap() {
+  const updateAttempt = readUpdateAttempt();
+  if (updateAttempt?.target !== CURRENT_VERSION) return false;
+
+  clearCompletedUpdate(updateAttempt, true);
+  return true;
 }
 
 function requestVersionUpdate(remoteVersion) {
@@ -154,6 +163,10 @@ async function checkForCurrentVersion() {
     if (!remoteVersion) return;
 
     if (remoteVersion === CURRENT_VERSION) {
+      if (readUpdateAttempt()?.target === CURRENT_VERSION) {
+        removeUpdateBanner();
+        return;
+      }
       clearCompletedUpdate();
       return;
     }
@@ -171,7 +184,7 @@ export function installVersionGuard() {
   installed = true;
 
   const updateAttempt = readUpdateAttempt();
-  if (updateAttempt?.target === CURRENT_VERSION) clearCompletedUpdate(updateAttempt);
+  if (updateAttempt?.target === CURRENT_VERSION) removeUpdateBanner();
 
   const checkWhenVisible = () => {
     if (document.visibilityState === "visible") checkForCurrentVersion();
