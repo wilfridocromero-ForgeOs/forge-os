@@ -44,7 +44,7 @@ export async function listOrbMessages(conversationId) {
   return data || [];
 }
 
-export async function streamOrbMessage({ conversationId, clientMessageId, message, onEvent, signal }) {
+export async function streamOrbMessage({ conversationId, clientMessageId, message, surface = null, onEvent, signal }) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (sessionError || !accessToken) throw new Error("Tu sesión ya no está disponible.");
@@ -56,7 +56,7 @@ export async function streamOrbMessage({ conversationId, clientMessageId, messag
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ conversation_id: conversationId, client_message_id: clientMessageId, message }),
+    body: JSON.stringify({ conversation_id: conversationId, client_message_id: clientMessageId, message, surface }),
     signal,
   });
 

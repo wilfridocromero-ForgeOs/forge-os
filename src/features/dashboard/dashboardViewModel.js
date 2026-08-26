@@ -13,6 +13,20 @@ export function buildDashboardBriefing(data) {
   return "Tu operación está al día.";
 }
 
+export function buildOrbNowBriefing(data) {
+  if (!data) return { state: "loading", text: "Preparando el pulso operativo…" };
+  const sources = [data.tasks, data.calendar, data.discovery, data.projects];
+  if (sources.every((source) => source?.available === false)) return { state: "unavailable", text: "El contexto operativo no está disponible ahora. El resto del Dashboard sigue funcionando." };
+  const facts = [];
+  if (data.tasks?.available && data.tasks.overdueCount > 0) facts.push(`${data.tasks.overdueCount} ${plural(data.tasks.overdueCount, "tarea vencida", "tareas vencidas")}`);
+  if (data.tasks?.available && data.tasks.today?.length > 0) facts.push(`${data.tasks.today.length} ${plural(data.tasks.today.length, "tarea para hoy", "tareas para hoy")}`);
+  if (data.calendar?.available && data.calendar.today?.length > 0) facts.push(`${data.calendar.today.length} ${plural(data.calendar.today.length, "evento hoy", "eventos hoy")}`);
+  if (data.discovery?.available && data.discovery.pendingCount > 0) facts.push(`${data.discovery.pendingCount} ${plural(data.discovery.pendingCount, "diagnóstico en curso", "diagnósticos en curso")}`);
+  if (facts.length) return { state: "ready", text: `Ahora mismo hay ${facts.join(", ")}.` };
+  const hasActivity = (data.projects?.available && (data.projects.count || 0) > 0) || (data.clients?.available && (data.clients.count || 0) > 0);
+  return hasActivity ? { state: "ready", text: "No hay urgencias operativas visibles con los datos disponibles en este momento." } : { state: "empty", text: "Todavía no hay suficiente actividad para generar un insight operativo." };
+}
+
 export function buildDayHeading(data) {
   const overdue = data?.tasks?.mineOverdue?.length || 0;
   const today = data?.tasks?.today?.length || 0;

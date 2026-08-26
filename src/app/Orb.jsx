@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertCircle, ArrowDown, LoaderCircle, Menu, MessageSquareText, Plus, RotateCcw, Send, Sparkles, X } from "lucide-react";
 
 import { useAuth } from "../Context/AuthContext";
@@ -32,6 +33,7 @@ const OrbMessage = memo(function OrbMessage({ message, sending, onRetry }) {
 });
 
 export default function Orb() {
+  const [searchParams] = useSearchParams();
   const { session } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY));
@@ -225,7 +227,8 @@ export default function Orb() {
         localStorage.setItem(ACTIVE_CONVERSATION_KEY, conversation.id);
       }
       const controller = new AbortController(); requestController.current = controller;
-      await streamOrbMessage({ conversationId, clientMessageId, message: content, signal: controller.signal, onEvent(type, payload) {
+      const surface = searchParams.get("from") === "dashboard" ? { module: "dashboard", route: "/" } : null;
+      await streamOrbMessage({ conversationId, clientMessageId, message: content, surface, signal: controller.signal, onEvent(type, payload) {
         if (type === "start" && payload.assistant_message_id) {
           streamedAssistantId = payload.assistant_message_id;
           setMessages((current) => reconcileAssistantStart(current, optimisticAssistantId, streamedAssistantId));

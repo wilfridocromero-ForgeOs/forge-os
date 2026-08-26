@@ -47,7 +47,30 @@ Deno.test("accepts the minimal Orb payload and ignores model selection", () => {
       conversation_id: conversationId,
       client_message_id: clientMessageId,
       message: "Hola Orb",
+      surface: null,
     },
+  );
+});
+
+Deno.test("accepts only the known dashboard surface", () => {
+  const base = {
+    conversation_id: conversationId,
+    client_message_id: clientMessageId,
+    message: "Hola",
+  };
+  assertEquals(
+    parseOrbChatRequest({
+      ...base,
+      surface: { module: "dashboard", route: "/" },
+    }).surface,
+    { module: "dashboard", route: "/" },
+  );
+  assertEquals(
+    parseOrbChatRequest({
+      ...base,
+      surface: { module: "admin", route: "/configuracion" },
+    }).surface,
+    null,
   );
 });
 

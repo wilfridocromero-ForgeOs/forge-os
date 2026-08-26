@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Brain, CalendarDays, CheckCircle2, CircleAlert, Clock3, FolderKanban, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Brain, CalendarDays, CheckCircle2, CircleAlert, Clock3, FolderKanban, Sparkles, Users } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import Card from "../components/ui/Card";
@@ -7,7 +7,7 @@ import CompanyScoreOverview from "../components/business/CompanyScoreOverview";
 import ActivityTimeline from "../components/business/ActivityTimeline";
 import { useAuth } from "../Context/AuthContext";
 import useDashboardData from "../hooks/useDashboardData";
-import { buildAttentionItems, buildDashboardBriefing, buildDayHeading, buildDayItems } from "../features/dashboard/dashboardViewModel";
+import { buildAttentionItems, buildDashboardBriefing, buildDayHeading, buildDayItems, buildOrbNowBriefing } from "../features/dashboard/dashboardViewModel";
 import "./Dashboard.css";
 
 const DAY_STATUS = {
@@ -40,6 +40,7 @@ export default function Dashboard() {
   const evaluationPath = isInternalOrganization ? "/discovery" : "/business-score";
   const attention = buildAttentionItems(dashboard, { scorePath, evaluationPath });
   const dayItems = buildDayItems(dashboard);
+  const orbNow = buildOrbNowBriefing(dashboard);
   const attentionIncomplete = dashboard && [dashboard.tasks, dashboard.discovery, dashboard.score].some((source) => source?.available === false);
   const dayIncomplete = dashboard && [dashboard.tasks, dashboard.calendar].some((source) => source?.available === false);
   const failedSources = dashboard ? Object.entries(dashboard)
@@ -74,6 +75,12 @@ export default function Dashboard() {
         detailPath={scorePath}
         onEvaluate={() => navigate(evaluationPath)}
       />
+
+      <Card hover={false} className="dashboard-orb-now" contentClassName="dashboard-orb-now-content">
+        <div className="dashboard-orb-now-mark"><Sparkles size={17} aria-hidden="true" /></div>
+        <div className="min-w-0"><p>Orb · Ahora</p><span>{loading ? "Preparando el pulso operativo…" : orbNow.text}</span></div>
+        <Link to="/orvesen-ia?from=dashboard">Hablar con Orb<ArrowRight size={14} /></Link>
+      </Card>
 
       <section className="dashboard-command-grid" aria-label="Prioridades y agenda de hoy">
         <Card hover={false} className="dashboard-attention-card" contentClassName="dashboard-section-card">

@@ -13,6 +13,7 @@ import {
   ORB_INSTRUCTIONS_VERSION,
 } from "./personality.ts";
 import { consumeOpenAIResponseStream } from "./openAIStream.ts";
+import { loadDashboardContextSafely } from "./dashboardContext.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -295,6 +296,12 @@ export async function handleOrbChat(request: Request) {
       );
     }
     const history = buildLimitedHistory(historyRows || []);
+    const dashboardContext = await loadDashboardContextSafely(
+      userClient,
+      activeOrganization.id,
+      user.id,
+      turn.membership_role,
+    );
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -325,6 +332,8 @@ export async function handleOrbChat(request: Request) {
               instructions: buildOrbInstructions({
                 organizationName: String(activeOrganization.name || ""),
                 role: String(turn.membership_role || "member"),
+                dashboard: dashboardContext,
+                surface: payload.surface,
               }),
               input: history,
               max_output_tokens: config.maxOutputTokens,

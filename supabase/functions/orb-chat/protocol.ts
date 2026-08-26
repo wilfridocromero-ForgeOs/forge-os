@@ -7,6 +7,7 @@ export type OrbChatRequest = {
   conversation_id: string;
   client_message_id: string;
   message: string;
+  surface: { module: "dashboard"; route: "/" } | null;
 };
 
 export class OrbRequestError extends Error {
@@ -35,6 +36,13 @@ export function parseOrbChatRequest(value: unknown): OrbChatRequest {
     ? payload.client_message_id
     : "";
   const message = typeof payload.message === "string" ? payload.message : "";
+  const surfaceValue = payload.surface;
+  const surface = surfaceValue && typeof surfaceValue === "object" &&
+      !Array.isArray(surfaceValue) &&
+      (surfaceValue as Record<string, unknown>).module === "dashboard" &&
+      (surfaceValue as Record<string, unknown>).route === "/"
+    ? { module: "dashboard" as const, route: "/" as const }
+    : null;
 
   if (
     !UUID_PATTERN.test(conversationId) || !UUID_PATTERN.test(clientMessageId)
@@ -59,6 +67,7 @@ export function parseOrbChatRequest(value: unknown): OrbChatRequest {
     conversation_id: conversationId,
     client_message_id: clientMessageId,
     message,
+    surface,
   };
 }
 
