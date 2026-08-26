@@ -1,87 +1,48 @@
 import { Fragment } from "react";
 
-const inlinePattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+import { parseOrbMarkdown } from "./orbMarkdownParser";
 
-function safeHref(value) {
-  try {
-    const url = new URL(value, window.location.origin);
-    return ["http:", "https:", "mailto:"].includes(url.protocol) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function renderInline(text, keyPrefix) {
-  return text.split(inlinePattern).filter(Boolean).map((part, index) => {
+function renderInline(nodes, keyPrefix) {
+  return nodes.map((node, index) => {
     const key = `${keyPrefix}-${index}`;
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    if (node.type === "strong") {
+      return <strong key={key}>{renderInline(node.children, key)}</strong>;
     }
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={key}>{part.slice(1, -1)}</code>;
+    if (node.type === "emphasis") {
+      return <em key={key}>{renderInline(node.children, key)}</em>;
     }
-    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (link) {
-      const href = safeHref(link[2]);
-      return href
-        ? <a key={key} href={href} target="_blank" rel="noreferrer noopener">{link[1]}</a>
-        : <Fragment key={key}>{link[1]}</Fragment>;
+    if (node.type === "code") return <code key={key}>{node.value}</code>;
+    if (node.type === "link") {
+      return <a key={key} href={node.href} target="_blank" rel="noreferrer noopener">{renderInline(node.children, key)}</a>;
     }
-    return <Fragment key={key}>{part}</Fragment>;
+    return <Fragment key={key}>{node.value}</Fragment>;
   });
 }
 
-function parseBlocks(markdown) {
-  const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
-  const blocks = [];
-  let paragraph = [];
-  let list = null;
-  let code = null;
-
-  const flushParagraph = () => {
-    if (paragraph.length) blocks.push({ type: "paragraph", text: paragraph.join("\n") });
-    paragraph = [];
-  };
-  const flushList = () => {
-    if (list) blocks.push(list);
-    list = null;
-  };
-
-  lines.forEach((line) => {
-    if (line.startsWith("```")) {
-      flushParagraph(); flushList();
-      if (code) { blocks.push(code); code = null; }
-      else code = { type: "code", language: line.slice(3).trim(), lines: [] };
-      return;
+function renderBlocks(blocks, keyPrefix = "orb") {
+  return blocks.map((block, index) => {
+    const key = `${keyPrefix}-${block.type}-${index}`;
+    if (block.type === "heading") {
+      const Heading = `h${block.level}`;
+      return <Heading key={key}>{renderInline(block.content, key)}</Heading>;
     }
-    if (code) { code.lines.push(line); return; }
-    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
-    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
-    if (unordered || ordered) {
-      flushParagraph();
-      const type = ordered ? "ordered-list" : "unordered-list";
-      if (!list || list.type !== type) { flushList(); list = { type, items: [] }; }
-      list.items.push((ordered || unordered)[1]);
-      return;
+    if (block.type === "code-block") {
+      return <pre key={key} data-language={block.language || undefined}><code>{block.value}</code></pre>;
     }
-    if (!line.trim()) { flushParagraph(); flushList(); return; }
-    flushList(); paragraph.push(line);
-  });
-  flushParagraph(); flushList();
-  if (code) blocks.push(code);
-  return blocks;
-}
-
-export default function OrbMarkdown({ children }) {
-  return parseBlocks(children).map((block, index) => {
-    const key = `${block.type}-${index}`;
-    if (block.type === "code") {
-      return <pre key={key} data-language={block.language || undefined}><code>{block.lines.join("\n")}</code></pre>;
+    if (block.type === "blockquote") {
+      return <blockquote key={key}>{renderBlocks(block.children, key)}</blockquote>;
     }
     if (block.type === "ordered-list" || block.type === "unordered-list") {
       const List = block.type === "ordered-list" ? "ol" : "ul";
-      return <List key={key}>{block.items.map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>{renderInline(item, `${key}-${itemIndex}`)}</li>)}</List>;
+      return <List key={key}>{block.items.map((item, itemIndex) => {
+        const itemKey = `${key}-item-${itemIndex}`;
+        return <li key={itemKey}><span>{renderInline(item.content, itemKey)}</span>{renderBlocks(item.children, itemKey)}</li>;
+      })}</List>;
     }
-    return <p key={key}>{renderInline(block.text, key)}</p>;
+    return <p key={key}>{renderInline(block.content, key)}</p>;
   });
+}
+
+export default function OrbMarkdown({ children }) {
+  return renderBlocks(parseOrbMarkdown(children));
 }
