@@ -2,15 +2,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   boundedInteger,
   buildLimitedHistory,
-  classifyProviderError,
-  classifyProviderStreamError,
-  extractOpenAIResponseText,
   orbEvent,
   OrbRequestError,
   parseOrbChatRequest,
   publicError,
   sanitizeErrorCode,
 } from "./protocol.ts";
+import {
+  buildOrbInstructions,
+  ORB_INSTRUCTIONS_VERSION,
+} from "./personality.ts";
+import { consumeOpenAIResponseStream } from "./openAIStream.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -25,10 +27,6 @@ const streamHeaders = {
   "cache-control": "no-cache, no-transform",
   "x-accel-buffering": "no",
 };
-
-const ORB_INSTRUCTIONS_VERSION = "orb-v1-2026-08-25";
-const ORB_INSTRUCTIONS =
-  `Eres Orb, el asistente inteligente de ORVESEN. Ayudas a comprender y operar la organización usando únicamente información disponible y autorizada. Distingue hechos, inferencias y propuestas. No inventes datos ni afirmes haber consultado módulos o herramientas que no estén disponibles. Explica claramente las limitaciones y respeta siempre los permisos del usuario. Actualmente no tienes herramientas activas ni acceso a Cerebro, Clientes, Discovery, Score, Proyectos, Calendario o Ventas.`;
 
 type TurnRecord = {
   organization_id: string;
@@ -128,48 +126,6 @@ async function privacyPreservingUserId(userId: string) {
   return Array.from(new Uint8Array(digest)).map((byte) =>
     byte.toString(16).padStart(2, "0")
   ).join("");
-}
-
-async function consumeOpenAINonStreamingResponse(response: Response) {
-  let payload: {
-    id?: unknown;
-    status?: unknown;
-    error?: { code?: unknown; type?: unknown; message?: unknown } | null;
-    output?: unknown;
-  } = {};
-  try {
-    payload = await response.json();
-  } catch {
-    throw new OrbRequestError(
-      "AI_RESPONSE_INVALID",
-      502,
-      "Orb received an invalid model response.",
-    );
-  }
-  if (!response.ok) {
-    throw new OrbRequestError(
-      classifyProviderError(
-        response.status,
-        payload.error?.code || payload.error?.type,
-      ),
-      502,
-      "Orb could not obtain a model response.",
-    );
-  }
-  if (payload.status === "failed") {
-    throw new OrbRequestError(
-      classifyProviderStreamError(
-        payload.error?.code,
-        payload.error?.message,
-      ),
-      502,
-      "Orb could not obtain a model response.",
-    );
-  }
-  return {
-    responseId: typeof payload.id === "string" ? payload.id : "",
-    output: extractOpenAIResponseText(payload),
-  };
 }
 
 export async function handleOrbChat(request: Request) {
@@ -366,13 +322,10 @@ export async function handleOrbChat(request: Request) {
             });
             const requestPayload = {
               model: config.model,
-              instructions: `${ORB_INSTRUCTIONS}\nContexto autorizado: ${
-                JSON.stringify({
-                  organization_name: String(activeOrganization.name || "")
-                    .slice(0, 120),
-                  role: String(turn.membership_role || "member"),
-                })
-              }`,
+              instructions: buildOrbInstructions({
+                organizationName: String(activeOrganization.name || ""),
+                role: String(turn.membership_role || "member"),
+              }),
               input: history,
               max_output_tokens: config.maxOutputTokens,
               store: false,
@@ -386,23 +339,19 @@ export async function handleOrbChat(request: Request) {
                   authorization: `Bearer ${openAIKey}`,
                   "content-type": "application/json",
                 },
-                body: JSON.stringify({ ...requestPayload, stream: false }),
+                body: JSON.stringify({ ...requestPayload, stream: true }),
                 signal: abortController.signal,
               },
             );
-            const nonStreaming = await consumeOpenAINonStreamingResponse(
+            const providerStream = await consumeOpenAIResponseStream(
               response,
+              (delta) => {
+                output += delta;
+                send("delta", { delta });
+              },
             );
-            output = nonStreaming.output;
-            providerResponseId = nonStreaming.responseId;
-            if (output) send("delta", { delta: output });
-            if (!output.trim()) {
-              throw new OrbRequestError(
-                "EMPTY_AI_RESPONSE",
-                502,
-                "Orb returned an empty response.",
-              );
-            }
+            output = providerStream.output;
+            providerResponseId = providerStream.responseId;
 
             const { data: completed, error: completionError } =
               await adminClient!.rpc("complete_orb_assistant_message", {

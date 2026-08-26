@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { createOrbEventParser } from "../features/orb/orbStream";
 
 const ORB_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orb-chat`;
 
@@ -43,21 +44,6 @@ export async function listOrbMessages(conversationId) {
   return data || [];
 }
 
-function parseEventBlock(block) {
-  let event = "message";
-  const dataLines = [];
-  block.split(/\r?\n/).forEach((line) => {
-    if (line.startsWith("event:")) event = line.slice(6).trim();
-    if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
-  });
-  if (!dataLines.length) return null;
-  try {
-    return { event, data: JSON.parse(dataLines.join("\n")) };
-  } catch {
-    return null;
-  }
-}
-
 export async function streamOrbMessage({ conversationId, clientMessageId, message, onEvent, signal }) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
@@ -83,22 +69,13 @@ export async function streamOrbMessage({ conversationId, clientMessageId, messag
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
-  let terminalEvent = false;
+  const parser = createOrbEventParser(onEvent);
   while (true) {
     const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || "";
-    blocks.forEach((block) => {
-      const parsed = parseEventBlock(block);
-      if (!parsed || !["start", "delta", "completed", "error"].includes(parsed.event)) return;
-      if (parsed.event === "completed" || parsed.event === "error") terminalEvent = true;
-      onEvent(parsed.event, parsed.data);
-    });
+    parser.push(decoder.decode(value || new Uint8Array(), { stream: !done }));
     if (done) break;
   }
-  if (!terminalEvent) throw new Error("La respuesta de Orb se interrumpió antes de terminar.");
+  if (!parser.finish()) throw new Error("La respuesta de Orb se interrumpió antes de terminar.");
 }
 
 export { friendlyError };
