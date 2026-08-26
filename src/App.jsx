@@ -25,6 +25,7 @@ import Calendar from "./app/Calendar";
 import Brain from "./app/Brain";
 import ScoreBuilder from "./app/ScoreBuilder";
 import BusinessScore from "./app/BusinessScore";
+import Orb from "./app/Orb";
 import { useAuth } from "./Context/AuthContext";
 
 
@@ -95,6 +96,8 @@ export default function App() {
         <Route path="/calendario" element={<Calendar />} />
 
         <Route path="/cerebro" element={<Brain />} />
+
+        <Route path="/orvesen-ia" element={<Orb />} />
 
         <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><BuilderHub /></CapabilityRoute>} />
 

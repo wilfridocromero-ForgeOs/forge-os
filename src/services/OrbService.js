@@ -1,0 +1,103 @@
+import { supabase } from "../lib/supabase";
+
+const ORB_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orb-chat`;
+
+function friendlyError(code) {
+  const messages = {
+    AI_NOT_CONFIGURED: "Orb todavía no está configurado para responder.",
+    AI_RATE_LIMITED: "Orb está recibiendo muchas solicitudes. Inténtalo nuevamente en un momento.",
+    AI_TIMEOUT: "Orb tardó más de lo esperado. Puedes volver a intentarlo.",
+    CONVERSATION_NOT_FOUND: "Esta conversación ya no está disponible.",
+    INVALID_SESSION: "Tu sesión venció. Vuelve a iniciar sesión.",
+    REQUEST_IN_PROGRESS: "Orb ya está procesando este mensaje.",
+  };
+  return messages[code] || "Orb no pudo completar la respuesta. Inténtalo nuevamente.";
+}
+
+export async function listOrbConversations() {
+  const { data, error } = await supabase.from("orb_conversations")
+    .select("id, title, status, created_at, updated_at, last_message_at")
+    .eq("status", "active")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createOrbConversation(title) {
+  const { data, error } = await supabase.rpc("create_orb_conversation", {
+    target_title: title.trim().slice(0, 120) || "Nueva conversación",
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listOrbMessages(conversationId) {
+  const { data, error } = await supabase.from("orb_messages")
+    .select("id, conversation_id, role, content, status, error_code, created_at, completed_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+function parseEventBlock(block) {
+  let event = "message";
+  const dataLines = [];
+  block.split(/\r?\n/).forEach((line) => {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  });
+  if (!dataLines.length) return null;
+  try {
+    return { event, data: JSON.parse(dataLines.join("\n")) };
+  } catch {
+    return null;
+  }
+}
+
+export async function streamOrbMessage({ conversationId, clientMessageId, message, onEvent, signal }) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) throw new Error("Tu sesión ya no está disponible.");
+
+  const response = await fetch(ORB_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ conversation_id: conversationId, client_message_id: clientMessageId, message }),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(friendlyError(payload.error));
+    error.code = payload.error || "ORB_REQUEST_FAILED";
+    throw error;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let terminalEvent = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+    blocks.forEach((block) => {
+      const parsed = parseEventBlock(block);
+      if (!parsed || !["start", "delta", "completed", "error"].includes(parsed.event)) return;
+      if (parsed.event === "completed" || parsed.event === "error") terminalEvent = true;
+      onEvent(parsed.event, parsed.data);
+    });
+    if (done) break;
+  }
+  if (!terminalEvent) throw new Error("La respuesta de Orb se interrumpió antes de terminar.");
+}
+
+export { friendlyError };

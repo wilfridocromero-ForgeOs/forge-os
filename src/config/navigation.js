@@ -9,6 +9,7 @@ import {
   FolderKanban,
   LayoutDashboard,
   Settings,
+  Sparkles,
   SlidersHorizontal,
   UserRound,
   Users,
@@ -21,6 +22,7 @@ export const navigationGroups = [
     title: "GENERAL",
     items: [
       { label: "Dashboard", icon: LayoutDashboard, to: "/" },
+      { label: "ORVESEN IA", icon: Sparkles, to: "/orvesen-ia" },
       { label: "Clientes", icon: Users, to: "/clientes" },
       { label: "Discovery", icon: Brain, to: "/discovery", end: true },
       { label: "Cerebro", icon: BookOpen, to: "/cerebro" },
