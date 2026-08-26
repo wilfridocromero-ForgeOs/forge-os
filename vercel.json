@@ -41,6 +41,7 @@
     { "source": "/configuracion/:path*", "destination": "/index.html" },
     { "source": "/calendario", "destination": "/index.html" },
     { "source": "/cerebro", "destination": "/index.html" },
+    { "source": "/orvesen-ia", "destination": "/index.html" },
     { "source": "/construir", "destination": "/index.html" },
     { "source": "/score-builder", "destination": "/index.html" }
   ]
