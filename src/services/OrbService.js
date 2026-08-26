@@ -5,6 +5,8 @@ const ORB_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orb-
 function friendlyError(code) {
   const messages = {
     AI_NOT_CONFIGURED: "Orb todavía no está configurado para responder.",
+    AI_BILLING_INACTIVE: "La facturación de Orb no está activa. Contacta al administrador.",
+    AI_QUOTA_EXCEEDED: "Orb no tiene crédito de API disponible. Contacta al administrador.",
     AI_RATE_LIMITED: "Orb está recibiendo muchas solicitudes. Inténtalo nuevamente en un momento.",
     AI_TIMEOUT: "Orb tardó más de lo esperado. Puedes volver a intentarlo.",
     CONVERSATION_NOT_FOUND: "Esta conversación ya no está disponible.",
@@ -34,10 +36,9 @@ export async function createOrbConversation(title) {
 
 export async function listOrbMessages(conversationId) {
   const { data, error } = await supabase.from("orb_messages")
-    .select("id, conversation_id, role, content, status, error_code, created_at, completed_at")
+    .select("id, conversation_id, role, content, status, error_code, client_message_id, reply_to_message_id, created_at, completed_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .order("id", { ascending: true });
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return data || [];
 }

@@ -1,6 +1,9 @@
 import {
   boundedInteger,
   buildLimitedHistory,
+  classifyProviderError,
+  classifyProviderStreamError,
+  extractOpenAIResponseText,
   MAX_HISTORY_MESSAGES,
   MAX_MESSAGE_CHARS,
   orbEvent,
@@ -103,4 +106,79 @@ Deno.test("bounds backend-only cost controls", () => {
   assertEquals(boundedInteger("99999", 800, 128, 2000), 2000);
   assertEquals(boundedInteger("1", 800, 128, 2000), 128);
   assertEquals(boundedInteger(undefined, 800, 128, 2000), 800);
+});
+
+Deno.test("classifies provider failures without exposing provider messages", () => {
+  assertEquals(
+    classifyProviderError(401, "invalid_api_key"),
+    "AI_AUTHENTICATION_FAILED",
+  );
+  assertEquals(
+    classifyProviderError(403, "permission_denied"),
+    "AI_ACCESS_DENIED",
+  );
+  assertEquals(
+    classifyProviderError(404, "model_not_found"),
+    "AI_MODEL_UNAVAILABLE",
+  );
+  assertEquals(
+    classifyProviderError(429, "insufficient_quota"),
+    "AI_QUOTA_EXCEEDED",
+  );
+  assertEquals(
+    classifyProviderError(429, "billing_not_active"),
+    "AI_BILLING_INACTIVE",
+  );
+  assertEquals(
+    classifyProviderError(429, "rate_limit_exceeded"),
+    "AI_RATE_LIMITED",
+  );
+  assertEquals(
+    classifyProviderError(400, "invalid_request_error"),
+    "AI_REQUEST_INVALID",
+  );
+  assertEquals(classifyProviderError(503, null), "AI_PROVIDER_UNAVAILABLE");
+  assertEquals(
+    classifyProviderStreamError(null, "You have insufficient quota."),
+    "AI_QUOTA_EXCEEDED",
+  );
+  assertEquals(
+    classifyProviderStreamError("model_not_found", null),
+    "AI_MODEL_UNAVAILABLE",
+  );
+  assertEquals(
+    classifyProviderStreamError(null, "Unrecognized provider failure"),
+    "AI_STREAM_FAILED_UNCLASSIFIED",
+  );
+  assertEquals(
+    classifyProviderStreamError(
+      null,
+      "The server encountered an error while processing your request.",
+    ),
+    "AI_PROVIDER_UNAVAILABLE",
+  );
+  assertEquals(
+    classifyProviderStreamError(null, null),
+    "AI_STREAM_FAILED_WITHOUT_DETAILS",
+  );
+});
+
+Deno.test("extracts text from a non-streaming Responses API payload", () => {
+  assertEquals(
+    extractOpenAIResponseText({
+      output: [
+        { type: "reasoning", content: [] },
+        {
+          type: "message",
+          content: [
+            { type: "output_text", text: "Hola" },
+            { type: "refusal", refusal: "ignored" },
+            { type: "output_text", text: " desde Orb" },
+          ],
+        },
+      ],
+    }),
+    "Hola desde Orb",
+  );
+  assertEquals(extractOpenAIResponseText(null), "");
 });

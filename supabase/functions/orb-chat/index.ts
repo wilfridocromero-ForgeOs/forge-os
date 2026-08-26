@@ -2,6 +2,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   boundedInteger,
   buildLimitedHistory,
+  classifyProviderError,
+  classifyProviderStreamError,
+  extractOpenAIResponseText,
   orbEvent,
   OrbRequestError,
   parseOrbChatRequest,
@@ -36,12 +39,6 @@ type TurnRecord = {
   assistant_content: string;
   membership_role: string;
   was_created: boolean;
-};
-
-type OpenAIEvent = {
-  type?: string;
-  delta?: string;
-  response?: { id?: string; error?: { code?: string } };
 };
 
 function json(status: number, body: Record<string, unknown>) {
@@ -133,56 +130,46 @@ async function privacyPreservingUserId(userId: string) {
   ).join("");
 }
 
-async function consumeOpenAIStream(
-  response: Response,
-  onDelta: (delta: string) => void,
-  onResponseId: (responseId: string) => void,
-) {
-  if (!response.ok || !response.body) {
+async function consumeOpenAINonStreamingResponse(response: Response) {
+  let payload: {
+    id?: unknown;
+    status?: unknown;
+    error?: { code?: unknown; type?: unknown; message?: unknown } | null;
+    output?: unknown;
+  } = {};
+  try {
+    payload = await response.json();
+  } catch {
     throw new OrbRequestError(
-      response.status === 429 ? "AI_RATE_LIMITED" : "AI_PROVIDER_ERROR",
+      "AI_RESPONSE_INVALID",
+      502,
+      "Orb received an invalid model response.",
+    );
+  }
+  if (!response.ok) {
+    throw new OrbRequestError(
+      classifyProviderError(
+        response.status,
+        payload.error?.code || payload.error?.type,
+      ),
       502,
       "Orb could not obtain a model response.",
     );
   }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || "";
-    for (const block of blocks) {
-      const data = block.split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n");
-      if (!data || data === "[DONE]") continue;
-      let event: OpenAIEvent;
-      try {
-        event = JSON.parse(data) as OpenAIEvent;
-      } catch {
-        continue;
-      }
-      if (event.response?.id) onResponseId(event.response.id);
-      if (
-        event.type === "response.output_text.delta" &&
-        typeof event.delta === "string"
-      ) {
-        onDelta(event.delta);
-      }
-      if (event.type === "response.failed") {
-        throw new OrbRequestError(
-          sanitizeErrorCode(event.response?.error?.code, "AI_PROVIDER_ERROR"),
-          502,
-          "Orb could not obtain a model response.",
-        );
-      }
-    }
-    if (done) break;
+  if (payload.status === "failed") {
+    throw new OrbRequestError(
+      classifyProviderStreamError(
+        payload.error?.code,
+        payload.error?.message,
+      ),
+      502,
+      "Orb could not obtain a model response.",
+    );
   }
+  return {
+    responseId: typeof payload.id === "string" ? payload.id : "",
+    output: extractOpenAIResponseText(payload),
+  };
 }
 
 export async function handleOrbChat(request: Request) {
@@ -286,17 +273,34 @@ export async function handleOrbChat(request: Request) {
         { status: 200, headers: streamHeaders },
       );
     }
-    if (turn.assistant_status === "failed") {
-      throw new OrbRequestError(
-        "PREVIOUS_ATTEMPT_FAILED",
-        409,
-        "This request previously failed. Send it again as a new message.",
-      );
-    }
-
     adminClient = createClient(supabaseUrl, serviceKey(), {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    if (turn.assistant_status === "failed") {
+      const { data: resetRows, error: resetError } = await adminClient
+        .from("orb_messages")
+        .update({
+          status: "pending",
+          content: "",
+          error_code: null,
+          completed_at: null,
+          processing_token: null,
+          provider_response_id: null,
+        })
+        .eq("id", assistantMessageId)
+        .eq("conversation_id", turn.conversation_id)
+        .eq("role", "assistant")
+        .eq("status", "failed")
+        .select("id");
+      if (resetError || resetRows?.length !== 1) {
+        throw new OrbRequestError(
+          "RETRY_NOT_AVAILABLE",
+          409,
+          "This response cannot be retried right now.",
+        );
+      }
+    }
+
     processingToken = crypto.randomUUID();
     const { data: claimed, error: claimError } = await adminClient.rpc(
       "claim_orb_assistant_message",
@@ -360,6 +364,20 @@ export async function handleOrbChat(request: Request) {
               assistant_message_id: assistantMessageId,
               instructions_version: ORB_INSTRUCTIONS_VERSION,
             });
+            const requestPayload = {
+              model: config.model,
+              instructions: `${ORB_INSTRUCTIONS}\nContexto autorizado: ${
+                JSON.stringify({
+                  organization_name: String(activeOrganization.name || "")
+                    .slice(0, 120),
+                  role: String(turn.membership_role || "member"),
+                })
+              }`,
+              input: history,
+              max_output_tokens: config.maxOutputTokens,
+              store: false,
+              safety_identifier: await privacyPreservingUserId(user.id),
+            };
             const response = await fetch(
               "https://api.openai.com/v1/responses",
               {
@@ -368,41 +386,16 @@ export async function handleOrbChat(request: Request) {
                   authorization: `Bearer ${openAIKey}`,
                   "content-type": "application/json",
                 },
-                body: JSON.stringify({
-                  model: config.model,
-                  instructions: `${ORB_INSTRUCTIONS}\nContexto autorizado: ${
-                    JSON.stringify({
-                      organization_name: String(activeOrganization.name || "")
-                        .slice(0, 120),
-                      role: String(turn.membership_role || "member"),
-                    })
-                  }`,
-                  input: history,
-                  max_output_tokens: config.maxOutputTokens,
-                  stream: true,
-                  store: false,
-                  safety_identifier: await privacyPreservingUserId(user.id),
-                }),
+                body: JSON.stringify({ ...requestPayload, stream: false }),
                 signal: abortController.signal,
               },
             );
-            await consumeOpenAIStream(
+            const nonStreaming = await consumeOpenAINonStreamingResponse(
               response,
-              (delta) => {
-                if (output.length + delta.length > 16_000) {
-                  throw new OrbRequestError(
-                    "OUTPUT_TOO_LARGE",
-                    502,
-                    "Orb response exceeded the allowed size.",
-                  );
-                }
-                output += delta;
-                send("delta", { delta });
-              },
-              (responseId) => {
-                providerResponseId = responseId;
-              },
             );
+            output = nonStreaming.output;
+            providerResponseId = nonStreaming.responseId;
+            if (output) send("delta", { delta: output });
             if (!output.trim()) {
               throw new OrbRequestError(
                 "EMPTY_AI_RESPONSE",
