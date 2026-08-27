@@ -160,12 +160,48 @@ Deno.test("module permissions use real keys, defaults and administrator policy",
     "calendar follows dashboard because no calendar key exists",
   );
   assert(permissions.score, "area_score authorizes score");
-  const admin = await getDashboardContextPermissions(
-    fakeClient({ accessError: true }).client,
-    "user-1",
-    "organization_admin",
-  );
-  assert(Object.values(admin).every(Boolean), "administrator policy preserved");
+  for (const role of ["founder", "admin"]) {
+    const administrator = await getDashboardContextPermissions(
+      fakeClient({ accessError: true }).client,
+      "user-1",
+      role,
+    );
+    assert(
+      Object.values(administrator).every(Boolean),
+      `${role} administrator policy preserved`,
+    );
+  }
+});
+
+Deno.test("area_lead and member remain governed by module access", async () => {
+  for (const role of ["area_lead", "member"]) {
+    const permissions = await getDashboardContextPermissions(
+      fakeClient({
+        access: [{ module_key: "projects", enabled: false }],
+      }).client,
+      "user-1",
+      role,
+    );
+    assert(!permissions.projects, `${role} explicit denial preserved`);
+    assert(!permissions.score, `${role} area_score defaults to denied`);
+  }
+});
+
+Deno.test("founder and admin receive an authorized score source", async () => {
+  for (const role of ["founder", "admin"]) {
+    const fixture = fakeClient({ accessError: true });
+    const context = await loadDashboardContextSafely(
+      fixture.client,
+      "organization-1",
+      "user-1",
+      role,
+    );
+    assert(context?.sources.score.status === "available", `${role} score`);
+    assert(
+      !fixture.queries.includes("member_module_access"),
+      `${role} bypasses module lookup`,
+    );
+  }
 });
 
 Deno.test("permission lookup failure is fail closed", async () => {
@@ -336,7 +372,7 @@ Deno.test("unexpected provider failure returns null with safe diagnostics", asyn
     fakeClient().client,
     "organization-1",
     "user-1",
-    "organization_admin",
+    "admin",
     (...args) => reports.push(args),
     () => {
       throw new Error("sensitive SQL detail");

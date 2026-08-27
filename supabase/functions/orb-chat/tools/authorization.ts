@@ -8,7 +8,7 @@ export type OrbToolPermission =
   | "calendar";
 export type OrbToolPermissions = Record<OrbToolPermission, boolean>;
 
-const ADMIN_ROLES = new Set(["platform_owner", "organization_admin"]);
+const ADMIN_ROLES = new Set(["founder", "admin"]);
 const DENIED: OrbToolPermissions = {
   projects: false,
   discovery: false,

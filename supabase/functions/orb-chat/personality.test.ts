@@ -140,6 +140,33 @@ Deno.test("limits data access to the read-only dashboard snapshot", () => {
   );
 });
 
+Deno.test("separates unauthorized real data from permitted conceptual knowledge", () => {
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "unauthorized limita únicamente afirmaciones sobre sus datos empresariales reales protegidos",
+    ),
+    "unauthorized applies to protected real data",
+  );
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "No impide explicar conceptualmente",
+    ),
+    "conceptual knowledge remains available",
+  );
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "No afirmes datos reales sin contexto o herramientas autorizadas",
+    ),
+    "real data still requires authorization",
+  );
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "responde conceptualmente o pide una aclaración breve",
+    ),
+    "ambiguous questions use safe semantic routing",
+  );
+});
+
 Deno.test("continues safely when dashboard context is absent", () => {
   const instructions = buildOrbInstructions({
     organizationName: "ORVESEN",

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const OPEN_TASK_STATUSES = ["pending", "in_progress", "blocked"];
 const ACTIVE_PROJECT_STATUSES = ["planned", "active", "blocked"];
 const COLLECTION_LIMIT = 5;
-const DASHBOARD_ADMIN_ROLES = new Set(["platform_owner", "organization_admin"]);
+const DASHBOARD_ADMIN_ROLES = new Set(["founder", "admin"]);
 
 export type DashboardContextPermissions = {
   dashboard: boolean;

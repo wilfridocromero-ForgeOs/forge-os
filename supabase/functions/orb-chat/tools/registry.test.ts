@@ -21,6 +21,49 @@ Deno.test("only authorized tools are offered", () => {
   assertEquals(names, ["list_projects", "list_tasks", "get_project_summary"]);
 });
 
+Deno.test("area_score controls whether get_score_summary is offered", () => {
+  const allowed = getAuthorizedToolDefinitions({
+    ...denied,
+    area_score: true,
+  }).map((tool) => tool.name);
+  const blocked = getAuthorizedToolDefinitions({
+    ...denied,
+    area_score: false,
+  }).map((tool) => tool.name);
+  assertEquals(allowed.includes("get_score_summary"), true);
+  assertEquals(blocked.includes("get_score_summary"), false);
+});
+
+Deno.test("authorized get_score_summary is executable with user-scoped client", async () => {
+  const snapshot = {
+    id: "score-1",
+    master_score: 80,
+    performance_percentage: 80,
+    coverage_percentage: 90,
+    status: "partial",
+    calculated_at: "2026-08-26T12:00:00.000Z",
+  };
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "order", "limit"]) {
+    chain[method] = () => chain;
+  }
+  chain.maybeSingle = () => Promise.resolve({ data: snapshot, error: null });
+  const client = { from: () => chain };
+  assertEquals(
+    await executeOrbTool(
+      {
+        client: client as never,
+        organizationId: "org",
+        userId: "user",
+        permissions: { ...denied, area_score: true },
+      },
+      "get_score_summary",
+      "{}",
+    ),
+    { status: "ok", data: { snapshot } },
+  );
+});
+
 Deno.test("registry exposes the seven bounded read tools for an administrator", () => {
   const tools = getAuthorizedToolDefinitions({
     projects: true,
