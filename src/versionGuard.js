@@ -1,128 +1,80 @@
 import "./versionGuard.css";
 import { hasUnsavedWork } from "./dirtyState";
+import {
+  ASSET_RECOVERY_ATTEMPT_KEY,
+  createVersionUpdateController,
+  normalizeBuild,
+  UPDATE_ATTEMPT_KEY,
+} from "./versionUpdateCore";
 
-const CURRENT_VERSION = import.meta.env.VITE_APP_VERSION;
-const UPDATE_ATTEMPT_KEY = "orvesen-version-update-attempt";
+const CURRENT_BUILD = normalizeBuild({
+  version: import.meta.env.VITE_APP_VERSION,
+  built_at: import.meta.env.VITE_APP_BUILD_TIME,
+});
 const UPDATE_BANNER_ID = "orvesen-version-update";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
-const MAX_UPDATE_ATTEMPTS = 2;
+const CHANNEL_NAME = "orvesen-version-updates";
 
 let installed = false;
 let checking = false;
+let controller = null;
+
+function storageRead(key) {
+  try {
+    return JSON.parse(sessionStorage.getItem(key) || "null");
+  } catch {
+    storageRemove(key);
+    return null;
+  }
+}
+
+function storageWrite(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // A cache-busted navigation still works in restrictive browsing modes.
+  }
+}
+
+function storageRemove(key) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Storage can be unavailable.
+  }
+}
+
+function currentRelativeUrl() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function replaceRoute(returnTo) {
+  const current = currentRelativeUrl();
+  const clean = new URL(returnTo, window.location.origin);
+  clean.searchParams.delete("_appv");
+  clean.searchParams.delete("_appbt");
+  clean.searchParams.delete("_asset_recovery");
+  const next = `${clean.pathname}${clean.search}${clean.hash}`;
+  if (next !== current) window.history.replaceState(window.history.state, "", next);
+}
+
+function completeAssetRecoveryBootstrap() {
+  const attempt = storageRead(ASSET_RECOVERY_ATTEMPT_KEY);
+  storageRemove(ASSET_RECOVERY_ATTEMPT_KEY);
+  if (!attempt || Date.now() - Number(attempt.attemptedAt || 0) > 5 * 60 * 1000) return false;
+  replaceRoute(attempt.returnTo || "/");
+  return true;
+}
 
 function removeUpdateBanner() {
   document.getElementById(UPDATE_BANNER_ID)?.remove();
 }
 
-function readUpdateAttempt() {
-  try {
-    return JSON.parse(sessionStorage.getItem(UPDATE_ATTEMPT_KEY) || "null");
-  } catch {
-    removeUpdateAttempt();
-    return null;
+function renderUpdateState(state) {
+  if (!document.body || state.status === "current") {
+    removeUpdateBanner();
+    return;
   }
-}
-
-function writeUpdateAttempt(attempt) {
-  try {
-    sessionStorage.setItem(UPDATE_ATTEMPT_KEY, JSON.stringify(attempt));
-  } catch {
-    // The cache-busted navigation still works when session storage is unavailable.
-  }
-}
-
-function removeUpdateAttempt() {
-  try {
-    sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
-  } catch {
-    // Storage can be unavailable in restrictive browsing modes.
-  }
-}
-
-function currentRelativeUrl() {
-  const currentUrl = new URL(window.location.href);
-  currentUrl.searchParams.delete("_appv");
-  return `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
-}
-
-function safeReturnUrl(value) {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
-  const target = new URL(value, window.location.origin);
-  return target.origin === window.location.origin
-    ? `${target.pathname}${target.search}${target.hash}`
-    : "/";
-}
-
-function clearCompletedUpdate(attempt = readUpdateAttempt(), notifyRouter = false) {
-  removeUpdateAttempt();
-  removeUpdateBanner();
-
-  const currentUrl = new URL(window.location.href);
-  const returnTo = attempt?.target === CURRENT_VERSION
-    ? safeReturnUrl(attempt.returnTo)
-    : `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
-  const cleanUrl = new URL(returnTo, window.location.origin);
-  cleanUrl.searchParams.delete("_appv");
-
-  if (`${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}` === `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`) return;
-  window.history.replaceState(
-    window.history.state,
-    "",
-    `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
-  );
-  if (notifyRouter) window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-export function completeVersionUpdateBootstrap() {
-  const updateAttempt = readUpdateAttempt();
-  if (updateAttempt?.target !== CURRENT_VERSION) return false;
-
-  clearCompletedUpdate(updateAttempt, true);
-  return true;
-}
-
-function requestVersionUpdate(remoteVersion) {
-  const previousAttempt = readUpdateAttempt();
-  const attempts = previousAttempt?.target === remoteVersion
-    ? Number(previousAttempt.attempts || 0)
-    : 0;
-
-  if (attempts >= MAX_UPDATE_ATTEMPTS) {
-    showUpdateBanner(remoteVersion);
-    return false;
-  }
-
-  if (hasUnsavedWork() && !window.confirm("Hay trabajo sin guardar. Si actualizas ahora, esos cambios locales se perderán. ¿Continuar?")) {
-    return false;
-  }
-
-  const returnTo = previousAttempt?.target === remoteVersion
-    ? safeReturnUrl(previousAttempt.returnTo)
-    : currentRelativeUrl();
-  const nextUrl = new URL("/", window.location.origin);
-  nextUrl.searchParams.set("_appv", remoteVersion);
-  writeUpdateAttempt({
-    from: CURRENT_VERSION,
-    target: remoteVersion,
-    returnTo,
-    attempts: attempts + 1,
-    attemptedAt: Date.now(),
-  });
-  window.location.replace(nextUrl.toString());
-  return true;
-}
-
-function showUpdateBanner(remoteVersion) {
-  if (!document.body) return;
-
-  const previousAttempt = readUpdateAttempt();
-  const retryingSameVersion =
-    previousAttempt?.from === CURRENT_VERSION && previousAttempt?.target === remoteVersion;
-  const attempts = previousAttempt?.target === remoteVersion
-    ? Number(previousAttempt.attempts || 0)
-    : 0;
-  const attemptsExhausted = attempts >= MAX_UPDATE_ATTEMPTS;
-
   let banner = document.getElementById(UPDATE_BANNER_ID);
   if (!banner) {
     banner = document.createElement("aside");
@@ -130,104 +82,109 @@ function showUpdateBanner(remoteVersion) {
     banner.className = "orvesen-version-update";
     banner.setAttribute("role", "status");
     banner.setAttribute("aria-live", "polite");
-
     const copy = document.createElement("div");
     copy.className = "orvesen-version-update__copy";
-
     const title = document.createElement("strong");
     title.className = "orvesen-version-update__title";
-    copy.appendChild(title);
-
     const description = document.createElement("span");
     description.className = "orvesen-version-update__description";
-    copy.appendChild(description);
-
+    copy.append(title, description);
     const action = document.createElement("button");
     action.className = "orvesen-version-update__action";
     action.type = "button";
-    action.textContent = "Actualizar ahora";
-
     banner.append(copy, action);
     document.body.appendChild(banner);
   }
-
-  banner.dataset.targetVersion = remoteVersion;
   const title = banner.querySelector(".orvesen-version-update__title");
   const description = banner.querySelector(".orvesen-version-update__description");
   const action = banner.querySelector(".orvesen-version-update__action");
+  banner.dataset.state = state.status;
+  banner.dataset.targetVersion = state.target?.version || "";
 
-  title.textContent = attemptsExhausted
-    ? "No pudimos completar la actualización"
-    : retryingSameVersion
-    ? "La actualización no terminó"
-    : "Hay una nueva versión de ORVESEN";
-  description.textContent = attemptsExhausted
-    ? "Puedes continuar con esta versión y recargar manualmente cuando estés listo."
-    : retryingSameVersion
-    ? "Guarda tu trabajo y vuelve a intentarlo."
-    : "Guarda tu trabajo antes de actualizar.";
-  action.disabled = attemptsExhausted;
-  action.textContent = attemptsExhausted
-    ? "Actualización pendiente"
-    : retryingSameVersion
-      ? "Reintentar actualización"
-      : "Actualizar ahora";
-  action.onclick = () => {
-    action.disabled = true;
+  if (state.status === "activating") {
+    title.textContent = "Activando la nueva versión";
+    description.textContent = "ORVESEN conservará esta ruta y se recargará una sola vez.";
     action.textContent = "Actualizando…";
-    if (!requestVersionUpdate(remoteVersion)) {
-      action.disabled = false;
-      showUpdateBanner(remoteVersion);
-    }
-  };
+    action.disabled = true;
+    return;
+  }
+  if (state.status === "error") {
+    title.textContent = "No pudimos completar la actualización";
+    description.textContent = "Puedes seguir trabajando y volver a intentarlo más tarde.";
+    action.textContent = "Actualización pendiente";
+    action.disabled = true;
+    return;
+  }
+  title.textContent = "Hay una nueva versión de ORVESEN";
+  description.textContent = "Guarda tu trabajo antes de actualizar.";
+  action.textContent = "Actualizar ahora";
+  action.disabled = false;
+  action.onclick = () => controller?.acceptUpdate({ hasUnsavedWork: hasUnsavedWork() });
 }
 
-async function checkForCurrentVersion() {
-  if (checking || !CURRENT_VERSION) return;
-  checking = true;
-  try {
-    const response = await fetch(`/version.json?v=${encodeURIComponent(CURRENT_VERSION)}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) return;
-    const remoteVersion = String((await response.json())?.version || "").trim();
-    if (!remoteVersion) return;
-
-    if (remoteVersion === CURRENT_VERSION) {
-      if (readUpdateAttempt()?.target === CURRENT_VERSION) {
-        removeUpdateBanner();
-        return;
-      }
-      clearCompletedUpdate();
-      return;
-    }
-
-    showUpdateBanner(remoteVersion);
-  } catch {
-    // A temporary network failure must never interrupt the active application.
-  } finally {
-    checking = false;
-  }
+async function fetchCurrentBuild() {
+  const response = await fetch(`/version.json?current=${encodeURIComponent(CURRENT_BUILD.version)}`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  return response.ok ? response.json() : null;
 }
 
 export function installVersionGuard() {
-  if (!import.meta.env.PROD || installed) return () => {};
+  if (!import.meta.env.PROD || installed || !CURRENT_BUILD) return () => {};
   installed = true;
+  completeAssetRecoveryBootstrap();
 
-  const updateAttempt = readUpdateAttempt();
-  if (updateAttempt?.target === CURRENT_VERSION) removeUpdateBanner();
+  controller = createVersionUpdateController({
+    currentBuild: CURRENT_BUILD,
+    origin: window.location.origin,
+    getCurrentUrl: currentRelativeUrl,
+    readAttempt: () => storageRead(UPDATE_ATTEMPT_KEY),
+    writeAttempt: (value) => storageWrite(UPDATE_ATTEMPT_KEY, value),
+    clearAttempt: () => storageRemove(UPDATE_ATTEMPT_KEY),
+    navigate: (url) => window.location.replace(url),
+    replaceRoute,
+    confirmUpdate: () => window.confirm("Hay trabajo sin guardar. Si actualizas ahora, esos cambios locales se perderán. ¿Continuar?"),
+    onState: renderUpdateState,
+  });
+  controller.completeBootstrap();
+  Object.defineProperty(window, "__ORVESEN_BUILD__", {
+    configurable: true,
+    value: Object.freeze({ ...CURRENT_BUILD }),
+  });
 
-  const checkWhenVisible = () => {
-    if (document.visibilityState === "visible") checkForCurrentVersion();
+  const channel = "BroadcastChannel" in window ? new BroadcastChannel(CHANNEL_NAME) : null;
+  const observe = (build, broadcast = true) => {
+    const decision = controller.observeRemote(build);
+    if (broadcast && decision.status === "update_available") {
+      channel?.postMessage({ type: "build", build: decision.build });
+    }
   };
-  const checkAfterPageShow = () => checkForCurrentVersion();
+  channel?.addEventListener("message", (event) => {
+    if (event.data?.type === "build") observe(event.data.build, false);
+  });
+  channel?.postMessage({ type: "build", build: CURRENT_BUILD });
+
+  const checkForCurrentVersion = async () => {
+    if (checking) return;
+    checking = true;
+    try {
+      const remoteBuild = await fetchCurrentBuild();
+      if (remoteBuild) observe(remoteBuild);
+    } catch {
+      // A temporary network failure must not interrupt the active application.
+    } finally {
+      checking = false;
+    }
+  };
+  const checkWhenVisible = () => {
+    if (document.visibilityState === "visible") void checkForCurrentVersion();
+  };
   const initialCheck = window.setTimeout(checkForCurrentVersion, 3000);
   const interval = window.setInterval(checkForCurrentVersion, CHECK_INTERVAL_MS);
-
   window.addEventListener("focus", checkForCurrentVersion);
   window.addEventListener("online", checkForCurrentVersion);
-  window.addEventListener("pageshow", checkAfterPageShow);
+  window.addEventListener("pageshow", checkForCurrentVersion);
   document.addEventListener("visibilitychange", checkWhenVisible);
 
   return () => {
@@ -235,9 +192,12 @@ export function installVersionGuard() {
     window.clearInterval(interval);
     window.removeEventListener("focus", checkForCurrentVersion);
     window.removeEventListener("online", checkForCurrentVersion);
-    window.removeEventListener("pageshow", checkAfterPageShow);
+    window.removeEventListener("pageshow", checkForCurrentVersion);
     document.removeEventListener("visibilitychange", checkWhenVisible);
+    channel?.close();
     removeUpdateBanner();
+    delete window.__ORVESEN_BUILD__;
+    controller = null;
     installed = false;
   };
 }

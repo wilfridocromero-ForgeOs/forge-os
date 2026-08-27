@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { CAPABILITIES, getRoleCapabilities } from "../config/capabilities";
 import { updateOrganizationName as persistOrganizationName } from "../services/OrganizationService";
-import { completeVersionUpdateBootstrap } from "../versionGuard";
 
 const AuthContext = createContext();
 const IDENTITY_RETRY_DELAYS_MS = [0, 500, 1500];
@@ -208,13 +207,6 @@ export function AuthProvider({ children }) {
       document.removeEventListener("visibilitychange", retryWhenVisible);
     };
   }, [identity.status]);
-
-  useEffect(() => {
-    if (!sessionResolved) return;
-    if (session && ["idle", "resolving"].includes(identity.status)) return;
-
-    completeVersionUpdateBootstrap();
-  }, [identity.status, session, sessionResolved]);
 
   const profile = identity.profile;
   const organization = profile?.organizations ?? null;
