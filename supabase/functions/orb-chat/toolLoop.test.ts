@@ -46,6 +46,21 @@ const toolCall = (
     },
   }, { type: "response.completed", response: { id: "resp_tool" } }]);
 
+const toolCalls = (calls: Array<{ name: string; callId: string }>) =>
+  stream([
+    { type: "response.created", response: { id: "resp_tools" } },
+    ...calls.map(({ name, callId }) => ({
+      type: "response.output_item.done",
+      item: {
+        type: "function_call",
+        call_id: callId,
+        name,
+        arguments: "{}",
+      },
+    })),
+    { type: "response.completed", response: { id: "resp_tools" } },
+  ]);
+
 Deno.test("model can answer without a tool", async () => {
   let output = "";
   const result = await runOrbToolLoop({
@@ -160,6 +175,43 @@ Deno.test("two tool rounds preserve each call_id and return only the final answe
   );
   assertEquals(result.output, "Respuesta empresarial final");
   assertEquals(result.output.includes("count"), false);
+});
+
+Deno.test("multiple tools in one round preserve call ids and isolate a partial failure", async () => {
+  let round = 0;
+  let secondInput: unknown[] = [];
+  const result = await runOrbToolLoop({
+    input: [{ role: "user", content: "prioridades" }],
+    request: (input) => {
+      round += 1;
+      if (round === 1) {
+        return Promise.resolve(toolCalls([
+          { name: "list_tasks", callId: "call_tasks" },
+          { name: "list_calendar_items", callId: "call_calendar" },
+        ]));
+      }
+      secondInput = input;
+      return Promise.resolve(completedText("Prioridad final"));
+    },
+    execute: (name) =>
+      Promise.resolve(
+        name === "list_tasks"
+          ? { status: "ok", data: { items: [] } }
+          : { status: "unavailable" },
+      ),
+    onDelta: () => {},
+  });
+  const outputs = secondInput.slice(-2) as Array<{
+    call_id: string;
+    output: string;
+  }>;
+  assertEquals(outputs.map((item) => item.call_id), [
+    "call_tasks",
+    "call_calendar",
+  ]);
+  assertEquals(outputs[0].output, '{"status":"ok","data":{"items":[]}}');
+  assertEquals(outputs[1].output, '{"status":"unavailable"}');
+  assertEquals(result.output, "Prioridad final");
 });
 
 Deno.test("sanitized tool failure remains controlled and reaches a final response", async () => {

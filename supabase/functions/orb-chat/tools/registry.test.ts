@@ -21,7 +21,7 @@ Deno.test("only authorized tools are offered", () => {
   assertEquals(names, ["list_projects", "list_tasks", "get_project_summary"]);
 });
 
-Deno.test("area_score controls whether get_score_summary is offered", () => {
+Deno.test("area_score controls whether score tools are offered", () => {
   const allowed = getAuthorizedToolDefinitions({
     ...denied,
     area_score: true,
@@ -31,7 +31,9 @@ Deno.test("area_score controls whether get_score_summary is offered", () => {
     area_score: false,
   }).map((tool) => tool.name);
   assertEquals(allowed.includes("get_score_summary"), true);
+  assertEquals(allowed.includes("get_score_breakdown"), true);
   assertEquals(blocked.includes("get_score_summary"), false);
+  assertEquals(blocked.includes("get_score_breakdown"), false);
 });
 
 Deno.test("authorized get_score_summary is executable with user-scoped client", async () => {
@@ -64,7 +66,7 @@ Deno.test("authorized get_score_summary is executable with user-scoped client", 
   );
 });
 
-Deno.test("registry exposes the seven bounded read tools for an administrator", () => {
+Deno.test("registry exposes the bounded read tools for an administrator", () => {
   const tools = getAuthorizedToolDefinitions({
     projects: true,
     discovery: true,
@@ -77,9 +79,12 @@ Deno.test("registry exposes the seven bounded read tools for an administrator", 
     "list_tasks",
     "get_project_summary",
     "list_discovery_assessments",
+    "get_discovery_summary",
     "get_score_summary",
+    "get_score_breakdown",
     "list_calendar_items",
     "list_clients",
+    "get_client_summary",
   ]);
   for (const tool of tools) {
     const schema = tool.parameters as {
@@ -91,6 +96,277 @@ Deno.test("registry exposes the seven bounded read tools for an administrator", 
       assertEquals(schema.properties.limit.maximum, 25);
     }
   }
+});
+
+Deno.test("client summary uses bigint identity, organization scope and excludes PII", async () => {
+  const selected: string[] = [];
+  const filters: Array<[string, string, unknown]> = [];
+  const client = {
+    from(table: string) {
+      const chain: Record<string, unknown> = {};
+      chain.select = (columns: string) => {
+        selected.push(`${table}:${columns}`);
+        return chain;
+      };
+      chain.eq = (column: string, value: unknown) => {
+        filters.push([table, column, value]);
+        return chain;
+      };
+      chain.order = () => chain;
+      chain.limit = () =>
+        Promise.resolve({
+          data: table === "projects"
+            ? [{ id: "project", name: "Project", status: "active" }]
+            : [{ id: "assessment", status: "completed", score: 80 }],
+          error: null,
+        });
+      chain.maybeSingle = () =>
+        Promise.resolve({
+          data: {
+            id: 42,
+            company_name: "Client",
+            industry: "Technology",
+            status: "active",
+            created_at: "2026-01-01T00:00:00Z",
+          },
+          error: null,
+        });
+      return chain;
+    },
+  };
+  const result = await executeOrbTool(
+    {
+      client: client as never,
+      organizationId: "org",
+      userId: "member",
+      permissions: { ...denied, clients: true },
+    },
+    "get_client_summary",
+    JSON.stringify({ client_id: 42 }),
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(
+    filters.some(([table, column, value]) =>
+      table === "clients" && column === "organization_id" && value === "org"
+    ),
+    true,
+  );
+  const contract = selected.join("|");
+  for (
+    const excluded of ["email", "phone", "contact_name", "notes", "content"]
+  ) {
+    assertEquals(contract.includes(excluded), false);
+  }
+});
+
+Deno.test("client summary rejects invalid ids, extra fields and unauthorized access before query", async () => {
+  let queried = false;
+  const client = {
+    from: () => {
+      queried = true;
+      throw new Error("unexpected");
+    },
+  };
+  for (
+    const [permissions, args] of [
+      [{ ...denied, clients: true }, { client_id: "uuid" }],
+      [{ ...denied, clients: true }, {
+        client_id: 42,
+        organization_id: "other",
+      }],
+      [denied, { client_id: 42 }],
+    ] as const
+  ) {
+    const result = await executeOrbTool(
+      {
+        client: client as never,
+        organizationId: "org",
+        userId: "user",
+        permissions,
+      },
+      "get_client_summary",
+      JSON.stringify(args),
+    );
+    assertEquals(
+      ["invalid_arguments", "unauthorized"].includes(result.status),
+      true,
+    );
+  }
+  assertEquals(queried, false);
+});
+
+Deno.test("cross-organization client id is indistinguishable from missing", async () => {
+  const chain: Record<string, unknown> = {};
+  chain.select = () => chain;
+  chain.eq = () => chain;
+  chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, clients: true },
+    },
+    "get_client_summary",
+    JSON.stringify({ client_id: 42 }),
+  );
+  assertEquals(result, { status: "ok", data: { status: "not_found" } });
+});
+
+Deno.test("discovery summary returns aggregates without querying responses", async () => {
+  const tables: string[] = [];
+  const client = {
+    from(table: string) {
+      tables.push(table);
+      const chain: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "order"]) {
+        chain[method] = () => chain;
+      }
+      chain.limit = () =>
+        Promise.resolve({
+          data: [{
+            category_id: "category",
+            percentage: 35,
+            status: "critical",
+            category: { id: "category", name: "Area" },
+          }],
+          error: null,
+        });
+      chain.maybeSingle = () =>
+        Promise.resolve({
+          data: {
+            id: "assessment",
+            status: "completed",
+            score: 35,
+            max_score: 100,
+          },
+          error: null,
+        });
+      return chain;
+    },
+  };
+  const result = await executeOrbTool(
+    {
+      client: client as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, discovery: true },
+    },
+    "get_discovery_summary",
+    JSON.stringify({ assessment_id: "11111111-1111-4111-8111-111111111111" }),
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(tables.includes("discovery_responses"), false);
+  assertEquals(tables, ["discovery_assessments", "discovery_category_results"]);
+});
+
+Deno.test("discovery summary rejects invalid, unauthorized and cross-organization assessments safely", async () => {
+  let queried = false;
+  const noQueryClient = {
+    from: () => {
+      queried = true;
+      throw new Error("unexpected");
+    },
+  };
+  for (
+    const [permissions, assessmentId] of [
+      [{ ...denied, discovery: true }, "bad"],
+      [denied, "11111111-1111-4111-8111-111111111111"],
+    ] as const
+  ) {
+    const result = await executeOrbTool(
+      {
+        client: noQueryClient as never,
+        organizationId: "org",
+        userId: "user",
+        permissions,
+      },
+      "get_discovery_summary",
+      JSON.stringify({ assessment_id: assessmentId }),
+    );
+    assertEquals(
+      ["invalid_arguments", "unauthorized"].includes(result.status),
+      true,
+    );
+  }
+  assertEquals(queried, false);
+
+  const chain: Record<string, unknown> = {};
+  chain.select = () => chain;
+  chain.eq = () => chain;
+  chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+  const crossOrg = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, discovery: true },
+    },
+    "get_discovery_summary",
+    JSON.stringify({
+      assessment_id: "11111111-1111-4111-8111-111111111111",
+    }),
+  );
+  assertEquals(crossOrg, { status: "ok", data: { status: "not_found" } });
+});
+
+Deno.test("score breakdown reads canonical snapshots and never calculates an alternative", async () => {
+  const tables: string[] = [];
+  const client = {
+    from(table: string) {
+      tables.push(table);
+      const chain: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "order"]) {
+        chain[method] = () => chain;
+      }
+      chain.limit = () =>
+        table === "company_score_snapshots"
+          ? chain
+          : Promise.resolve({ data: [], error: null });
+      chain.maybeSingle = () =>
+        Promise.resolve({
+          data: { id: "snapshot", master_score: 700 },
+          error: null,
+        });
+      return chain;
+    },
+  };
+  const result = await executeOrbTool(
+    {
+      client: client as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, area_score: true },
+    },
+    "get_score_breakdown",
+    "{}",
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(tables, [
+    "company_score_snapshots",
+    "company_score_snapshot_components",
+  ]);
+});
+
+Deno.test("score breakdown denial executes no query", async () => {
+  let queried = false;
+  const result = await executeOrbTool(
+    {
+      client: {
+        from: () => {
+          queried = true;
+          throw new Error("unexpected");
+        },
+      } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: denied,
+    },
+    "get_score_breakdown",
+    "{}",
+  );
+  assertEquals(result, { status: "unauthorized" });
+  assertEquals(queried, false);
 });
 
 Deno.test("unauthorized tool performs no query", async () => {

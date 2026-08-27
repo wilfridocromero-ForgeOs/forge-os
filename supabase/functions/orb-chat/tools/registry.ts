@@ -64,6 +64,12 @@ function uuid(value: unknown) {
   }
   return value;
 }
+function positiveInteger(value: unknown) {
+  if (!Number.isSafeInteger(value) || Number(value) < 1) {
+    throw new Error("INVALID_ARGUMENTS");
+  }
+  return Number(value);
+}
 function assertKeys(args: Record<string, unknown>, allowed: string[]) {
   if (
     !args || Array.isArray(args) || typeof args !== "object" ||
@@ -243,6 +249,44 @@ const definitions: Definition[] = [
     },
   },
   {
+    name: "get_discovery_summary",
+    description:
+      "Obtiene resultados agregados y categorías de una evaluación Discovery visible, sin respuestas libres.",
+    permission: "discovery",
+    parameters: objectSchema(
+      { assessment_id: { type: "string", format: "uuid" } },
+      ["assessment_id"],
+    ),
+    async handler({ client, organizationId }, args) {
+      assertKeys(args, ["assessment_id"]);
+      const assessmentId = uuid(args.assessment_id);
+      const assessment = await client.from("discovery_assessments").select(
+        "id,status,client_id,division_id,score,max_score,maturity_level,started_at,completed_at,updated_at",
+      ).eq("id", assessmentId).eq("organization_id", organizationId)
+        .maybeSingle();
+      if (assessment.error) throw assessment.error;
+      if (!assessment.data) return { status: "not_found" };
+
+      const categories = await client.from("discovery_category_results")
+        .select(
+          "category_id,percentage,status,category:score_categories!inner(id,name)",
+        ).eq("assessment_id", assessmentId).order("percentage", {
+          ascending: true,
+        }).limit(MAX_LIMIT);
+      if (categories.error) throw categories.error;
+      return {
+        assessment: assessment.data,
+        categories: (categories.data || []).map((row) => ({
+          category_id: row.category_id,
+          percentage: row.percentage,
+          status: row.status,
+          category: relation(row.category),
+        })),
+        categories_truncated: (categories.data?.length || 0) === MAX_LIMIT,
+      };
+    },
+  },
+  {
     name: "get_score_summary",
     description: "Obtiene el último Company Master Score canónico visible.",
     permission: "area_score",
@@ -257,6 +301,47 @@ const definitions: Definition[] = [
         }).limit(1).maybeSingle();
       if (error) throw error;
       return { snapshot: data || null };
+    },
+  },
+  {
+    name: "get_score_breakdown",
+    description:
+      "Obtiene el desglose canónico por división del último Company Master Score visible.",
+    permission: "area_score",
+    parameters: objectSchema({}, []),
+    async handler({ client, organizationId }, args) {
+      assertKeys(args, []);
+      const snapshot = await client.from("company_score_snapshots").select(
+        "id,master_score,performance_percentage,coverage_percentage,status,calculated_at",
+      ).eq("organization_id", organizationId).order("calculated_at", {
+        ascending: false,
+      }).limit(1).maybeSingle();
+      if (snapshot.error) throw snapshot.error;
+      if (!snapshot.data) return { snapshot: null, divisions: [] };
+
+      const components = await client.from("company_score_snapshot_components")
+        .select(
+          "division_id,configured_weight,represented,division_performance_percentage,division_coverage_percentage,division:divisions!inner(id,name,organization_id)",
+        ).eq("snapshot_id", snapshot.data.id).eq(
+          "organization_id",
+          organizationId,
+        ).eq("division.organization_id", organizationId).order(
+          "division_performance_percentage",
+          { ascending: true, nullsFirst: false },
+        ).limit(MAX_LIMIT);
+      if (components.error) throw components.error;
+      return {
+        snapshot: snapshot.data,
+        divisions: (components.data || []).map((row) => ({
+          division_id: row.division_id,
+          configured_weight: row.configured_weight,
+          represented: row.represented,
+          performance_percentage: row.division_performance_percentage,
+          coverage_percentage: row.division_coverage_percentage,
+          division: relation(row.division),
+        })),
+        divisions_truncated: (components.data?.length || 0) === MAX_LIMIT,
+      };
     },
   },
   {
@@ -340,6 +425,51 @@ const definitions: Definition[] = [
         items: data || [],
         limit: take,
         truncated: (data?.length || 0) === take,
+      };
+    },
+  },
+  {
+    name: "get_client_summary",
+    description:
+      "Obtiene una ficha empresarial mínima y actividad reciente de un cliente visible, sin contacto ni notas.",
+    permission: "clients",
+    parameters: objectSchema(
+      { client_id: { type: "integer", minimum: 1 } },
+      ["client_id"],
+    ),
+    async handler({ client, organizationId }, args) {
+      assertKeys(args, ["client_id"]);
+      const clientId = positiveInteger(args.client_id);
+      const clientResult = await client.from("clients").select(
+        "id,company_name,industry,status,created_at",
+      ).eq("id", clientId).eq("organization_id", organizationId)
+        .maybeSingle();
+      if (clientResult.error) throw clientResult.error;
+      if (!clientResult.data) return { status: "not_found" };
+
+      const [projects, assessments] = await Promise.all([
+        client.from("projects").select(
+          "id,name,status,due_at,updated_at",
+        ).eq("client_id", clientId).eq("organization_id", organizationId)
+          .order("updated_at", { ascending: false }).limit(6),
+        client.from("discovery_assessments").select(
+          "id,status,score,max_score,completed_at,updated_at",
+        ).eq("client_id", clientId).eq("organization_id", organizationId)
+          .order("updated_at", { ascending: false }).limit(6),
+      ]);
+      if (projects.error || assessments.error) {
+        throw projects.error || assessments.error;
+      }
+      return {
+        client: clientResult.data,
+        projects: {
+          items: (projects.data || []).slice(0, 5),
+          truncated: (projects.data?.length || 0) > 5,
+        },
+        discoveries: {
+          items: (assessments.data || []).slice(0, 5),
+          truncated: (assessments.data?.length || 0) > 5,
+        },
       };
     },
   },

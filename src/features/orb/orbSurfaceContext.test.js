@@ -9,7 +9,7 @@ import {
 } from "./orbSurfaceContext.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const CLIENT_ID = "22222222-2222-4222-8222-222222222222";
+const CLIENT_ID = "42";
 const ASSESSMENT_ID = "33333333-3333-4333-8333-333333333333";
 
 test("derives all supported ORVESEN surfaces from real routes", () => {
@@ -37,6 +37,7 @@ test("rejects unknown routes and invalid entity ids", () => {
   assert.equal(deriveOrbSurfaceContext("/configuracion"), null);
   assert.equal(deriveOrbSurfaceContext("/proyectos/not-a-uuid"), null);
   assert.equal(deriveOrbSurfaceContext("/clientes/not-a-uuid"), null);
+  assert.equal(deriveOrbSurfaceContext("/clientes/0"), null);
   assert.equal(deriveOrbSurfaceContext("/discovery/evaluaciones/not-a-uuid"), null);
 });
 

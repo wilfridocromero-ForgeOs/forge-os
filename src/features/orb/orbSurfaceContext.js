@@ -1,8 +1,9 @@
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CLIENT_ID_PATTERN = /^[1-9][0-9]*$/;
 
-function entitySurface(type, route, prefix) {
+function entitySurface(type, route, prefix, pattern = UUID_PATTERN) {
   const entityId = route.slice(prefix.length);
-  return UUID_PATTERN.test(entityId)
+  return pattern.test(entityId)
     ? { type, route, entity_id: entityId }
     : null;
 }
@@ -12,7 +13,7 @@ export function deriveOrbSurfaceContext(pathname) {
   if (route === "/") return { type: "dashboard", route };
   if (route === "/orvesen-ia") return { type: "orvesen_ai", route };
   if (route.startsWith("/proyectos/")) return entitySurface("project", route, "/proyectos/");
-  if (route.startsWith("/clientes/")) return entitySurface("client", route, "/clientes/");
+  if (route.startsWith("/clientes/")) return entitySurface("client", route, "/clientes/", CLIENT_ID_PATTERN);
   if (route === "/discovery") return { type: "discovery", route };
   if (route.startsWith("/discovery/evaluaciones/")) {
     const parts = route.split("/").filter(Boolean);

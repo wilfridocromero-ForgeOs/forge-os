@@ -7,8 +7,21 @@ function assertEquals(actual: unknown, expected: unknown) {
 }
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const CLIENT_ID = "42";
 
 Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "client",
+      route: `/clientes/${CLIENT_ID}`,
+      entity_id: CLIENT_ID,
+    }),
+    {
+      type: "client",
+      route: `/clientes/${CLIENT_ID}`,
+      entity_id: CLIENT_ID,
+    },
+  );
   assertEquals(
     normalizeOrbSurfaceContext({
       type: "project",
@@ -20,6 +33,14 @@ Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
       route: `/proyectos/${PROJECT_ID}`,
       entity_id: PROJECT_ID,
     },
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "client",
+      route: "/clientes/0",
+      entity_id: "0",
+    }),
+    null,
   );
   assertEquals(
     normalizeOrbSurfaceContext({ module: "dashboard", route: "/" }),
