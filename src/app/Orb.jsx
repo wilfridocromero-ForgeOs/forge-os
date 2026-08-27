@@ -33,10 +33,11 @@ const OrbMessage = memo(function OrbMessage({ message, sending, onRetry }) {
   </article>;
 });
 
-export default function Orb() {
+export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   const [searchParams] = useSearchParams();
   const { session } = useAuth();
-  const surface = useMemo(() => deriveOrbSurfaceFromSearch(searchParams), [searchParams]);
+  const routeSurface = useMemo(() => deriveOrbSurfaceFromSearch(searchParams), [searchParams]);
+  const surface = surfaceOverride || routeSurface;
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY));
   const [messages, setMessages] = useState([]);
@@ -272,7 +273,7 @@ export default function Orb() {
   function handleKeyDown(event) { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }
   const hasConversation = Boolean(activeConversationId || messages.length);
 
-  return <div className="orb-page">
+  return <div className={`orb-page ${mode === "panel" ? "orb-page-panel" : ""}`}>
     <button className="orb-history-toggle" onClick={() => setHistoryOpen(true)} aria-label="Abrir conversaciones"><Menu size={19} /><span>Conversaciones</span></button>
     {historyOpen && <button className="orb-history-backdrop" aria-label="Cerrar conversaciones" onClick={() => setHistoryOpen(false)} />}
     <aside className={`orb-history ${historyOpen ? "is-open" : ""}`}>
@@ -302,4 +303,8 @@ export default function Orb() {
       </div>
     </section>
   </div>;
+}
+
+export default function Orb() {
+  return <OrbExperience />;
 }

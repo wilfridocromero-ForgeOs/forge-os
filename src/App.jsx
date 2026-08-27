@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -25,8 +26,9 @@ import Calendar from "./app/Calendar";
 import Brain from "./app/Brain";
 import ScoreBuilder from "./app/ScoreBuilder";
 import BusinessScore from "./app/BusinessScore";
-import Orb from "./app/Orb";
 import { useAuth } from "./Context/AuthContext";
+
+const Orb = lazy(() => import("./app/Orb"));
 
 
 export default function App() {
@@ -97,7 +99,7 @@ export default function App() {
 
         <Route path="/cerebro" element={<Brain />} />
 
-        <Route path="/orvesen-ia" element={<Orb />} />
+        <Route path="/orvesen-ia" element={<Suspense fallback={<OrbRouteLoading />}><Orb /></Suspense>} />
 
         <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><BuilderHub /></CapabilityRoute>} />
 
@@ -119,6 +121,10 @@ export default function App() {
 
     </Routes>
   );
+}
+
+function OrbRouteLoading() {
+  return <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-500">Cargando Orb…</div>;
 }
 
 function InternalOnly({ children }) {

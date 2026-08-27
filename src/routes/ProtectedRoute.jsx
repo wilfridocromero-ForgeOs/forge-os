@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../Context/AuthContext";
+import OrbGlobal from "../features/orb/OrbGlobal";
 
 export default function ProtectedRoute() {
   const { session, loading, identityStatus } = useAuth();
@@ -34,5 +35,8 @@ export default function ProtectedRoute() {
     );
   }
 
-  return <Outlet />;
+  return <>
+    <Outlet />
+    <OrbGlobal />
+  </>;
 }

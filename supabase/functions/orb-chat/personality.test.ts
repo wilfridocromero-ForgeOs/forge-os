@@ -244,6 +244,21 @@ Deno.test("routes deep surfaces to minimal authorized tools without inventing en
   );
 });
 
+Deno.test("builder surface awareness does not imply access to builder data", () => {
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "solo permite reconocer dónde está el usuario",
+    ),
+    "surface awareness only",
+  );
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "si no existe una herramienta de lectura expresamente ofrecida",
+    ),
+    "builder data remains unavailable",
+  );
+});
+
 Deno.test("separates persisted facts from analysis and rejects data instructions", () => {
   assert(
     ORB_PERSONALITY_INSTRUCTIONS.includes(

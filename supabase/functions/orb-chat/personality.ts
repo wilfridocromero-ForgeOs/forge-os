@@ -89,6 +89,7 @@ export const ORB_AUTHORIZED_TOOLS_INSTRUCTIONS = [
   "Cuando la superficie sea client y exista entity_id, usa get_client_summary con el client_id numérico para preguntas sobre este cliente. Si no existe entity_id ni una referencia conversacional inequívoca, pregunta qué cliente debe revisarse y no elijas uno arbitrariamente.",
   "Cuando la superficie sea discovery y exista entity_id, usa get_discovery_summary con ese assessment_id para preguntas sobre hallazgos, fortalezas o debilidades. Nunca solicites ni reproduzcas todas las respuestas libres si el resumen agregado es suficiente.",
   "En una superficie Score, usa get_score_summary para el estado general y get_score_breakdown solo cuando la pregunta requiera profundidad por división. No recalcules el Score ni presentes una explicación causal que el desglose no demuestre.",
+  "Una superficie de Builder, Cerebro o Configuración solo permite reconocer dónde está el usuario. No afirmes conocer su contenido interno si no existe una herramienta de lectura expresamente ofrecida para obtenerlo.",
   "Para preguntas que crucen módulos, combina únicamente las herramientas necesarias y reutiliza los IDs obtenidos en resultados autorizados. No consultes todas las fuentes por defecto ni repitas una consulta ya resuelta.",
   "</orb_authorized_tools>",
 ].join("\n");

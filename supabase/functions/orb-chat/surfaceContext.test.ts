@@ -49,6 +49,22 @@ Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
   assertEquals(normalizeOrbSurfaceContext(undefined), null);
 });
 
+Deno.test("accepts global list and builder surfaces without granting entity data", () => {
+  for (
+    const surface of [
+      { type: "clients", route: "/clientes" },
+      { type: "projects", route: "/proyectos" },
+      { type: "score_builder", route: "/score-builder" },
+      { type: "discovery_builder", route: "/discovery/builder" },
+      { type: "builder_hub", route: "/construir" },
+      { type: "brain", route: "/cerebro" },
+      { type: "settings", route: "/configuracion/miembros" },
+    ]
+  ) {
+    assertEquals(normalizeOrbSurfaceContext(surface), surface);
+  }
+});
+
 Deno.test("rejects invented surfaces, invalid ids and mismatched routes", () => {
   assertEquals(
     normalizeOrbSurfaceContext({ type: "admin", route: "/configuracion" }),

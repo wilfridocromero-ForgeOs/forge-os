@@ -1,11 +1,18 @@
 export const ORB_SURFACE_TYPES = [
   "dashboard",
   "orvesen_ai",
+  "clients",
   "project",
+  "projects",
   "client",
   "discovery",
+  "discovery_builder",
   "score",
+  "score_builder",
   "calendar",
+  "builder_hub",
+  "brain",
+  "settings",
 ] as const;
 
 export type OrbSurfaceType = typeof ORB_SURFACE_TYPES[number];
@@ -32,12 +39,14 @@ function validEntityId(type: OrbSurfaceType, entityId: string) {
 function validRoute(type: OrbSurfaceType, route: string, entityId?: string) {
   if (type === "dashboard") return route === "/" && !entityId;
   if (type === "orvesen_ai") return route === "/orvesen-ia" && !entityId;
+  if (type === "clients") return route === "/clientes" && !entityId;
   if (type === "project") {
     return Boolean(entityId) && route === `/proyectos/${entityId}`;
   }
   if (type === "client") {
     return Boolean(entityId) && route === `/clientes/${entityId}`;
   }
+  if (type === "projects") return route === "/proyectos" && !entityId;
   if (type === "discovery") {
     return !entityId
       ? route === "/discovery"
@@ -48,7 +57,16 @@ function validRoute(type: OrbSurfaceType, route: string, entityId?: string) {
     return !entityId &&
       (route === "/orvesen-score" || route === "/business-score");
   }
-  return type === "calendar" && route === "/calendario" && !entityId;
+  if (type === "calendar") return route === "/calendario" && !entityId;
+  if (type === "score_builder") return route === "/score-builder" && !entityId;
+  if (type === "discovery_builder") {
+    return route === "/discovery/builder" && !entityId;
+  }
+  if (type === "builder_hub") return route === "/construir" && !entityId;
+  if (type === "brain") return route === "/cerebro" && !entityId;
+  return type === "settings" &&
+    (route === "/configuracion" || route.startsWith("/configuracion/")) &&
+    !entityId;
 }
 
 export function normalizeOrbSurfaceContext(

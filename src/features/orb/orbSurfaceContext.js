@@ -12,9 +12,12 @@ export function deriveOrbSurfaceContext(pathname) {
   const route = typeof pathname === "string" ? pathname : "";
   if (route === "/") return { type: "dashboard", route };
   if (route === "/orvesen-ia") return { type: "orvesen_ai", route };
+  if (route === "/clientes") return { type: "clients", route };
   if (route.startsWith("/proyectos/")) return entitySurface("project", route, "/proyectos/");
+  if (route === "/proyectos") return { type: "projects", route };
   if (route.startsWith("/clientes/")) return entitySurface("client", route, "/clientes/", CLIENT_ID_PATTERN);
   if (route === "/discovery") return { type: "discovery", route };
+  if (route === "/discovery/builder") return { type: "discovery_builder", route };
   if (route.startsWith("/discovery/evaluaciones/")) {
     const parts = route.split("/").filter(Boolean);
     const assessmentId = parts[2];
@@ -27,6 +30,12 @@ export function deriveOrbSurfaceContext(pathname) {
     return { type: "score", route };
   }
   if (route === "/calendario") return { type: "calendar", route };
+  if (route === "/score-builder") return { type: "score_builder", route };
+  if (route === "/construir") return { type: "builder_hub", route };
+  if (route === "/cerebro") return { type: "brain", route };
+  if (route === "/configuracion" || route.startsWith("/configuracion/")) {
+    return { type: "settings", route };
+  }
   return null;
 }
 
