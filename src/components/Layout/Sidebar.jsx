@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
 import { navigationGroups } from "../../config/navigation";
 import Logo from "../display/Logo";
+import { buildOrbDestination } from "../../features/orb/orbSurfaceContext";
 
 export default function Sidebar({
   sidebarOpen,
@@ -119,7 +120,7 @@ export default function Sidebar({
                   return (
                     <NavLink
                       key={item.label}
-                      to={item.to}
+                      to={item.to === "/orvesen-ia" ? buildOrbDestination(location.pathname) : item.to}
                       end={item.end || item.to === "/"}
                       onClick={() => setSidebarOpen(false)}
                       className={({ isActive }) => {

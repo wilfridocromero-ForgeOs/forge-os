@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { createOrbEventParser } from "../features/orb/orbStream";
+import { buildOrbRequestPayload } from "../features/orb/orbSurfaceContext";
 
 const ORB_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orb-chat`;
 
@@ -56,7 +57,7 @@ export async function streamOrbMessage({ conversationId, clientMessageId, messag
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ conversation_id: conversationId, client_message_id: clientMessageId, message, surface }),
+    body: JSON.stringify(buildOrbRequestPayload({ conversationId, clientMessageId, message, surface })),
     signal,
   });
 

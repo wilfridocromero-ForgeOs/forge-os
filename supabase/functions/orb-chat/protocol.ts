@@ -1,3 +1,8 @@
+import {
+  normalizeOrbSurfaceContext,
+  type OrbSurfaceContext,
+} from "./surfaceContext.ts";
+
 export const ORB_PROTOCOL_VERSION = "orb-stream-v1";
 export const MAX_MESSAGE_CHARS = 8_000;
 export const MAX_HISTORY_MESSAGES = 24;
@@ -7,7 +12,7 @@ export type OrbChatRequest = {
   conversation_id: string;
   client_message_id: string;
   message: string;
-  surface: { module: "dashboard"; route: "/" } | null;
+  surface: OrbSurfaceContext | null;
 };
 
 export class OrbRequestError extends Error {
@@ -36,13 +41,7 @@ export function parseOrbChatRequest(value: unknown): OrbChatRequest {
     ? payload.client_message_id
     : "";
   const message = typeof payload.message === "string" ? payload.message : "";
-  const surfaceValue = payload.surface;
-  const surface = surfaceValue && typeof surfaceValue === "object" &&
-      !Array.isArray(surfaceValue) &&
-      (surfaceValue as Record<string, unknown>).module === "dashboard" &&
-      (surfaceValue as Record<string, unknown>).route === "/"
-    ? { module: "dashboard" as const, route: "/" as const }
-    : null;
+  const surface = normalizeOrbSurfaceContext(payload.surface);
 
   if (
     !UUID_PATTERN.test(conversationId) || !UUID_PATTERN.test(clientMessageId)

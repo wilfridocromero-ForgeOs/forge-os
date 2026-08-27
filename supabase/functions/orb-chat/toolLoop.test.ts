@@ -78,6 +78,40 @@ Deno.test("valid tool call is executed and returned to the next round", async ()
     "function_call_output",
   );
 });
+
+Deno.test("project deictic flow can request the exact authorized project summary", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  let round = 0;
+  let executed: { name: string; args: string } | null = null;
+  const result = await runOrbToolLoop({
+    input: [{ role: "user", content: "¿Qué está pasando aquí?" }],
+    request: () => {
+      round += 1;
+      return Promise.resolve(
+        round === 1
+          ? toolCall(
+            "get_project_summary",
+            "call_surface_project",
+            JSON.stringify({ project_id: projectId }),
+          )
+          : completedText("Resumen autorizado del proyecto."),
+      );
+    },
+    execute: (name, args) => {
+      executed = { name, args };
+      return Promise.resolve({
+        status: "ok",
+        data: { project: { id: projectId } },
+      });
+    },
+    onDelta: () => {},
+  });
+  assertEquals(executed, {
+    name: "get_project_summary",
+    args: JSON.stringify({ project_id: projectId }),
+  });
+  assertEquals(result.output, "Resumen autorizado del proyecto.");
+});
 Deno.test("tool rounds are bounded", async () => {
   await assertRejects(
     () =>

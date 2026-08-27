@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AlertCircle, ArrowDown, LoaderCircle, Menu, MessageSquareText, Plus, RotateCcw, Send, Sparkles, X } from "lucide-react";
 
 import { useAuth } from "../Context/AuthContext";
 import OrbMarkdown from "../features/orb/OrbMarkdown";
 import { normalizeOrbMessages } from "../features/orb/orbMessageOrder";
+import { deriveOrbSurfaceFromSearch } from "../features/orb/orbSurfaceContext";
 import {
   appendAssistantDelta,
   failAssistantStream,
@@ -35,6 +36,7 @@ const OrbMessage = memo(function OrbMessage({ message, sending, onRetry }) {
 export default function Orb() {
   const [searchParams] = useSearchParams();
   const { session } = useAuth();
+  const surface = useMemo(() => deriveOrbSurfaceFromSearch(searchParams), [searchParams]);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY));
   const [messages, setMessages] = useState([]);
@@ -227,7 +229,6 @@ export default function Orb() {
         localStorage.setItem(ACTIVE_CONVERSATION_KEY, conversation.id);
       }
       const controller = new AbortController(); requestController.current = controller;
-      const surface = searchParams.get("from") === "dashboard" ? { module: "dashboard", route: "/" } : null;
       await streamOrbMessage({ conversationId, clientMessageId, message: content, surface, signal: controller.signal, onEvent(type, payload) {
         if (type === "start" && payload.assistant_message_id) {
           streamedAssistantId = payload.assistant_message_id;

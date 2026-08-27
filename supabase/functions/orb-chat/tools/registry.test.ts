@@ -117,6 +117,45 @@ Deno.test("unauthorized tool performs no query", async () => {
   assertEquals(queried, false);
 });
 
+Deno.test("a cross-organization project id reveals only not_found", async () => {
+  const filters: Array<[string, string, unknown]> = [];
+  const client = {
+    from(table: string) {
+      const chain: Record<string, unknown> = {};
+      chain.select = () => chain;
+      chain.eq = (column: string, value: unknown) => {
+        filters.push([table, column, value]);
+        return chain;
+      };
+      chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+      chain.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve(resolve({ data: [], error: null }));
+      return chain;
+    },
+  };
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  assertEquals(
+    await executeOrbTool(
+      {
+        client: client as never,
+        organizationId: "authorized-organization",
+        userId: "user",
+        permissions: { ...denied, projects: true },
+      },
+      "get_project_summary",
+      JSON.stringify({ project_id: projectId }),
+    ),
+    { status: "ok", data: { status: "not_found" } },
+  );
+  assertEquals(
+    filters.some(([table, column, value]) =>
+      table === "projects" && column === "organization_id" &&
+      value === "authorized-organization"
+    ),
+    true,
+  );
+});
+
 Deno.test("unknown tool is sanitized and performs no business query", async () => {
   let queried = false;
   const client = {

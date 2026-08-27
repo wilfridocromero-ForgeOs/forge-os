@@ -52,7 +52,7 @@ Deno.test("accepts the minimal Orb payload and ignores model selection", () => {
   );
 });
 
-Deno.test("accepts only the known dashboard surface", () => {
+Deno.test("accepts normalized Surface Context and the legacy Dashboard hint", () => {
   const base = {
     conversation_id: conversationId,
     client_message_id: clientMessageId,
@@ -63,7 +63,23 @@ Deno.test("accepts only the known dashboard surface", () => {
       ...base,
       surface: { module: "dashboard", route: "/" },
     }).surface,
-    { module: "dashboard", route: "/" },
+    { type: "dashboard", route: "/" },
+  );
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  assertEquals(
+    parseOrbChatRequest({
+      ...base,
+      surface: {
+        type: "project",
+        route: `/proyectos/${projectId}`,
+        entity_id: projectId,
+      },
+    }).surface,
+    {
+      type: "project",
+      route: `/proyectos/${projectId}`,
+      entity_id: projectId,
+    },
   );
   assertEquals(
     parseOrbChatRequest({
@@ -72,6 +88,22 @@ Deno.test("accepts only the known dashboard surface", () => {
     }).surface,
     null,
   );
+});
+
+Deno.test("invalid Surface Context is ignored without changing the request", () => {
+  const parsed = parseOrbChatRequest({
+    conversation_id: conversationId,
+    client_message_id: clientMessageId,
+    message: "Hola",
+    surface: {
+      type: "project",
+      route: "/proyectos/33333333-3333-4333-8333-333333333333",
+      entity_id: "33333333-3333-4333-8333-333333333333",
+      organization_id: "another-organization",
+    },
+  });
+  assertEquals(parsed.surface, null);
+  assertEquals(parsed.message, "Hola");
 });
 
 Deno.test("rejects invalid, empty, and oversized payloads", () => {
