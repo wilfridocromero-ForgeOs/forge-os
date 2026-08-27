@@ -16,6 +16,7 @@ type ProviderStreamEvent = {
   code?: unknown;
   message?: unknown;
   error?: ProviderError;
+  item?: Record<string, unknown>;
   response?: {
     id?: unknown;
     status?: unknown;
@@ -72,6 +73,7 @@ function parseProviderEvent(block: string): ProviderStreamEvent | null {
 export async function consumeOpenAIResponseStream(
   response: Response,
   onDelta: (delta: string) => void,
+  captureToolCalls = false,
 ) {
   if (!response.ok) throw await providerHttpFailure(response);
   if (!response.body) {
@@ -88,6 +90,7 @@ export async function consumeOpenAIResponseStream(
   let output = "";
   let responseId = "";
   let completed = false;
+  const outputItems: Record<string, unknown>[] = [];
 
   const consumeBlock = (block: string) => {
     const event = parseProviderEvent(block);
@@ -108,6 +111,10 @@ export async function consumeOpenAIResponseStream(
     ) {
       output += event.delta;
       onDelta(event.delta);
+      return;
+    }
+    if (type === "response.output_item.done" && event.item) {
+      outputItems.push(event.item);
       return;
     }
     if (type === "response.completed") {
@@ -151,12 +158,18 @@ export async function consumeOpenAIResponseStream(
       "Orb model stream ended before completion.",
     );
   }
-  if (!output.trim()) {
+  const toolCalls = outputItems.filter((item) =>
+    item.type === "function_call" && typeof item.name === "string" &&
+    typeof item.call_id === "string" && typeof item.arguments === "string"
+  );
+  if (!output.trim() && toolCalls.length === 0) {
     throw new OrbRequestError(
       "EMPTY_AI_RESPONSE",
       502,
       "Orb returned an empty response.",
     );
   }
-  return { output, responseId };
+  return captureToolCalls
+    ? { output, responseId, outputItems, toolCalls }
+    : { output, responseId };
 }

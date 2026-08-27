@@ -724,13 +724,15 @@ export function buildOrbNowBriefing(data) {
 
   const {
     actions,
-    tasks,
     primary,
     secondary,
     context,
   } = engine;
 
-  if (!context) {
+  const hasAvailableSource = context &&
+    Object.values(context.sources || {}).some(Boolean);
+
+  if (!context || !hasAvailableSource) {
     return {
       state: "unavailable",
       title:

@@ -12,8 +12,13 @@ import {
   buildOrbInstructions,
   ORB_INSTRUCTIONS_VERSION,
 } from "./personality.ts";
-import { consumeOpenAIResponseStream } from "./openAIStream.ts";
 import { loadDashboardContextSafely } from "./dashboardContext.ts";
+import { runOrbToolLoop } from "./toolLoop.ts";
+import { getOrbToolPermissions } from "./tools/authorization.ts";
+import {
+  executeOrbTool,
+  getAuthorizedToolDefinitions,
+} from "./tools/registry.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -127,6 +132,35 @@ async function privacyPreservingUserId(userId: string) {
   return Array.from(new Uint8Array(digest)).map((byte) =>
     byte.toString(16).padStart(2, "0")
   ).join("");
+}
+
+export async function persistFinalOrbResponse(
+  client: SupabaseClient,
+  {
+    assistantMessageId,
+    processingToken,
+    output,
+    providerResponseId,
+  }: {
+    assistantMessageId: string;
+    processingToken: string;
+    output: string;
+    providerResponseId: string;
+  },
+) {
+  const { data, error } = await client.rpc("complete_orb_assistant_message", {
+    target_assistant_message_id: assistantMessageId,
+    target_processing_token: processingToken,
+    target_content: output,
+    target_provider_response_id: providerResponseId,
+  });
+  if (error || !data) {
+    throw new OrbRequestError(
+      "PERSISTENCE_FAILED",
+      500,
+      "Orb could not persist the response.",
+    );
+  }
 }
 
 export async function handleOrbChat(request: Request) {
@@ -302,6 +336,12 @@ export async function handleOrbChat(request: Request) {
       user.id,
       turn.membership_role,
     );
+    const toolPermissions = await getOrbToolPermissions(
+      userClient,
+      user.id,
+      turn.membership_role,
+    );
+    const authorizedTools = getAuthorizedToolDefinitions(toolPermissions);
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -339,43 +379,49 @@ export async function handleOrbChat(request: Request) {
               max_output_tokens: config.maxOutputTokens,
               store: false,
               safety_identifier: await privacyPreservingUserId(user.id),
+              ...(authorizedTools.length ? { tools: authorizedTools } : {}),
             };
-            const response = await fetch(
-              "https://api.openai.com/v1/responses",
-              {
-                method: "POST",
-                headers: {
-                  authorization: `Bearer ${openAIKey}`,
-                  "content-type": "application/json",
-                },
-                body: JSON.stringify({ ...requestPayload, stream: true }),
-                signal: abortController.signal,
-              },
-            );
-            const providerStream = await consumeOpenAIResponseStream(
-              response,
-              (delta) => {
+            const providerStream = await runOrbToolLoop({
+              input: history,
+              request: (roundInput) =>
+                fetch("https://api.openai.com/v1/responses", {
+                  method: "POST",
+                  headers: {
+                    authorization: `Bearer ${openAIKey}`,
+                    "content-type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    ...requestPayload,
+                    input: roundInput,
+                    stream: true,
+                  }),
+                  signal: abortController.signal,
+                }),
+              execute: (name, args) =>
+                executeOrbTool(
+                  {
+                    client: userClient,
+                    organizationId: activeOrganization.id,
+                    userId: user.id,
+                    permissions: toolPermissions,
+                  },
+                  name,
+                  args,
+                ),
+              onDelta: (delta) => {
                 output += delta;
                 send("delta", { delta });
               },
-            );
+            });
             output = providerStream.output;
             providerResponseId = providerStream.responseId;
 
-            const { data: completed, error: completionError } =
-              await adminClient!.rpc("complete_orb_assistant_message", {
-                target_assistant_message_id: assistantMessageId,
-                target_processing_token: processingToken,
-                target_content: output,
-                target_provider_response_id: providerResponseId,
-              });
-            if (completionError || !completed) {
-              throw new OrbRequestError(
-                "PERSISTENCE_FAILED",
-                500,
-                "Orb could not persist the response.",
-              );
-            }
+            await persistFinalOrbResponse(adminClient!, {
+              assistantMessageId: assistantMessageId!,
+              processingToken: processingToken!,
+              output,
+              providerResponseId,
+            });
             send("completed", { assistant_message_id: assistantMessageId });
           } catch (error) {
             const failureCode =

@@ -1,4 +1,8 @@
-import { handleOrbChat, readOpenAIKey } from "./index.ts";
+import {
+  handleOrbChat,
+  persistFinalOrbResponse,
+  readOpenAIKey,
+} from "./index.ts";
 
 function assertEquals(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -42,6 +46,30 @@ Deno.test({
       );
     }
   },
+});
+
+Deno.test("persists exactly one final assistant response without internal tool items", async () => {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const client = {
+    rpc: (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args });
+      return Promise.resolve({ data: true, error: null });
+    },
+  };
+  await persistFinalOrbResponse(client as never, {
+    assistantMessageId: "assistant-1",
+    processingToken: "token-1",
+    output: "Respuesta final",
+    providerResponseId: "response-1",
+  });
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].name, "complete_orb_assistant_message");
+  assertEquals(calls[0].args.target_content, "Respuesta final");
+  assertEquals(JSON.stringify(calls[0]).includes("function_call"), false);
+  assertEquals(
+    JSON.stringify(calls[0]).includes("function_call_output"),
+    false,
+  );
 });
 
 Deno.test({
