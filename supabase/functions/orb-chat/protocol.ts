@@ -2,6 +2,7 @@ import {
   normalizeOrbSurfaceContext,
   type OrbSurfaceContext,
 } from "./surfaceContext.ts";
+import { isValidTimeZone } from "./temporalResolution.ts";
 
 export const ORB_PROTOCOL_VERSION = "orb-stream-v1";
 export const MAX_MESSAGE_CHARS = 8_000;
@@ -13,6 +14,7 @@ export type OrbChatRequest = {
   client_message_id: string;
   message: string;
   surface: OrbSurfaceContext | null;
+  timezone: string | null;
 };
 
 export class OrbRequestError extends Error {
@@ -42,6 +44,7 @@ export function parseOrbChatRequest(value: unknown): OrbChatRequest {
     : "";
   const message = typeof payload.message === "string" ? payload.message : "";
   const surface = normalizeOrbSurfaceContext(payload.surface);
+  const timezone = isValidTimeZone(payload.timezone) ? payload.timezone : null;
 
   if (
     !UUID_PATTERN.test(conversationId) || !UUID_PATTERN.test(clientMessageId)
@@ -67,6 +70,7 @@ export function parseOrbChatRequest(value: unknown): OrbChatRequest {
     client_message_id: clientMessageId,
     message,
     surface,
+    timezone,
   };
 }
 

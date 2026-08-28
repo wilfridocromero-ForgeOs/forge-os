@@ -52,11 +52,12 @@ export function buildOrbDestination(pathname) {
   return `/orvesen-ia?from=${encodeURIComponent(surface.route)}`;
 }
 
-export function buildOrbRequestPayload({ conversationId, clientMessageId, message, surface = null }) {
+export function buildOrbRequestPayload({ conversationId, clientMessageId, message, surface = null, timezone = null }) {
   return {
     conversation_id: conversationId,
     client_message_id: clientMessageId,
     message,
     ...(surface ? { surface } : {}),
+    ...(timezone ? { timezone } : {}),
   };
 }

@@ -117,7 +117,7 @@ export function resolveEntityName(
 }
 
 export function entityResolutionMessage(
-  entityLabel: "proyecto" | "cliente",
+  entityLabel: "proyecto" | "cliente" | "responsable",
   resolution: EntityResolution,
 ) {
   if (resolution.state === "UNIQUE_CANDIDATE") {
@@ -144,13 +144,20 @@ export function readTerminalEntityResolution(value: unknown) {
     wrapper.status !== "ok" || !wrapper.data || typeof wrapper.data !== "object"
   ) return null;
   const data = wrapper.data as { entity_type?: unknown; resolution?: unknown };
-  if (data.entity_type !== "project" && data.entity_type !== "client") {
+  if (
+    data.entity_type !== "project" && data.entity_type !== "client" &&
+    data.entity_type !== "assignee"
+  ) {
     return null;
   }
   const resolution = data.resolution as EntityResolution | undefined;
   if (!resolution || resolution.state === "EXACT") return null;
   return entityResolutionMessage(
-    data.entity_type === "project" ? "proyecto" : "cliente",
+    data.entity_type === "project"
+      ? "proyecto"
+      : data.entity_type === "client"
+      ? "cliente"
+      : "responsable",
     resolution,
   );
 }

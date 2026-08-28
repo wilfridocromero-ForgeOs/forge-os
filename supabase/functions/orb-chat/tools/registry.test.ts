@@ -18,12 +18,23 @@ const denied = {
   calendar: false,
 };
 
+function emptyPendingQuery() {
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "neq", "gt"]) {
+    chain[method] = () => chain;
+  }
+  chain.limit = () => Promise.resolve({ data: [], error: null });
+  return chain;
+}
+
 Deno.test("only authorized tools are offered", () => {
   const names = getAuthorizedToolDefinitions({ ...denied, projects: true }).map(
     (tool) => tool.name,
   );
   assertEquals(names, [
     "resolve_project",
+    "resolve_project_assignee",
+    "resolve_task_date",
     "prepare_create_project_task",
     "list_projects",
     "list_tasks",
@@ -87,6 +98,8 @@ Deno.test("registry exposes the bounded read tools for an administrator", () => 
   assertEquals(tools.map((tool) => tool.name), [
     "resolve_project",
     "resolve_client",
+    "resolve_project_assignee",
+    "resolve_task_date",
     "prepare_create_project_task",
     "list_projects",
     "list_tasks",
@@ -202,6 +215,148 @@ Deno.test("candidate, ambiguous and missing entities cannot prepare an action", 
   assertEquals(rpcCalled, false);
 });
 
+Deno.test("assignee resolution is project-scoped and excludes observer roles", async () => {
+  const filters: Array<[string, unknown]> = [];
+  const chain: Record<string, unknown> = {};
+  chain.select = () => chain;
+  chain.eq = (column: string, value: unknown) => {
+    filters.push([column, value]);
+    return chain;
+  };
+  chain.in = (column: string, value: unknown) => {
+    filters.push([column, value]);
+    return chain;
+  };
+  chain.limit = () =>
+    Promise.resolve({
+      data: [{
+        user_id: "44444444-4444-4444-8444-444444444444",
+        role: "member",
+        user: {
+          id: "44444444-4444-4444-8444-444444444444",
+          first_name: "Roberto",
+        },
+      }],
+      error: null,
+    });
+  const resolution = createEntityResolutionSession();
+  resolution.exactProjectIds.add("33333333-3333-4333-8333-333333333333");
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution,
+    },
+    "resolve_project_assignee",
+    JSON.stringify({
+      project_id: "33333333-3333-4333-8333-333333333333",
+      name: "Roberto",
+    }),
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(
+    filters.some(([column, value]) =>
+      column === "project_id" &&
+      value === "33333333-3333-4333-8333-333333333333"
+    ),
+    true,
+  );
+  assertEquals(
+    JSON.stringify(filters).includes('"role",["owner","member"]'),
+    true,
+  );
+  assertEquals(
+    resolution.exactAssigneeIds?.get("33333333-3333-4333-8333-333333333333")
+      ?.has("44444444-4444-4444-8444-444444444444"),
+    true,
+  );
+});
+
+Deno.test("prepare rejects an assignee not exactly resolved for that project", async () => {
+  let rpcCalled = false;
+  const resolution = createEntityResolutionSession();
+  resolution.exactProjectIds.add("33333333-3333-4333-8333-333333333333");
+  const result = await executeOrbTool(
+    {
+      client: {
+        rpc: () => {
+          rpcCalled = true;
+        },
+      } as never,
+      organizationId: "org",
+      userId: "user",
+      conversationId: "11111111-1111-4111-8111-111111111111",
+      userMessageId: "22222222-2222-4222-8222-222222222222",
+      permissions: { ...denied, projects: true },
+      resolution,
+    },
+    "prepare_create_project_task",
+    JSON.stringify({
+      project_id: "33333333-3333-4333-8333-333333333333",
+      title: "Task",
+      instructions: null,
+      assignee_id: "44444444-4444-4444-8444-444444444444",
+      priority: null,
+      starts_at: null,
+      due_at: null,
+    }),
+  );
+  assertEquals(result, { status: "entity_not_resolved" });
+  assertEquals(rpcCalled, false);
+});
+
+Deno.test("prepare accepts only dates produced by the trusted temporal resolver", async () => {
+  const resolution = createEntityResolutionSession();
+  resolution.exactProjectIds.add("33333333-3333-4333-8333-333333333333");
+  const client = {
+    from: () => emptyPendingQuery(),
+    rpc: () =>
+      Promise.resolve({
+        data: {
+          id: "proposal",
+          action_type: "create_project_task",
+          status: "proposed",
+          arguments_hash: "a".repeat(64),
+          expires_at: "2026-08-29T00:00:00Z",
+          display_payload: {},
+        },
+        error: null,
+      }),
+  };
+  const base = {
+    client: client as never,
+    organizationId: "org",
+    userId: "user",
+    conversationId: "11111111-1111-4111-8111-111111111111",
+    userMessageId: "22222222-2222-4222-8222-222222222222",
+    permissions: { ...denied, projects: true },
+    resolution,
+    timezone: "America/La_Paz",
+    now: new Date("2026-08-28T14:00:00Z"),
+  };
+  const date = await executeOrbTool(
+    base,
+    "resolve_task_date",
+    JSON.stringify({ phrase: "mañana", field: "due_at" }),
+  ) as { data: { value: string } };
+  const accepted = await executeOrbTool(
+    base,
+    "prepare_create_project_task",
+    JSON.stringify({
+      project_id: "33333333-3333-4333-8333-333333333333",
+      title: "Task",
+      instructions: null,
+      assignee_id: null,
+      priority: null,
+      starts_at: null,
+      due_at: date.data.value,
+    }),
+  );
+  assertEquals(accepted.status, "ok");
+});
+
 Deno.test("client resolver is permission-gated and organization-scoped", async () => {
   let queried = false;
   const deniedResult = await executeOrbTool(
@@ -257,6 +412,7 @@ Deno.test("conversational entity confirmation still only prepares a proposal", a
   const result = await executeOrbTool(
     {
       client: {
+        from: () => emptyPendingQuery(),
         rpc: (name: string) => {
           calls.push(name);
           return Promise.resolve({
@@ -285,7 +441,7 @@ Deno.test("conversational entity confirmation still only prepares a proposal", a
       title: "Task",
       instructions: null,
       assignee_id: null,
-      priority: "medium",
+      priority: null,
       starts_at: null,
       due_at: null,
     }),
@@ -297,6 +453,7 @@ Deno.test("conversational entity confirmation still only prepares a proposal", a
 Deno.test("prepare task tool writes only through proposal RPC and reuses backend identity", async () => {
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const client = {
+    from: () => emptyPendingQuery(),
     rpc(name: string, args: Record<string, unknown>) {
       calls.push({ name, args });
       return Promise.resolve({
@@ -331,7 +488,7 @@ Deno.test("prepare task tool writes only through proposal RPC and reuses backend
       title: "Task",
       instructions: null,
       assignee_id: null,
-      priority: "medium",
+      priority: null,
       starts_at: null,
       due_at: null,
     }),
@@ -339,7 +496,45 @@ Deno.test("prepare task tool writes only through proposal RPC and reuses backend
   assertEquals(result.status, "ok");
   assertEquals(calls.length, 1);
   assertEquals(calls[0].name, "prepare_orb_project_task_proposal");
+  assertEquals(calls[0].args.requested_priority, "medium");
   assertEquals("organization_id" in calls[0].args, false);
+});
+
+Deno.test("a pending proposal blocks a materially new proposal without mutation", async () => {
+  let rpcCalled = false;
+  const chain = emptyPendingQuery();
+  chain.limit = () =>
+    Promise.resolve({ data: [{ id: "old-proposal" }], error: null });
+  const resolution = createEntityResolutionSession();
+  resolution.exactProjectIds.add("33333333-3333-4333-8333-333333333333");
+  const result = await executeOrbTool(
+    {
+      client: {
+        from: () => chain,
+        rpc: () => {
+          rpcCalled = true;
+        },
+      } as never,
+      organizationId: "org",
+      userId: "user",
+      conversationId: "11111111-1111-4111-8111-111111111111",
+      userMessageId: "55555555-5555-4555-8555-555555555555",
+      permissions: { ...denied, projects: true },
+      resolution,
+    },
+    "prepare_create_project_task",
+    JSON.stringify({
+      project_id: "33333333-3333-4333-8333-333333333333",
+      title: "Changed task",
+      instructions: null,
+      assignee_id: null,
+      priority: null,
+      starts_at: null,
+      due_at: null,
+    }),
+  );
+  assertEquals(result, { status: "proposal_pending" });
+  assertEquals(rpcCalled, false);
 });
 
 Deno.test("prepare task rejects ambiguous dates and injected authority before RPC", async () => {

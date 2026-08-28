@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrbToolPermission, OrbToolPermissions } from "./authorization.ts";
-import { resolveEntityName } from "../entityResolution.ts";
+import { normalizeEntityName, resolveEntityName } from "../entityResolution.ts";
+import { resolveNaturalTaskDate } from "../temporalResolution.ts";
 
 const MAX_LIMIT = 25;
 const DEFAULT_LIMIT = 10;
@@ -27,7 +28,10 @@ type Context = {
   resolution?: {
     exactProjectIds: Set<string>;
     exactClientIds: Set<number>;
+    exactAssigneeIds?: Map<string, Set<string>>;
+    exactTaskDates?: Set<string>;
   };
+  timezone?: string | null;
   now?: Date;
 };
 type Definition = {
@@ -90,6 +94,9 @@ function safeError(error: unknown) {
   if (error instanceof Error && error.message === "ENTITY_NOT_RESOLVED") {
     return "entity_not_resolved";
   }
+  if (error instanceof Error && error.message === "PROPOSAL_PENDING") {
+    return "proposal_pending";
+  }
   return error instanceof Error && error.message === "INVALID_ARGUMENTS"
     ? "invalid_arguments"
     : "unavailable";
@@ -149,6 +156,92 @@ const definitions: Definition[] = [
     },
   },
   {
+    name: "resolve_project_assignee",
+    description:
+      "Resuelve un responsable por nombre exclusivamente entre miembros owner/member del proyecto exacto. Solo EXACT autoriza assignee_id; candidatos requieren aclaración.",
+    permission: "projects",
+    parameters: objectSchema({
+      project_id: { type: "string", format: "uuid" },
+      name: { type: "string", minLength: 1, maxLength: 120 },
+    }, ["project_id", "name"]),
+    async handler({ client, resolution }, args) {
+      assertKeys(args, ["project_id", "name"]);
+      const projectId = uuid(args.project_id);
+      const requested = text(args.name);
+      if (!requested || !resolution?.exactProjectIds.has(projectId)) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
+      const { data, error } = await client.from("project_members").select(
+        "user_id,role,user:users!project_members_user_id_fkey(id,first_name,title)",
+      ).eq("project_id", projectId).in("role", ["owner", "member"]).limit(25);
+      if (error) throw error;
+      const members = (data || []).flatMap((row) => {
+        const user = relation(
+          row.user as
+            | { id: string; first_name: string; title?: string | null }
+            | Array<{ id: string; first_name: string; title?: string | null }>
+            | null,
+        );
+        return user?.id && user.first_name
+          ? [{ id: user.id, name: user.first_name, title: user.title }]
+          : [];
+      });
+      const counts = new Map<string, number>();
+      for (const member of members) {
+        const key = normalizeEntityName(member.name);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const resolved = resolveEntityName(
+        requested,
+        members.map((member) => ({
+          id: member.id,
+          name: (counts.get(normalizeEntityName(member.name)) || 0) > 1 &&
+              member.title
+            ? `${member.name} — ${member.title}`
+            : member.name,
+        })),
+      );
+      if (resolved.state === "EXACT") {
+        const ids = resolution.exactAssigneeIds?.get(projectId) ||
+          new Set<string>();
+        ids.add(String(resolved.entity.id));
+        resolution.exactAssigneeIds ??= new Map<string, Set<string>>();
+        resolution.exactAssigneeIds.set(projectId, ids);
+      }
+      return {
+        entity_type: "assignee",
+        project_id: projectId,
+        resolution: resolved,
+      };
+    },
+  },
+  {
+    name: "resolve_task_date",
+    description:
+      "Convierte una fecha natural del usuario a un instante exacto usando su zona horaria validada. Usa due_at para vencimiento y starts_at para inicio.",
+    permission: "projects",
+    parameters: objectSchema({
+      phrase: { type: "string", minLength: 1, maxLength: 120 },
+      field: { type: "string", enum: ["starts_at", "due_at"] },
+    }, ["phrase", "field"]),
+    handler({ timezone, now, resolution }, args) {
+      assertKeys(args, ["phrase", "field"]);
+      const phrase = text(args.phrase);
+      const field = enumValue(args.field, ["starts_at", "due_at"]);
+      if (!phrase || !field) throw new Error("INVALID_ARGUMENTS");
+      const resolved = resolveNaturalTaskDate(
+        phrase,
+        field as "starts_at" | "due_at",
+        timezone,
+        now,
+      );
+      if (resolved.state === "EXACT") {
+        resolution?.exactTaskDates?.add(resolved.value);
+      }
+      return Promise.resolve(resolved);
+    },
+  },
+  {
     name: "prepare_create_project_task",
     description:
       "Prepara una propuesta confirmable para crear una tarea. No crea la tarea. Úsala solo cuando proyecto, título y fechas sean inequívocos; una fecha ambigua requiere aclaración previa.",
@@ -158,7 +251,10 @@ const definitions: Definition[] = [
       title: { type: "string", minLength: 2, maxLength: 180 },
       instructions: { type: ["string", "null"], maxLength: 10000 },
       assignee_id: { type: ["string", "null"], format: "uuid" },
-      priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+      priority: {
+        type: ["string", "null"],
+        enum: ["low", "medium", "high", "urgent", null],
+      },
       starts_at: { type: ["string", "null"], format: "date-time" },
       due_at: { type: ["string", "null"], format: "date-time" },
     }, [
@@ -170,7 +266,10 @@ const definitions: Definition[] = [
       "starts_at",
       "due_at",
     ]),
-    async handler({ client, conversationId, userMessageId, resolution }, args) {
+    async handler(
+      { client, conversationId, userMessageId, resolution, now },
+      args,
+    ) {
       assertKeys(args, [
         "project_id",
         "title",
@@ -193,12 +292,18 @@ const definitions: Definition[] = [
       const assigneeId = args.assignee_id == null
         ? null
         : uuid(args.assignee_id);
+      if (
+        assigneeId &&
+        !resolution?.exactAssigneeIds?.get(projectId)?.has(assigneeId)
+      ) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
       const priority = enumValue(args.priority, [
         "low",
         "medium",
         "high",
         "urgent",
-      ]);
+      ]) || "medium";
       const parseDate = (value: unknown) => {
         if (value == null) return null;
         if (
@@ -212,9 +317,24 @@ const definitions: Definition[] = [
       };
       const startsAt = parseDate(args.starts_at);
       const dueAt = parseDate(args.due_at);
+      if (
+        (startsAt && !resolution?.exactTaskDates?.has(startsAt)) ||
+        (dueAt && !resolution?.exactTaskDates?.has(dueAt))
+      ) throw new Error("INVALID_ARGUMENTS");
       if (startsAt && dueAt && dueAt < startsAt) {
         throw new Error("INVALID_ARGUMENTS");
       }
+      const { data: pending, error: pendingError } = await client.from(
+        "orb_action_proposals",
+      ).select("id").eq("conversation_id", conversationId).eq(
+        "status",
+        "proposed",
+      ).neq("user_message_id", userMessageId).gt(
+        "expires_at",
+        (now || new Date()).toISOString(),
+      ).limit(1);
+      if (pendingError) throw pendingError;
+      if (pending?.length) throw new Error("PROPOSAL_PENDING");
       const { data, error } = await client.rpc(
         "prepare_orb_project_task_proposal",
         {
@@ -634,6 +754,8 @@ export function createEntityResolutionSession() {
   return {
     exactProjectIds: new Set<string>(),
     exactClientIds: new Set<number>(),
+    exactAssigneeIds: new Map<string, Set<string>>(),
+    exactTaskDates: new Set<string>(),
   };
 }
 

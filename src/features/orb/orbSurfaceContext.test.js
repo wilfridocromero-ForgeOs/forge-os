@@ -36,6 +36,15 @@ test("keeps requests without Surface Context backward compatible", () => {
   });
 });
 
+test("sends the browser IANA timezone without authority fields", () => {
+  assert.deepEqual(buildOrbRequestPayload({ conversationId: "conversation", clientMessageId: "message", message: "Crea una tarea para mañana", timezone: "America/La_Paz" }), {
+    conversation_id: "conversation",
+    client_message_id: "message",
+    message: "Crea una tarea para mañana",
+    timezone: "America/La_Paz",
+  });
+});
+
 test("rejects unknown routes and invalid entity ids", () => {
   assert.deepEqual(deriveOrbSurfaceContext("/configuracion"), { type: "settings", route: "/configuracion" });
   assert.equal(deriveOrbSurfaceContext("/desconocido"), null);

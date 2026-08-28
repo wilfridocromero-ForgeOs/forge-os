@@ -48,6 +48,7 @@ Deno.test("accepts the minimal Orb payload and ignores model selection", () => {
       client_message_id: clientMessageId,
       message: "Hola Orb",
       surface: null,
+      timezone: null,
     },
   );
 });
@@ -86,6 +87,22 @@ Deno.test("accepts normalized Surface Context and the legacy Dashboard hint", ()
       ...base,
       surface: { module: "admin", route: "/configuracion" },
     }).surface,
+    null,
+  );
+});
+
+Deno.test("accepts only valid IANA timezones", () => {
+  const base = {
+    conversation_id: conversationId,
+    client_message_id: clientMessageId,
+    message: "Hola",
+  };
+  assertEquals(
+    parseOrbChatRequest({ ...base, timezone: "America/La_Paz" }).timezone,
+    "America/La_Paz",
+  );
+  assertEquals(
+    parseOrbChatRequest({ ...base, timezone: "Mars/Olympus" }).timezone,
     null,
   );
 });

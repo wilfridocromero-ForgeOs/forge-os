@@ -83,7 +83,7 @@ export async function streamOrbMessage({ conversationId, clientMessageId, messag
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(buildOrbRequestPayload({ conversationId, clientMessageId, message, surface })),
+    body: JSON.stringify(buildOrbRequestPayload({ conversationId, clientMessageId, message, surface, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null })),
     signal,
   });
 

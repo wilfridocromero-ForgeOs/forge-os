@@ -2,7 +2,7 @@ import { consumeOpenAIResponseStream } from "./openAIStream.ts";
 import { OrbRequestError } from "./protocol.ts";
 import { readTerminalEntityResolution } from "./entityResolution.ts";
 
-export const MAX_TOOL_ROUNDS = 3;
+export const MAX_TOOL_ROUNDS = 4;
 
 type ToolCall = {
   type: "function_call";
@@ -92,6 +92,23 @@ export async function runOrbToolLoop(
       .map(({ value }) => readTerminalEntityResolution(value))
       .find((value): value is string => Boolean(value));
     if (clarification) return controlledStop(result, clarification);
+    const temporalClarification = executions.map(({ value }) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+      }
+      const wrapper = value as { status?: unknown; data?: { state?: unknown } };
+      if (wrapper.status !== "ok") return null;
+      if (wrapper.data?.state === "NEEDS_TIMEZONE") {
+        return "Necesito una zona horaria válida para interpretar esa fecha. Indícame la fecha exacta con zona horaria.";
+      }
+      if (wrapper.data?.state === "AMBIGUOUS") {
+        return "No pude interpretar esa fecha con seguridad. Indícame una fecha exacta y, si corresponde, la hora.";
+      }
+      return null;
+    }).find(Boolean);
+    if (temporalClarification) {
+      return controlledStop(result, temporalClarification);
+    }
     const outputs = executions.map(({ call, value }) => ({
       type: "function_call_output",
       call_id: call.call_id,
