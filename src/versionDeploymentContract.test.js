@@ -65,3 +65,23 @@ test("production index keeps asset recovery before the hashed application entry"
   const html = fs.readFileSync("dist/index.html", "utf8");
   assert.ok(html.indexOf("/update-bootstrap.js") < html.indexOf("/assets/"));
 });
+
+test("version guard installation is globally idempotent and cleanup is symmetrical", () => {
+  const source = fs.readFileSync("src/versionGuard.js", "utf8");
+  assert.match(source, /if \(!import\.meta\.env\.PROD \|\| installed \|\| !CURRENT_BUILD\)/);
+  assert.match(source, /installed = true/);
+  assert.match(source, /installed = false/);
+  for (const event of ["focus", "online", "pageshow", "visibilitychange"]) {
+    assert.match(source, new RegExp(`addEventListener\\(\\"${event}\\"`));
+    assert.match(source, new RegExp(`removeEventListener\\(\\"${event}\\"`));
+  }
+  assert.match(source, /channel\?\.close\(\)/);
+});
+
+test("build configuration reuses one canonical timestamp for runtime and manifest", () => {
+  const source = fs.readFileSync("vite.config.js", "utf8");
+  assert.equal((source.match(/Date\.now\(\)/g) || []).length, 1);
+  assert.match(source, /local-\$\{appBuildTime\}/);
+  assert.match(source, /built_at: appBuildTime/);
+  assert.match(source, /VITE_APP_BUILD_TIME[^\n]+appBuildTime/);
+});

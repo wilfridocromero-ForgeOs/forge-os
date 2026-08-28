@@ -3,8 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import process from "node:process";
 
-const appVersion = process.env.VERCEL_GIT_COMMIT_SHA || `local-${Date.now()}`;
 const appBuildTime = Date.now();
+const appVersion = process.env.VERCEL_GIT_COMMIT_SHA || `local-${appBuildTime}`;
 
 function appVersionManifest() {
   return {

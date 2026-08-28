@@ -2,6 +2,7 @@ import "./versionGuard.css";
 import { hasUnsavedWork } from "./dirtyState";
 import {
   ASSET_RECOVERY_ATTEMPT_KEY,
+  createLatestRequestObserver,
   createVersionUpdateController,
   normalizeBuild,
   UPDATE_ATTEMPT_KEY,
@@ -18,6 +19,7 @@ const CHANNEL_NAME = "orvesen-version-updates";
 let installed = false;
 let checking = false;
 let controller = null;
+let lastDiagnostic = null;
 
 function storageRead(key) {
   try {
@@ -122,6 +124,16 @@ function renderUpdateState(state) {
   action.onclick = () => controller?.acceptUpdate({ hasUnsavedWork: hasUnsavedWork() });
 }
 
+function recordDecision(decision, context = {}) {
+  lastDiagnostic = Object.freeze({
+    current: Object.freeze({ ...CURRENT_BUILD }),
+    remote: decision.build ? Object.freeze({ ...decision.build }) : null,
+    decision: decision.status,
+    source: context.source || "unknown",
+    reason: decision.reason || "unspecified",
+  });
+}
+
 async function fetchCurrentBuild() {
   const response = await fetch(`/version.json?current=${encodeURIComponent(CURRENT_BUILD.version)}`, {
     cache: "no-store",
@@ -146,31 +158,45 @@ export function installVersionGuard() {
     replaceRoute,
     confirmUpdate: () => window.confirm("Hay trabajo sin guardar. Si actualizas ahora, esos cambios locales se perderán. ¿Continuar?"),
     onState: renderUpdateState,
+    onDecision: recordDecision,
   });
   controller.completeBootstrap();
   Object.defineProperty(window, "__ORVESEN_BUILD__", {
     configurable: true,
     value: Object.freeze({ ...CURRENT_BUILD }),
   });
+  Object.defineProperty(window, "__ORVESEN_VERSION_DEBUG__", {
+    configurable: true,
+    value: Object.freeze({
+      current: Object.freeze({ ...CURRENT_BUILD }),
+      snapshot: () => lastDiagnostic,
+    }),
+  });
 
   const channel = "BroadcastChannel" in window ? new BroadcastChannel(CHANNEL_NAME) : null;
-  const observe = (build, broadcast = true) => {
-    const decision = controller.observeRemote(build);
+  const observe = (build, { broadcast = true, source = "unknown", request } = {}) => {
+    const decision = controller.observeRemote(build, { source, request });
     if (broadcast && decision.status === "update_available") {
       channel?.postMessage({ type: "build", build: decision.build });
     }
   };
   channel?.addEventListener("message", (event) => {
-    if (event.data?.type === "build") observe(event.data.build, false);
+    if (event.data?.type === "build") observe(event.data.build, { broadcast: false, source: "broadcast" });
   });
   channel?.postMessage({ type: "build", build: CURRENT_BUILD });
 
-  const checkForCurrentVersion = async () => {
+  const requestObserver = createLatestRequestObserver(
+    (build, context) => observe(build, { ...context, broadcast: true }),
+    recordDecision,
+  );
+
+  const checkForCurrentVersion = async (source = "poll") => {
     if (checking) return;
     checking = true;
+    const completeRequest = requestObserver.begin(typeof source === "string" ? source : source?.type || "event");
     try {
       const remoteBuild = await fetchCurrentBuild();
-      if (remoteBuild) observe(remoteBuild);
+      completeRequest(remoteBuild);
     } catch {
       // A temporary network failure must not interrupt the active application.
     } finally {
@@ -178,26 +204,31 @@ export function installVersionGuard() {
     }
   };
   const checkWhenVisible = () => {
-    if (document.visibilityState === "visible") void checkForCurrentVersion();
+    if (document.visibilityState === "visible") void checkForCurrentVersion("visibility");
   };
-  const initialCheck = window.setTimeout(checkForCurrentVersion, 3000);
-  const interval = window.setInterval(checkForCurrentVersion, CHECK_INTERVAL_MS);
-  window.addEventListener("focus", checkForCurrentVersion);
-  window.addEventListener("online", checkForCurrentVersion);
-  window.addEventListener("pageshow", checkForCurrentVersion);
+  const initialCheck = window.setTimeout(() => checkForCurrentVersion("initial"), 3000);
+  const interval = window.setInterval(() => checkForCurrentVersion("poll"), CHECK_INTERVAL_MS);
+  const checkOnFocus = () => checkForCurrentVersion("focus");
+  const checkWhenOnline = () => checkForCurrentVersion("online");
+  const checkOnPageShow = () => checkForCurrentVersion("pageshow");
+  window.addEventListener("focus", checkOnFocus);
+  window.addEventListener("online", checkWhenOnline);
+  window.addEventListener("pageshow", checkOnPageShow);
   document.addEventListener("visibilitychange", checkWhenVisible);
 
   return () => {
     window.clearTimeout(initialCheck);
     window.clearInterval(interval);
-    window.removeEventListener("focus", checkForCurrentVersion);
-    window.removeEventListener("online", checkForCurrentVersion);
-    window.removeEventListener("pageshow", checkForCurrentVersion);
+    window.removeEventListener("focus", checkOnFocus);
+    window.removeEventListener("online", checkWhenOnline);
+    window.removeEventListener("pageshow", checkOnPageShow);
     document.removeEventListener("visibilitychange", checkWhenVisible);
     channel?.close();
     removeUpdateBanner();
     delete window.__ORVESEN_BUILD__;
+    delete window.__ORVESEN_VERSION_DEBUG__;
     controller = null;
+    lastDiagnostic = null;
     installed = false;
   };
 }

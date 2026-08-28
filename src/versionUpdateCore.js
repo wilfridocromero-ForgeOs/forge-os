@@ -12,11 +12,29 @@ export function normalizeBuild(value) {
 }
 
 export function classifyBuild(currentBuild, remoteValue) {
+  const current = normalizeBuild(currentBuild);
   const remoteBuild = normalizeBuild(remoteValue);
-  if (!remoteBuild) return { status: "invalid", build: null };
-  if (remoteBuild.version === currentBuild.version) return { status: "current", build: remoteBuild };
-  if (remoteBuild.builtAt <= currentBuild.builtAt) return { status: "stale", build: remoteBuild };
-  return { status: "update_available", build: remoteBuild };
+  if (!current || !remoteBuild) return { status: "invalid", build: remoteBuild, reason: "invalid_build_metadata" };
+  if (remoteBuild.version === current.version) return { status: "current", build: remoteBuild, reason: "same_version" };
+  if (remoteBuild.builtAt <= current.builtAt) return { status: "stale", build: remoteBuild, reason: "remote_not_newer" };
+  return { status: "update_available", build: remoteBuild, reason: "different_newer_version" };
+}
+
+export function createLatestRequestObserver(observe, onIgnored = () => {}) {
+  let latestRequest = 0;
+  return {
+    begin(source = "poll") {
+      const request = ++latestRequest;
+      return (value) => {
+        if (request !== latestRequest) {
+          const decision = { status: "ignored", build: normalizeBuild(value), reason: "out_of_order_response" };
+          onIgnored(decision, { source, request });
+          return decision;
+        }
+        return observe(value, { source, request });
+      };
+    },
+  };
 }
 
 export function safeRelativeUrl(value, origin) {
@@ -54,6 +72,7 @@ export function createVersionUpdateController({
   confirmUpdate = () => true,
   now = () => Date.now(),
   onState = () => {},
+  onDecision = () => {},
 }) {
   let state = { status: "current", target: null, error: null };
   let navigationRequested = false;
@@ -70,21 +89,49 @@ export function createVersionUpdateController({
       clearAttempt();
       return false;
     }
-    if (attempt.target !== currentBuild.version) return false;
+    if (attempt.target !== currentBuild.version) {
+      if (attempt.targetBuiltAt <= currentBuild.builtAt) clearAttempt();
+      onDecision({
+        status: attempt.targetBuiltAt <= currentBuild.builtAt ? "stale" : "ignored",
+        build: { version: attempt.target, builtAt: attempt.targetBuiltAt },
+        reason: "bootstrap_target_mismatch",
+      }, { source: "bootstrap" }, state);
+      return false;
+    }
     clearAttempt();
     replaceRoute(safeRelativeUrl(attempt.returnTo, origin));
     publish({ status: "current", target: null, error: null });
+    onDecision({
+      status: "current",
+      build: { version: attempt.target, builtAt: attempt.targetBuiltAt },
+      reason: "completed_update_attempt",
+    }, { source: "bootstrap" }, state);
     return true;
   }
 
-  function observeRemote(remoteValue) {
+  function observeRemote(remoteValue, context = {}) {
     const decision = classifyBuild(currentBuild, remoteValue);
+    const previous = state;
     if (decision.status === "update_available") {
-      publish({ status: "update_available", target: decision.build, error: null });
-    } else if (decision.status === "current" || decision.status === "stale") {
+      if (state.target && (
+        state.target.builtAt > decision.build.builtAt
+        || (state.target.builtAt === decision.build.builtAt && state.target.version !== decision.build.version)
+      )) {
+        const ignored = { ...decision, status: "stale", reason: "older_than_observed_target" };
+        onDecision(ignored, context, previous);
+        return ignored;
+      }
+      if (state.status !== "update_available" || state.target?.version !== decision.build.version || state.target?.builtAt !== decision.build.builtAt) {
+        publish({ status: "update_available", target: decision.build, error: null });
+      }
+    } else if (decision.status === "current" && state.status !== "update_available") {
+      clearAttempt();
+      publish({ status: "current", target: null, error: null });
+    } else if (decision.status === "stale" && state.status !== "update_available") {
       clearAttempt();
       publish({ status: "current", target: null, error: null });
     }
+    onDecision(decision, context, previous);
     return decision;
   }
 
