@@ -294,3 +294,21 @@ Deno.test("task actions require the concrete UI confirmation", () => {
     "text is not confirmation",
   );
 });
+
+Deno.test("entity clarification never substitutes action confirmation", () => {
+  for (
+    const expected of [
+      "usa resolve_project antes de preparar",
+      "Solo un resultado EXACT",
+      "UNIQUE_CANDIDATE, AMBIGUOUS y NOT_FOUND",
+      "sí, ese solo confirma el nombre sugerido",
+      "nunca sustituye el botón seguro",
+      "Usa resolve_client del mismo modo",
+    ]
+  ) {
+    assert(
+      ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(expected),
+      `missing entity resolution rule: ${expected}`,
+    );
+  }
+});

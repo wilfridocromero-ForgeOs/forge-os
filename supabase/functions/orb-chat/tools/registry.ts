@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrbToolPermission, OrbToolPermissions } from "./authorization.ts";
+import { resolveEntityName } from "../entityResolution.ts";
 
 const MAX_LIMIT = 25;
 const DEFAULT_LIMIT = 10;
@@ -23,6 +24,10 @@ type Context = {
   conversationId?: string;
   userMessageId?: string;
   permissions: OrbToolPermissions;
+  resolution?: {
+    exactProjectIds: Set<string>;
+    exactClientIds: Set<number>;
+  };
   now?: Date;
 };
 type Definition = {
@@ -82,12 +87,67 @@ function relation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
 function safeError(error: unknown) {
+  if (error instanceof Error && error.message === "ENTITY_NOT_RESOLVED") {
+    return "entity_not_resolved";
+  }
   return error instanceof Error && error.message === "INVALID_ARGUMENTS"
     ? "invalid_arguments"
     : "unavailable";
 }
 
 const definitions: Definition[] = [
+  {
+    name: "resolve_project",
+    description:
+      "Resuelve de forma determinista un nombre de proyecto visible. Para acciones por nombre, úsala antes de prepare_create_project_task. Solo EXACT autoriza reutilizar el project_id; cualquier candidato requiere aclaración del usuario.",
+    permission: "projects",
+    parameters: objectSchema({
+      name: { type: "string", minLength: 1, maxLength: 120 },
+    }, ["name"]),
+    async handler({ client, organizationId, resolution }, args) {
+      assertKeys(args, ["name"]);
+      const requested = text(args.name);
+      if (!requested) throw new Error("INVALID_ARGUMENTS");
+      const { data, error } = await client.from("projects").select("id,name")
+        .eq("organization_id", organizationId).order("updated_at", {
+          ascending: false,
+        }).limit(25);
+      if (error) throw error;
+      const resolved = resolveEntityName(requested, data || []);
+      if (resolved.state === "EXACT") {
+        resolution?.exactProjectIds.add(String(resolved.entity.id));
+      }
+      return { entity_type: "project", resolution: resolved };
+    },
+  },
+  {
+    name: "resolve_client",
+    description:
+      "Resuelve de forma determinista un nombre de cliente visible. Solo EXACT entrega identidad; candidatos aproximados requieren aclaración del usuario.",
+    permission: "clients",
+    parameters: objectSchema({
+      name: { type: "string", minLength: 1, maxLength: 120 },
+    }, ["name"]),
+    async handler({ client, organizationId, resolution }, args) {
+      assertKeys(args, ["name"]);
+      const requested = text(args.name);
+      if (!requested) throw new Error("INVALID_ARGUMENTS");
+      const { data, error } = await client.from("clients").select(
+        "id,company_name",
+      ).eq("organization_id", organizationId).order("created_at", {
+        ascending: false,
+      }).limit(25);
+      if (error) throw error;
+      const resolved = resolveEntityName(
+        requested,
+        (data || []).map((row) => ({ id: row.id, name: row.company_name })),
+      );
+      if (resolved.state === "EXACT") {
+        resolution?.exactClientIds.add(Number(resolved.entity.id));
+      }
+      return { entity_type: "client", resolution: resolved };
+    },
+  },
   {
     name: "prepare_create_project_task",
     description:
@@ -110,7 +170,7 @@ const definitions: Definition[] = [
       "starts_at",
       "due_at",
     ]),
-    async handler({ client, conversationId, userMessageId }, args) {
+    async handler({ client, conversationId, userMessageId, resolution }, args) {
       assertKeys(args, [
         "project_id",
         "title",
@@ -127,6 +187,9 @@ const definitions: Definition[] = [
       if (!title || title.length < 2) throw new Error("INVALID_ARGUMENTS");
       const instructions = text(args.instructions, 10000);
       const projectId = uuid(args.project_id);
+      if (!resolution?.exactProjectIds.has(projectId)) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
       const assigneeId = args.assignee_id == null
         ? null
         : uuid(args.assignee_id);
@@ -566,6 +629,13 @@ const definitions: Definition[] = [
     },
   },
 ];
+
+export function createEntityResolutionSession() {
+  return {
+    exactProjectIds: new Set<string>(),
+    exactClientIds: new Set<number>(),
+  };
+}
 
 export function getAuthorizedToolDefinitions(permissions: OrbToolPermissions) {
   return definitions.filter((tool) => permissions[tool.permission]).map((

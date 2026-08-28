@@ -16,6 +16,7 @@ import { loadDashboardContextSafely } from "./dashboardContext.ts";
 import { runOrbToolLoop } from "./toolLoop.ts";
 import { getOrbToolPermissions } from "./tools/authorization.ts";
 import {
+  createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
 } from "./tools/registry.ts";
@@ -342,6 +343,7 @@ export async function handleOrbChat(request: Request) {
       turn.membership_role,
     );
     const authorizedTools = getAuthorizedToolDefinitions(toolPermissions);
+    const entityResolution = createEntityResolutionSession();
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -406,6 +408,7 @@ export async function handleOrbChat(request: Request) {
                     conversationId: turn.conversation_id,
                     userMessageId: turn.user_message_id,
                     permissions: toolPermissions,
+                    resolution: entityResolution,
                   },
                   name,
                   args,
@@ -417,6 +420,13 @@ export async function handleOrbChat(request: Request) {
             });
             output = providerStream.output;
             providerResponseId = providerStream.responseId;
+            if (providerStream.diagnosticCode) {
+              console.warn("Orb tool loop stopped safely", {
+                code: providerStream.diagnosticCode,
+                conversationId: turn.conversation_id,
+                assistantMessageId,
+              });
+            }
 
             await persistFinalOrbResponse(adminClient!, {
               assistantMessageId: assistantMessageId!,

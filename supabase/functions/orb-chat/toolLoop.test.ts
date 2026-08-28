@@ -7,16 +7,6 @@ function assertEquals(actual: unknown, expected: unknown) {
   }
 }
 
-async function assertRejects(run: () => Promise<unknown>, expected: string) {
-  try {
-    await run();
-  } catch (error) {
-    if (error instanceof Error && error.message.includes(expected)) return;
-    throw error;
-  }
-  throw new Error("Expected rejection");
-}
-
 function stream(events: unknown[]) {
   const body =
     events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") +
@@ -128,17 +118,81 @@ Deno.test("project deictic flow can request the exact authorized project summary
   assertEquals(result.output, "Resumen autorizado del proyecto.");
 });
 Deno.test("tool rounds are bounded", async () => {
-  await assertRejects(
-    () =>
-      runOrbToolLoop({
-        input: [],
-        request: () => Promise.resolve(toolCall()),
-        execute: () => Promise.resolve({}),
-        onDelta: () => {},
-        maxRounds: 2,
-      }),
-    "tool round limit",
+  let executions = 0;
+  const result = await runOrbToolLoop({
+    input: [],
+    request: () => Promise.resolve(toolCall()),
+    execute: () => {
+      executions += 1;
+      return Promise.resolve({});
+    },
+    onDelta: () => {},
+    maxRounds: 2,
+  });
+  assertEquals(result.diagnosticCode, "TOOL_ROUND_LIMIT");
+  assertEquals(result.output.includes("no se ejecutó ninguna acción"), true);
+  assertEquals(executions, 1);
+});
+
+Deno.test("real project typo ends with a deterministic clarification and no proposal", async () => {
+  let rounds = 0;
+  let proposals = 0;
+  const result = await runOrbToolLoop({
+    input: [{ role: "user", content: "Crea una tarea en Pruebas par Orvesen" }],
+    request: () => {
+      rounds += 1;
+      return Promise.resolve(toolCall(
+        "resolve_project",
+        "call_resolve",
+        JSON.stringify({ name: "Pruebas par Orvesen" }),
+      ));
+    },
+    execute: (name) => {
+      if (name === "prepare_create_project_task") proposals += 1;
+      return Promise.resolve({
+        status: "ok",
+        data: {
+          entity_type: "project",
+          resolution: {
+            state: "UNIQUE_CANDIDATE",
+            requested: "Pruebas par Orvesen",
+            candidates: [{ name: "Pruebas para Orvesen" }],
+          },
+        },
+      });
+    },
+    onDelta: () => {},
+  });
+  assertEquals(rounds, 1);
+  assertEquals(proposals, 0);
+  assertEquals(
+    result.output.includes("¿Te refieres a “Pruebas para Orvesen”?"),
+    true,
   );
+});
+
+Deno.test("repeated equivalent lookup stops safely without another query", async () => {
+  let round = 0;
+  let executions = 0;
+  const result = await runOrbToolLoop({
+    input: [],
+    request: () => {
+      round += 1;
+      return Promise.resolve(toolCall(
+        "list_projects",
+        `call_${round}`,
+        '{"search":"Acme","limit":10,"status":null}',
+      ));
+    },
+    execute: () => {
+      executions += 1;
+      return Promise.resolve({ status: "ok", data: { items: [] } });
+    },
+    onDelta: () => {},
+  });
+  assertEquals(round, 2);
+  assertEquals(executions, 1);
+  assertEquals(result.diagnosticCode, "TOOL_ROUND_LIMIT");
 });
 
 Deno.test("two tool rounds preserve each call_id and return only the final answer", async () => {
