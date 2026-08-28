@@ -4,6 +4,7 @@ import { AlertCircle, ArrowDown, LoaderCircle, Menu, MessageSquareText, Plus, Ro
 
 import { useAuth } from "../Context/AuthContext";
 import OrbMarkdown from "../features/orb/OrbMarkdown";
+import OrbActionProposal from "../features/orb/OrbActionProposal";
 import { normalizeOrbMessages } from "../features/orb/orbMessageOrder";
 import { deriveOrbSurfaceFromSearch } from "../features/orb/orbSurfaceContext";
 import {
@@ -15,7 +16,7 @@ import {
   reconcileAssistantStart,
   shouldFollowStreamGrowth,
 } from "../features/orb/orbStream";
-import { createOrbConversation, friendlyError, listOrbConversations, listOrbMessages, streamOrbMessage } from "../services/OrbService";
+import { cancelOrbActionProposal, confirmOrbActionProposal, createOrbConversation, friendlyError, listOrbActionProposals, listOrbConversations, listOrbMessages, streamOrbMessage } from "../services/OrbService";
 import "./Orb.css";
 
 const ACTIVE_CONVERSATION_KEY = "orvesen-orb-active-conversation";
@@ -25,11 +26,12 @@ const suggestions = [
   "Hazme preguntas para entender mejor un problema.",
 ];
 
-const OrbMessage = memo(function OrbMessage({ message, sending, onRetry }) {
+const OrbMessage = memo(function OrbMessage({ message, sending, onRetry, proposals, onConfirmProposal, onCancelProposal }) {
   return <article id={`orb-message-${message.id}`} className={`orb-message orb-message-${message.role}`}>
     <div className="orb-message-label">{message.role === "assistant" ? "Orb" : "Tú"}</div>
     <div className="orb-message-content">{message.content ? (message.role === "assistant" ? <OrbMarkdown>{message.content}</OrbMarkdown> : message.content) : message.displayStatus === "streaming" ? <span className="orb-thinking"><span>Orb está pensando</span><i /><i /><i /></span> : null}</div>
     {message.displayStatus === "failed" ? <div className="orb-message-error"><span>La respuesta no pudo completarse.</span><button onClick={() => onRetry(message)} disabled={sending}><RotateCcw size={13} /> Reintentar</button></div> : null}
+    {proposals?.map((proposal) => <OrbActionProposal key={proposal.id} proposal={proposal} onConfirm={onConfirmProposal} onCancel={onCancelProposal} />)}
   </article>;
 });
 
@@ -41,6 +43,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY));
   const [messages, setMessages] = useState([]);
+  const [proposals, setProposals] = useState([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -131,6 +134,13 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
     return rows;
   }, []);
 
+  const loadProposals = useCallback(async (conversationId) => {
+    if (!conversationId) { setProposals([]); return []; }
+    const rows = await listOrbActionProposals(conversationId);
+    setProposals(rows);
+    return rows;
+  }, []);
+
   useEffect(() => {
     let active = true;
     listOrbConversations().then((rows) => {
@@ -153,7 +163,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
     initialScroll.current = true;
     setLoadingMessages(true); setError("");
     localStorage.setItem(ACTIVE_CONVERSATION_KEY, activeConversationId);
-    listOrbMessages(activeConversationId).then((rows) => active && setMessages(normalizeOrbMessages(rows)))
+    Promise.all([listOrbMessages(activeConversationId), listOrbActionProposals(activeConversationId)]).then(([rows, actionRows]) => { if (active) { setMessages(normalizeOrbMessages(rows)); setProposals(actionRows); } })
       .catch((requestError) => active && setError(requestError.message)).finally(() => active && setLoadingMessages(false));
     return () => { active = false; };
   }, [activeConversationId]);
@@ -189,7 +199,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
     if (sending) return;
     followLatest.current = true;
     setActiveConversationId(null); localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
-    setMessages([]); setDraft(""); setError(""); setShowLatest(false); setHistoryOpen(false);
+    setMessages([]); setProposals([]); setDraft(""); setError(""); setShowLatest(false); setHistoryOpen(false);
   }
 
   function selectConversation(id) {
@@ -248,6 +258,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
       } });
       flushPendingDeltas();
       setMessages(normalizeOrbMessages(await listOrbMessages(conversationId)));
+      await loadProposals(conversationId);
       await loadConversations();
     } catch (requestError) {
       discardPendingDeltas();
@@ -255,7 +266,10 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
         setMessages((current) => failAssistantStream(current, streamedAssistantId, requestError.code));
         setError(requestError.message || "Orb no pudo responder.");
       }
-      if (conversationId) listOrbMessages(conversationId).then((rows) => setMessages(normalizeOrbMessages(rows))).catch(() => {});
+      if (conversationId) {
+        listOrbMessages(conversationId).then((rows) => setMessages(normalizeOrbMessages(rows))).catch(() => {});
+        loadProposals(conversationId).catch(() => {});
+      }
     } finally { requestController.current = null; setSending(false); }
   }
 
@@ -270,6 +284,16 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   });
 
   function handleSubmit(event) { event.preventDefault(); void sendMessage(); }
+  async function handleConfirmProposal(proposal) {
+    setError("");
+    try { await confirmOrbActionProposal(proposal.id, proposal.arguments_hash); await loadProposals(proposal.conversation_id); }
+    catch (requestError) { setError(requestError.message || "No se pudo confirmar la acción."); await loadProposals(proposal.conversation_id).catch(() => {}); }
+  }
+  async function handleCancelProposal(proposal) {
+    setError("");
+    try { await cancelOrbActionProposal(proposal.id); await loadProposals(proposal.conversation_id); }
+    catch (requestError) { setError(requestError.message || "No se pudo cancelar la acción."); }
+  }
   function handleKeyDown(event) { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }
   const hasConversation = Boolean(activeConversationId || messages.length);
 
@@ -292,7 +316,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
         <div className="orb-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void sendMessage(suggestion)}>{suggestion}</button>)}</div>
       </div> : <div className="orb-message-scroll" ref={scrollRef} onScroll={handleScroll}><div className="orb-message-column">
         {loadingMessages ? <div className="orb-centered-state"><LoaderCircle className="orb-spin" size={22} /> Cargando conversación</div> : null}
-        {!loadingMessages && messages.map((message) => <OrbMessage key={message.id} message={message} sending={sending} onRetry={handleRetry} />)}
+        {!loadingMessages && messages.map((message) => <OrbMessage key={message.id} message={message} sending={sending} onRetry={handleRetry} proposals={message.role === "assistant" ? proposals.filter((proposal) => proposal.user_message_id === message.reply_to_message_id) : []} onConfirmProposal={handleConfirmProposal} onCancelProposal={handleCancelProposal} />)}
       </div></div>}
       {showLatest ? <button className="orb-jump-latest" onClick={() => scrollToLatest()}><ArrowDown size={15} /> Ir al mensaje más reciente</button> : null}
 

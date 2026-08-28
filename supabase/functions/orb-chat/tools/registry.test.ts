@@ -18,7 +18,12 @@ Deno.test("only authorized tools are offered", () => {
   const names = getAuthorizedToolDefinitions({ ...denied, projects: true }).map(
     (tool) => tool.name,
   );
-  assertEquals(names, ["list_projects", "list_tasks", "get_project_summary"]);
+  assertEquals(names, [
+    "prepare_create_project_task",
+    "list_projects",
+    "list_tasks",
+    "get_project_summary",
+  ]);
 });
 
 Deno.test("area_score controls whether score tools are offered", () => {
@@ -75,6 +80,7 @@ Deno.test("registry exposes the bounded read tools for an administrator", () => 
     calendar: true,
   });
   assertEquals(tools.map((tool) => tool.name), [
+    "prepare_create_project_task",
     "list_projects",
     "list_tasks",
     "get_project_summary",
@@ -96,6 +102,111 @@ Deno.test("registry exposes the bounded read tools for an administrator", () => 
       assertEquals(schema.properties.limit.maximum, 25);
     }
   }
+});
+
+Deno.test("OpenAI receives a proposal tool but no action executor", () => {
+  const names = getAuthorizedToolDefinitions({ ...denied, projects: true }).map(
+    (tool) => tool.name,
+  );
+  assertEquals(names.includes("prepare_create_project_task"), true);
+  assertEquals(names.includes("confirm_orb_action_proposal"), false);
+  assertEquals(names.includes("create_project_task_with_configuration"), false);
+  assertEquals(
+    names.some((name) => /confirm|execute|cancel/.test(name)),
+    false,
+  );
+});
+
+Deno.test("prepare task tool writes only through proposal RPC and reuses backend identity", async () => {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const client = {
+    rpc(name: string, args: Record<string, unknown>) {
+      calls.push({ name, args });
+      return Promise.resolve({
+        data: {
+          id: "proposal",
+          action_type: "create_project_task",
+          status: "proposed",
+          arguments_hash: "a".repeat(64),
+          expires_at: "2026-08-28T04:00:00Z",
+          display_payload: { project_name: "Project", title: "Task" },
+        },
+        error: null,
+      });
+    },
+  };
+  const result = await executeOrbTool(
+    {
+      client: client as never,
+      organizationId: "server-org",
+      userId: "user",
+      conversationId: "11111111-1111-4111-8111-111111111111",
+      userMessageId: "22222222-2222-4222-8222-222222222222",
+      permissions: { ...denied, projects: true },
+    },
+    "prepare_create_project_task",
+    JSON.stringify({
+      project_id: "33333333-3333-4333-8333-333333333333",
+      title: "Task",
+      instructions: null,
+      assignee_id: null,
+      priority: "medium",
+      starts_at: null,
+      due_at: null,
+    }),
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].name, "prepare_orb_project_task_proposal");
+  assertEquals("organization_id" in calls[0].args, false);
+});
+
+Deno.test("prepare task rejects ambiguous dates and injected authority before RPC", async () => {
+  let called = false;
+  const client = {
+    rpc: () => {
+      called = true;
+      throw new Error("unexpected");
+    },
+  };
+  for (
+    const args of [
+      {
+        project_id: "33333333-3333-4333-8333-333333333333",
+        title: "Task",
+        instructions: null,
+        assignee_id: null,
+        priority: "medium",
+        starts_at: "2026-08-29T15:00:00",
+        due_at: null,
+      },
+      {
+        project_id: "33333333-3333-4333-8333-333333333333",
+        title: "Task",
+        instructions: null,
+        assignee_id: null,
+        priority: "medium",
+        starts_at: null,
+        due_at: null,
+        organization_id: "other",
+      },
+    ]
+  ) {
+    const result = await executeOrbTool(
+      {
+        client: client as never,
+        organizationId: "server-org",
+        userId: "user",
+        conversationId: "11111111-1111-4111-8111-111111111111",
+        userMessageId: "22222222-2222-4222-8222-222222222222",
+        permissions: { ...denied, projects: true },
+      },
+      "prepare_create_project_task",
+      JSON.stringify(args),
+    );
+    assertEquals(result.status, "invalid_arguments");
+  }
+  assertEquals(called, false);
 });
 
 Deno.test("client summary uses bigint identity, organization scope and excludes PII", async () => {

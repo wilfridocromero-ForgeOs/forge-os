@@ -20,6 +20,8 @@ type Context = {
   client: SupabaseClient;
   organizationId: string;
   userId: string;
+  conversationId?: string;
+  userMessageId?: string;
   permissions: OrbToolPermissions;
   now?: Date;
 };
@@ -86,6 +88,96 @@ function safeError(error: unknown) {
 }
 
 const definitions: Definition[] = [
+  {
+    name: "prepare_create_project_task",
+    description:
+      "Prepara una propuesta confirmable para crear una tarea. No crea la tarea. Úsala solo cuando proyecto, título y fechas sean inequívocos; una fecha ambigua requiere aclaración previa.",
+    permission: "projects",
+    parameters: objectSchema({
+      project_id: { type: "string", format: "uuid" },
+      title: { type: "string", minLength: 2, maxLength: 180 },
+      instructions: { type: ["string", "null"], maxLength: 10000 },
+      assignee_id: { type: ["string", "null"], format: "uuid" },
+      priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+      starts_at: { type: ["string", "null"], format: "date-time" },
+      due_at: { type: ["string", "null"], format: "date-time" },
+    }, [
+      "project_id",
+      "title",
+      "instructions",
+      "assignee_id",
+      "priority",
+      "starts_at",
+      "due_at",
+    ]),
+    async handler({ client, conversationId, userMessageId }, args) {
+      assertKeys(args, [
+        "project_id",
+        "title",
+        "instructions",
+        "assignee_id",
+        "priority",
+        "starts_at",
+        "due_at",
+      ]);
+      if (!conversationId || !userMessageId) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      const title = text(args.title, 180);
+      if (!title || title.length < 2) throw new Error("INVALID_ARGUMENTS");
+      const instructions = text(args.instructions, 10000);
+      const projectId = uuid(args.project_id);
+      const assigneeId = args.assignee_id == null
+        ? null
+        : uuid(args.assignee_id);
+      const priority = enumValue(args.priority, [
+        "low",
+        "medium",
+        "high",
+        "urgent",
+      ]);
+      const parseDate = (value: unknown) => {
+        if (value == null) return null;
+        if (
+          typeof value !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)
+        ) throw new Error("INVALID_ARGUMENTS");
+        const parsed = new Date(value);
+        if (!Number.isFinite(parsed.getTime())) {
+          throw new Error("INVALID_ARGUMENTS");
+        }
+        return parsed.toISOString();
+      };
+      const startsAt = parseDate(args.starts_at);
+      const dueAt = parseDate(args.due_at);
+      if (startsAt && dueAt && dueAt < startsAt) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      const { data, error } = await client.rpc(
+        "prepare_orb_project_task_proposal",
+        {
+          target_conversation_id: conversationId,
+          target_user_message_id: userMessageId,
+          target_project_id: projectId,
+          requested_title: title,
+          requested_instructions: instructions,
+          requested_assignee_id: assigneeId,
+          requested_priority: priority,
+          requested_starts_at: startsAt,
+          requested_due_at: dueAt,
+        },
+      );
+      if (error) throw error;
+      return {
+        proposal_id: data.id,
+        action_type: data.action_type,
+        status: data.status,
+        arguments_hash: data.arguments_hash,
+        expires_at: data.expires_at,
+        display: data.display_payload,
+        confirmation_required: true,
+      };
+    },
+  },
   {
     name: "list_projects",
     description: "Lista proyectos visibles, con filtros acotados.",

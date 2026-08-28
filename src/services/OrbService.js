@@ -45,6 +45,32 @@ export async function listOrbMessages(conversationId) {
   return data || [];
 }
 
+export async function listOrbActionProposals(conversationId) {
+  const { data, error } = await supabase.from("orb_action_proposals")
+    .select("id, action_type, conversation_id, user_message_id, arguments_hash, display_payload, status, expires_at, result_entity_id, safe_error_code, created_at, updated_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function confirmOrbActionProposal(proposalId, argumentsHash) {
+  const { data, error } = await supabase.rpc("confirm_orb_action_proposal", {
+    target_proposal_id: proposalId,
+    expected_arguments_hash: argumentsHash,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelOrbActionProposal(proposalId) {
+  const { data, error } = await supabase.rpc("cancel_orb_action_proposal", {
+    target_proposal_id: proposalId,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function streamOrbMessage({ conversationId, clientMessageId, message, surface = null, onEvent, signal }) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;

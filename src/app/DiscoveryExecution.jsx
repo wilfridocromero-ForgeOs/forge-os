@@ -13,6 +13,11 @@ import {
   getExecutionDashboardData, saveDiscoveryResponse,
 } from "../features/discovery-execution/services/discoveryExecutionService";
 import {
+  assessmentProgress,
+  assessmentStructureMatches,
+  safeDiscoveryErrorDiagnostic,
+} from "../features/discovery-execution/discoveryAssessmentIntegrity";
+import {
   getDiscoveryQuestionConfigurationError,
   normalizeDiscoveryOptions,
   normalizeDiscoveryResponseType,
@@ -43,11 +48,7 @@ function questionIsRequiredAndIncomplete(question, answers) {
 }
 
 function progressFor(assessment) {
-  const questions = allQuestions(assessment.discovery_templates);
-  const answered = new Set((assessment.discovery_responses || [])
-    .filter((response) => isAnswered(response.response_value))
-    .map((response) => response.discovery_question_id));
-  return questions.length ? Math.round(answered.size / questions.length * 100) : 0;
+  return assessmentProgress(assessment, isAnswered).percentage;
 }
 
 function formatDate(value) {
@@ -311,9 +312,26 @@ export function DiscoveryRunner() {
     setFinalizing(true);
     try {
       await flushQuestions(questions);
+      const canonicalAssessment = await getAssessment(assessmentId);
+      if (!assessmentStructureMatches(assessment, canonicalAssessment)) {
+        const responseMap = Object.fromEntries(canonicalAssessment.discovery_responses
+          .map((item) => [item.discovery_question_id, item]));
+        const valueMap = Object.fromEntries(canonicalAssessment.discovery_responses
+          .map((item) => [item.discovery_question_id, item.response_value]));
+        responsesRef.current = responseMap;
+        savedValuesRef.current = valueMap;
+        setAssessment(canonicalAssessment);
+        setAnswers(valueMap);
+        setPersistedAnswers(valueMap);
+        setReviewing(false);
+        setSectionIndex(0);
+        setError("La estructura de este Discovery cambió. La evaluación se actualizó; revisa las preguntas antes de finalizar.");
+        return;
+      }
       await finalizeAssessment(assessmentId);
       navigate(`/discovery/evaluaciones/${assessmentId}/resultado`, { replace: true });
     } catch (reason) {
+      console.error("[Discovery] Finalization failed", safeDiscoveryErrorDiagnostic(reason));
       setError(friendlyError(reason, "No se pudo finalizar el Discovery."));
     } finally {
       setFinalizing(false);

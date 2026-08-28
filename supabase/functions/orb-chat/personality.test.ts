@@ -279,3 +279,18 @@ Deno.test("separates persisted facts from analysis and rejects data instructions
     "tool prompt injection stays data",
   );
 });
+
+Deno.test("task actions require the concrete UI confirmation", () => {
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "prepare_create_project_task solo puede preparar una propuesta",
+    ),
+    "proposal-only tool boundary",
+  );
+  assert(
+    ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
+      "Una frase como sí, confirmo o hazlo no ejecuta acciones",
+    ),
+    "text is not confirmation",
+  );
+});

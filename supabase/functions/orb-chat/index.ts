@@ -403,6 +403,8 @@ export async function handleOrbChat(request: Request) {
                     client: userClient,
                     organizationId: activeOrganization.id,
                     userId: user.id,
+                    conversationId: turn.conversation_id,
+                    userMessageId: turn.user_message_id,
                     permissions: toolPermissions,
                   },
                   name,
