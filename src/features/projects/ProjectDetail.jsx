@@ -53,6 +53,14 @@ export default function ProjectDetail({ project, organizationId, users, projectM
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadWorkspace(); }, [loadWorkspace]);
 
+  useEffect(() => {
+    const refreshTask = (event) => {
+      if (event.detail?.projectId === projectId) void loadWorkspace();
+    };
+    window.addEventListener("orvesen:project-task-changed", refreshTask);
+    return () => window.removeEventListener("orvesen:project-task-changed", refreshTask);
+  }, [loadWorkspace, projectId]);
+
   const taskStats = useMemo(() => {
     const tasks = work.tasks.filter((task) => !task.is_recurrence_template && task.status !== "cancelled");
     const completed = tasks.filter((task) => task.status === "completed").length;

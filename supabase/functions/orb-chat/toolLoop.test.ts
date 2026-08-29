@@ -380,6 +380,56 @@ Deno.test("task creation dependencies remain ordered under adversarial delays", 
   assertEquals(result.output, "Propuesta preparada.");
 });
 
+Deno.test("task update waits for task, assignee and date under inverted latency", async () => {
+  const completed = new Set<string>();
+  const started: string[] = [];
+  let round = 0;
+  await runOrbToolLoop({
+    input: [],
+    request: () => {
+      round += 1;
+      return Promise.resolve(
+        round === 1
+          ? toolCalls([
+            { name: "prepare_update_project_task", callId: "prepare" },
+            { name: "resolve_project_assignee", callId: "assignee" },
+            { name: "resolve_task_date", callId: "date" },
+            { name: "resolve_task", callId: "task" },
+          ])
+          : completedText("Propuesta de actualización preparada."),
+      );
+    },
+    execute: async (name) => {
+      started.push(name);
+      if (name === "resolve_task") {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        completed.add(name);
+        return { status: "ok", data: { resolution: { state: "EXACT" } } };
+      }
+      if (name === "resolve_project_assignee" || name === "resolve_task_date") {
+        assertEquals(completed.has("resolve_task"), true);
+        await new Promise((resolve) =>
+          setTimeout(resolve, name === "resolve_project_assignee" ? 20 : 5)
+        );
+        completed.add(name);
+        return {
+          status: "ok",
+          data: name === "resolve_task_date"
+            ? { state: "EXACT" }
+            : { resolution: { state: "EXACT" } },
+        };
+      }
+      assertEquals(completed.has("resolve_project_assignee"), true);
+      assertEquals(completed.has("resolve_task_date"), true);
+      completed.add(name);
+      return { status: "ok", data: { proposal_id: "proposal" } };
+    },
+    onDelta: () => {},
+  });
+  assertEquals(started[0], "resolve_task");
+  assertEquals(started.at(-1), "prepare_update_project_task");
+});
+
 Deno.test("a non-exact project stops before dependent assignee or prepare tools", async () => {
   const executed: string[] = [];
   const result = await runOrbToolLoop({

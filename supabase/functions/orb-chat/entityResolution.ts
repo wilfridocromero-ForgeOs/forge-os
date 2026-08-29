@@ -117,7 +117,7 @@ export function resolveEntityName(
 }
 
 export function entityResolutionMessage(
-  entityLabel: "proyecto" | "cliente" | "responsable",
+  entityLabel: "proyecto" | "cliente" | "responsable" | "tarea",
   resolution: EntityResolution,
 ) {
   if (resolution.state === "UNIQUE_CANDIDATE") {
@@ -146,7 +146,7 @@ export function readTerminalEntityResolution(value: unknown) {
   const data = wrapper.data as { entity_type?: unknown; resolution?: unknown };
   if (
     data.entity_type !== "project" && data.entity_type !== "client" &&
-    data.entity_type !== "assignee"
+    data.entity_type !== "assignee" && data.entity_type !== "task"
   ) {
     return null;
   }
@@ -157,7 +157,9 @@ export function readTerminalEntityResolution(value: unknown) {
       ? "proyecto"
       : data.entity_type === "client"
       ? "cliente"
-      : "responsable",
+      : data.entity_type === "assignee"
+      ? "responsable"
+      : "tarea",
     resolution,
   );
 }

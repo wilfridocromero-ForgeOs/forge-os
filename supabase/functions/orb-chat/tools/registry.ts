@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrbToolPermission, OrbToolPermissions } from "./authorization.ts";
 import { normalizeEntityName, resolveEntityName } from "../entityResolution.ts";
 import { resolveNaturalTaskDate } from "../temporalResolution.ts";
+import type { OrbSurfaceContext } from "../surfaceContext.ts";
 
 const MAX_LIMIT = 25;
 const DEFAULT_LIMIT = 10;
@@ -30,7 +31,10 @@ type Context = {
     exactClientIds: Set<number>;
     exactAssigneeIds?: Map<string, Set<string>>;
     exactTaskDates?: Set<string>;
+    exactTaskIds?: Set<string>;
+    exactTaskProjectIds?: Map<string, string>;
   };
+  surface?: OrbSurfaceContext | null;
   timezone?: string | null;
   now?: Date;
 };
@@ -102,7 +106,101 @@ function safeError(error: unknown) {
     : "unavailable";
 }
 
+async function assertNoOtherPendingProposal(
+  client: SupabaseClient,
+  conversationId: string,
+  userMessageId: string,
+  now: Date,
+) {
+  const { data, error } = await client.from("orb_action_proposals").select(
+    "id",
+  ).eq("conversation_id", conversationId).eq("status", "proposed").neq(
+    "user_message_id",
+    userMessageId,
+  ).gt("expires_at", now.toISOString()).limit(1);
+  if (error) throw error;
+  if (data?.length) throw new Error("PROPOSAL_PENDING");
+}
+
 const definitions: Definition[] = [
+  {
+    name: "resolve_task",
+    description:
+      "Resuelve conservadoramente una tarea visible por identificador contextual exacto o por título. Solo EXACT autoriza reutilizar task_id; candidatos requieren aclaración.",
+    permission: "projects",
+    parameters: objectSchema({
+      task_id: { type: ["string", "null"], format: "uuid" },
+      project_id: { type: ["string", "null"], format: "uuid" },
+      name: { type: ["string", "null"], maxLength: 180 },
+    }, ["task_id", "project_id", "name"]),
+    async handler({ client, organizationId, resolution, surface }, args) {
+      assertKeys(args, ["task_id", "project_id", "name"]);
+      const taskId = args.task_id == null ? null : uuid(args.task_id);
+      const projectId = args.project_id == null ? null : uuid(args.project_id);
+      const requested = text(args.name, 180);
+      if ((taskId ? 1 : 0) + (requested ? 1 : 0) !== 1) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      if (taskId && surface?.task_id && taskId !== surface.task_id) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
+      let query = client.from("project_tasks").select(
+        "id,project_id,title,project:projects!inner(id,name,organization_id)",
+      ).eq("project.organization_id", organizationId).eq(
+        "is_recurrence_template",
+        false,
+      ).neq("status", "cancelled").order("updated_at", {
+        ascending: false,
+      }).limit(25);
+      if (projectId) query = query.eq("project_id", projectId);
+      if (taskId) query = query.eq("id", taskId);
+      const { data, error } = await query;
+      if (error) throw error;
+      if (taskId) {
+        const task = data?.[0];
+        if (!task) {
+          return {
+            entity_type: "task",
+            resolution: {
+              state: "NOT_FOUND",
+              requested: "esta tarea",
+              candidates: [],
+            },
+          };
+        }
+        resolution?.exactTaskIds?.add(task.id);
+        resolution?.exactTaskProjectIds?.set(task.id, task.project_id);
+        resolution?.exactProjectIds.add(task.project_id);
+        return {
+          entity_type: "task",
+          resolution: {
+            state: "EXACT",
+            entity: { id: task.id, name: task.title },
+          },
+          project_id: task.project_id,
+        };
+      }
+      const resolved = resolveEntityName(
+        requested || "",
+        (data || []).map((task) => ({ id: task.id, name: task.title })),
+      );
+      if (resolved.state === "EXACT") {
+        const task = (data || []).find((item) =>
+          item.id === resolved.entity.id
+        );
+        if (task) {
+          resolution?.exactTaskIds?.add(task.id);
+          resolution?.exactTaskProjectIds?.set(task.id, task.project_id);
+          resolution?.exactProjectIds.add(task.project_id);
+        }
+      }
+      return {
+        entity_type: "task",
+        resolution: resolved,
+        project_id: projectId,
+      };
+    },
+  },
   {
     name: "resolve_project",
     description:
@@ -347,6 +445,202 @@ const definitions: Definition[] = [
           requested_priority: priority,
           requested_starts_at: startsAt,
           requested_due_at: dueAt,
+        },
+      );
+      if (error) throw error;
+      return {
+        proposal_id: data.id,
+        action_type: data.action_type,
+        status: data.status,
+        arguments_hash: data.arguments_hash,
+        expires_at: data.expires_at,
+        display: data.display_payload,
+        confirmation_required: true,
+      };
+    },
+  },
+  {
+    name: "prepare_update_project_task",
+    description:
+      "Prepara una propuesta confirmable para modificar campos permitidos de una tarea exacta. Nunca ejecuta la actualización.",
+    permission: "projects",
+    parameters: objectSchema({
+      task_id: { type: "string", format: "uuid" },
+      change_fields: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: ["title", "instructions", "assignee_id", "priority", "due_at"],
+        },
+        minItems: 1,
+        maxItems: 5,
+        uniqueItems: true,
+      },
+      title: { type: ["string", "null"], maxLength: 180 },
+      instructions: { type: ["string", "null"], maxLength: 2000 },
+      assignee_id: { type: ["string", "null"], format: "uuid" },
+      priority: {
+        type: ["string", "null"],
+        enum: ["low", "medium", "high", "urgent", null],
+      },
+      due_at: { type: ["string", "null"], format: "date-time" },
+    }, [
+      "task_id",
+      "change_fields",
+      "title",
+      "instructions",
+      "assignee_id",
+      "priority",
+      "due_at",
+    ]),
+    async handler(
+      { client, conversationId, userMessageId, resolution, now = new Date() },
+      args,
+    ) {
+      assertKeys(args, [
+        "task_id",
+        "change_fields",
+        "title",
+        "instructions",
+        "assignee_id",
+        "priority",
+        "due_at",
+      ]);
+      if (
+        !conversationId || !userMessageId || !Array.isArray(args.change_fields)
+      ) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      const taskId = uuid(args.task_id);
+      if (!resolution?.exactTaskIds?.has(taskId)) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
+      const fields = args.change_fields as string[];
+      if (
+        !fields.length || new Set(fields).size !== fields.length ||
+        fields.some((field) =>
+          !["title", "instructions", "assignee_id", "priority", "due_at"]
+            .includes(field)
+        )
+      ) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      const changes: Record<string, unknown> = {};
+      if (fields.includes("title")) {
+        const title = text(args.title, 180);
+        if (!title || title.length < 2) throw new Error("INVALID_ARGUMENTS");
+        changes.title = title;
+      }
+      if (fields.includes("instructions")) {
+        changes.instructions = text(args.instructions, 2000);
+      }
+      if (fields.includes("priority")) {
+        const priority = enumValue(args.priority, [
+          "low",
+          "medium",
+          "high",
+          "urgent",
+        ]);
+        if (!priority) throw new Error("INVALID_ARGUMENTS");
+        changes.priority = priority;
+      }
+      if (fields.includes("assignee_id")) {
+        const assigneeId = args.assignee_id == null
+          ? null
+          : uuid(args.assignee_id);
+        const projectId = resolution.exactTaskProjectIds?.get(taskId);
+        if (
+          assigneeId &&
+          (!projectId ||
+            !resolution.exactAssigneeIds?.get(projectId)?.has(assigneeId))
+        ) {
+          throw new Error("ENTITY_NOT_RESOLVED");
+        }
+        changes.assignee_id = assigneeId;
+      }
+      if (fields.includes("due_at")) {
+        const dueDate = args.due_at == null
+          ? null
+          : new Date(String(args.due_at));
+        if (dueDate && !Number.isFinite(dueDate.getTime())) {
+          throw new Error("INVALID_ARGUMENTS");
+        }
+        const dueAt = dueDate?.toISOString() || null;
+        if (dueAt && !resolution.exactTaskDates?.has(dueAt)) {
+          throw new Error("INVALID_ARGUMENTS");
+        }
+        changes.due_at = dueAt;
+      }
+      await assertNoOtherPendingProposal(
+        client,
+        conversationId,
+        userMessageId,
+        now,
+      );
+      const { data, error } = await client.rpc(
+        "prepare_orb_update_project_task_proposal",
+        {
+          target_conversation_id: conversationId,
+          target_user_message_id: userMessageId,
+          target_task_id: taskId,
+          requested_changes: changes,
+        },
+      );
+      if (error) throw error;
+      return {
+        proposal_id: data.id,
+        action_type: data.action_type,
+        status: data.status,
+        arguments_hash: data.arguments_hash,
+        expires_at: data.expires_at,
+        display: data.display_payload,
+        confirmation_required: true,
+      };
+    },
+  },
+  {
+    name: "prepare_change_project_task_status",
+    description:
+      "Prepara una propuesta confirmable para cambiar el estado de una tarea exacta. Nunca cambia el estado por sí misma.",
+    permission: "projects",
+    parameters: objectSchema({
+      task_id: { type: "string", format: "uuid" },
+      target_status: {
+        type: "string",
+        enum: ["pending", "in_progress", "completed"],
+      },
+    }, ["task_id", "target_status"]),
+    async handler(
+      { client, conversationId, userMessageId, resolution, now = new Date() },
+      args,
+    ) {
+      assertKeys(args, ["task_id", "target_status"]);
+      if (!conversationId || !userMessageId) {
+        throw new Error("INVALID_ARGUMENTS");
+      }
+      const taskId = uuid(args.task_id);
+      if (!resolution?.exactTaskIds?.has(taskId)) {
+        throw new Error("ENTITY_NOT_RESOLVED");
+      }
+      const targetStatus = enumValue(args.target_status, [
+        "pending",
+        "in_progress",
+        "completed",
+      ]);
+      if (!targetStatus) throw new Error("INVALID_ARGUMENTS");
+      await assertNoOtherPendingProposal(
+        client,
+        conversationId,
+        userMessageId,
+        now,
+      );
+      const { data, error } = await client.rpc(
+        "prepare_orb_task_status_proposal",
+        {
+          target_conversation_id: conversationId,
+          target_user_message_id: userMessageId,
+          target_task_id: taskId,
+          requested_target_status: targetStatus,
         },
       );
       if (error) throw error;
@@ -756,6 +1050,8 @@ export function createEntityResolutionSession() {
     exactClientIds: new Set<number>(),
     exactAssigneeIds: new Map<string, Set<string>>(),
     exactTaskDates: new Set<string>(),
+    exactTaskIds: new Set<string>(),
+    exactTaskProjectIds: new Map<string, string>(),
   };
 }
 

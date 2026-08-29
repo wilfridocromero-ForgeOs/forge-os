@@ -7,6 +7,7 @@ const service = readFileSync(new URL("../../services/OrbService.js", import.meta
 const orb = readFileSync(new URL("../../app/Orb.jsx", import.meta.url), "utf8");
 const projectService = readFileSync(new URL("../../services/ProjectService.js", import.meta.url), "utf8");
 const projectPage = readFileSync(new URL("../../app/ProjectPage.jsx", import.meta.url), "utf8");
+const projectDetail = readFileSync(new URL("../projects/ProjectDetail.jsx", import.meta.url), "utf8");
 
 test("proposal card exposes explicit confirm/cancel states and a supported task route", () => {
   for (const state of ["proposed", "executing", "completed", "cancelled", "expired", "failed"]) assert.match(component, new RegExp(state));
@@ -32,4 +33,20 @@ test("Actions V1 reuses the canonical project task contract and supported deep l
   assert.match(projectService, /create_project_task_with_configuration/);
   assert.match(projectPage, /searchParams\.get\("task"\)/);
   assert.match(projectPage, /tab === "work"/);
+});
+
+test("Actions V2 renders material current-to-target changes and safe terminal errors", () => {
+  assert.match(component, /update_project_task/);
+  assert.match(component, /change_project_task_status/);
+  assert.match(component, /materialChanges\.map/);
+  assert.match(component, /change\.current/);
+  assert.match(component, /change\.target/);
+  assert.match(component, /STALE_ENTITY_STATE/);
+  assert.match(component, /EVIDENCE_REQUIRED/);
+});
+
+test("a completed confirmation refreshes the real project workspace", () => {
+  assert.match(orb, /orvesen:project-task-changed/);
+  assert.match(projectDetail, /orvesen:project-task-changed/);
+  assert.match(projectDetail, /loadWorkspace/);
 });

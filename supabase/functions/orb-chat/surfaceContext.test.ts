@@ -8,6 +8,7 @@ function assertEquals(actual: unknown, expected: unknown) {
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "42";
+const TASK_ID = "22222222-2222-4222-8222-222222222222";
 
 Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
   assertEquals(
@@ -20,6 +21,20 @@ Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
       type: "client",
       route: `/clientes/${CLIENT_ID}`,
       entity_id: CLIENT_ID,
+    },
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "project",
+      route: `/proyectos/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      task_id: TASK_ID,
+    }),
+    {
+      type: "project",
+      route: `/proyectos/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      task_id: TASK_ID,
     },
   );
   assertEquals(
@@ -109,6 +124,26 @@ Deno.test("rejects organization, permission and instruction injection fields", (
       null,
     );
   }
+});
+
+Deno.test("rejects task hints outside project surfaces or with invalid ids", () => {
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "projects",
+      route: "/proyectos",
+      task_id: TASK_ID,
+    }),
+    null,
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "project",
+      route: `/proyectos/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      task_id: "not-a-task",
+    }),
+    null,
+  );
 });
 
 Deno.test("bounds labels and total serialized size", () => {

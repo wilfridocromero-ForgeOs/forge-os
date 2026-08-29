@@ -11,6 +11,7 @@ import {
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "42";
 const ASSESSMENT_ID = "33333333-3333-4333-8333-333333333333";
+const TASK_ID = "44444444-4444-4444-8444-444444444444";
 
 test("derives all supported ORVESEN surfaces from real routes", () => {
   assert.deepEqual(deriveOrbSurfaceContext("/"), { type: "dashboard", route: "/" });
@@ -26,6 +27,25 @@ test("derives all supported ORVESEN surfaces from real routes", () => {
   assert.deepEqual(deriveOrbSurfaceContext("/calendario"), { type: "calendar", route: "/calendario" });
   assert.deepEqual(deriveOrbSurfaceContext("/score-builder"), { type: "score_builder", route: "/score-builder" });
   assert.deepEqual(deriveOrbSurfaceContext("/discovery/builder"), { type: "discovery_builder", route: "/discovery/builder" });
+});
+
+test("preserves a valid task workspace hint without treating it as authority", () => {
+  assert.deepEqual(
+    deriveOrbSurfaceContext(`/proyectos/${PROJECT_ID}`, new URLSearchParams(`tab=work&task=${TASK_ID}`)),
+    { type: "project", route: `/proyectos/${PROJECT_ID}`, entity_id: PROJECT_ID, task_id: TASK_ID },
+  );
+  assert.deepEqual(
+    deriveOrbSurfaceContext(`/proyectos/${PROJECT_ID}`, new URLSearchParams("tab=work&task=malicious")),
+    { type: "project", route: `/proyectos/${PROJECT_ID}`, entity_id: PROJECT_ID },
+  );
+  assert.equal(
+    buildOrbDestination(`/proyectos/${PROJECT_ID}`, `?tab=work&task=${TASK_ID}`),
+    `/orvesen-ia?from=${encodeURIComponent(`/proyectos/${PROJECT_ID}?tab=work&task=${TASK_ID}`)}`,
+  );
+  assert.deepEqual(
+    deriveOrbSurfaceFromSearch(new URLSearchParams(`from=${encodeURIComponent(`/proyectos/${PROJECT_ID}?tab=work&task=${TASK_ID}`)}`)),
+    { type: "project", route: `/proyectos/${PROJECT_ID}`, entity_id: PROJECT_ID, task_id: TASK_ID },
+  );
 });
 
 test("keeps requests without Surface Context backward compatible", () => {

@@ -1,7 +1,7 @@
 import { deriveOrbSurfaceContext } from "./orbSurfaceContext.js";
 
-export function getOrbGlobalSurface(pathname) {
-  const surface = deriveOrbSurfaceContext(pathname);
+export function getOrbGlobalSurface(pathname, search = "") {
+  const surface = deriveOrbSurfaceContext(pathname, new URLSearchParams(search));
   return surface?.type === "orvesen_ai" ? null : surface;
 }
 

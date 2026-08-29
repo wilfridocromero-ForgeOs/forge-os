@@ -15,6 +15,8 @@ const TOOL_EXECUTION_PHASES: Readonly<Record<string, number>> = Object.freeze({
   resolve_project_assignee: 1,
   resolve_task_date: 1,
   prepare_create_project_task: 2,
+  prepare_update_project_task: 2,
+  prepare_change_project_task_status: 2,
 });
 
 export function getToolExecutionPhase(name: string): number {

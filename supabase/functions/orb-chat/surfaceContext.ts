@@ -20,6 +20,7 @@ export type OrbSurfaceContext = {
   type: OrbSurfaceType;
   route: string;
   entity_id?: string;
+  task_id?: string;
   label?: string;
 };
 
@@ -28,7 +29,13 @@ const UUID_PATTERN =
 const CLIENT_ID_PATTERN = /^[1-9][0-9]*$/;
 const MAX_SURFACE_BYTES = 512;
 const MAX_LABEL_CHARS = 120;
-const ALLOWED_KEYS = new Set(["type", "route", "entity_id", "label"]);
+const ALLOWED_KEYS = new Set([
+  "type",
+  "route",
+  "entity_id",
+  "task_id",
+  "label",
+]);
 
 function validEntityId(type: OrbSurfaceType, entityId: string) {
   return type === "client"
@@ -95,6 +102,13 @@ export function normalizeOrbSurfaceContext(
     ? candidate.entity_id
     : undefined;
   if (candidate.entity_id !== undefined && !entityId) return null;
+  const taskId = typeof candidate.task_id === "string" &&
+      UUID_PATTERN.test(candidate.task_id)
+    ? candidate.task_id
+    : undefined;
+  if (candidate.task_id !== undefined && (!taskId || type !== "project")) {
+    return null;
+  }
   if (!validRoute(type, candidate.route, entityId)) return null;
 
   const label = typeof candidate.label === "string"
@@ -107,6 +121,7 @@ export function normalizeOrbSurfaceContext(
     type,
     route: candidate.route,
     ...(entityId ? { entity_id: entityId } : {}),
+    ...(taskId ? { task_id: taskId } : {}),
     ...(label ? { label } : {}),
   };
 }

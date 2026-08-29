@@ -32,10 +32,13 @@ Deno.test("only authorized tools are offered", () => {
     (tool) => tool.name,
   );
   assertEquals(names, [
+    "resolve_task",
     "resolve_project",
     "resolve_project_assignee",
     "resolve_task_date",
     "prepare_create_project_task",
+    "prepare_update_project_task",
+    "prepare_change_project_task_status",
     "list_projects",
     "list_tasks",
     "get_project_summary",
@@ -96,11 +99,14 @@ Deno.test("registry exposes the bounded read tools for an administrator", () => 
     calendar: true,
   });
   assertEquals(tools.map((tool) => tool.name), [
+    "resolve_task",
     "resolve_project",
     "resolve_client",
     "resolve_project_assignee",
     "resolve_task_date",
     "prepare_create_project_task",
+    "prepare_update_project_task",
+    "prepare_change_project_task_status",
     "list_projects",
     "list_tasks",
     "get_project_summary",
@@ -180,6 +186,237 @@ Deno.test("project resolver reads only organization-scoped RLS data and records 
     ),
     true,
   );
+});
+
+Deno.test("task resolver authorizes only exact visible tasks and binds their project", async () => {
+  const taskId = "55555555-5555-4555-8555-555555555555";
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const filters: Array<[string, unknown]> = [];
+  const chain: Record<string, unknown> = {};
+  chain.select = () => chain;
+  chain.eq = (column: string, value: unknown) => {
+    filters.push([column, value]);
+    return chain;
+  };
+  chain.neq = () => chain;
+  chain.order = () => chain;
+  const response = {
+    data: [{ id: taskId, project_id: projectId, title: "Revisar Discovery" }],
+    error: null,
+  };
+  chain.limit = () => chain;
+  chain.then = (resolve: (value: typeof response) => unknown) =>
+    Promise.resolve(response).then(resolve);
+  const resolution = createEntityResolutionSession();
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "authorized-org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution,
+      surface: {
+        type: "project",
+        route: `/proyectos/${projectId}`,
+        entity_id: projectId,
+        task_id: taskId,
+      },
+    },
+    "resolve_task",
+    JSON.stringify({ task_id: taskId, project_id: projectId, name: null }),
+  );
+  assertEquals(result.status, "ok");
+  assertEquals(resolution.exactTaskIds.has(taskId), true);
+  assertEquals(resolution.exactTaskProjectIds.get(taskId), projectId);
+  assertEquals(resolution.exactProjectIds.has(projectId), true);
+  assertEquals(
+    filters.some(([column, value]) =>
+      column === "project.organization_id" && value === "authorized-org"
+    ),
+    true,
+  );
+});
+
+Deno.test("a manipulated task surface is rejected before a business query", async () => {
+  let queried = false;
+  const result = await executeOrbTool(
+    {
+      client: {
+        from: () => {
+          queried = true;
+          return {};
+        },
+      } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution: createEntityResolutionSession(),
+      surface: {
+        type: "project",
+        route: "/proyectos/33333333-3333-4333-8333-333333333333",
+        entity_id: "33333333-3333-4333-8333-333333333333",
+        task_id: "55555555-5555-4555-8555-555555555555",
+      },
+    },
+    "resolve_task",
+    JSON.stringify({
+      task_id: "66666666-6666-4666-8666-666666666666",
+      project_id: "33333333-3333-4333-8333-333333333333",
+      name: null,
+    }),
+  );
+  assertEquals(result, { status: "entity_not_resolved" });
+  assertEquals(queried, false);
+});
+
+Deno.test("task fuzzy candidates never become executable identities", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "neq", "order"]) {
+    chain[method] = () => chain;
+  }
+  const response = {
+    data: [
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        project_id: projectId,
+        title: "Revisar Discovery",
+      },
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        project_id: projectId,
+        title: "Revisar Discovery final",
+      },
+    ],
+    error: null,
+  };
+  chain.limit = () => chain;
+  chain.then = (resolve: (value: typeof response) => unknown) =>
+    Promise.resolve(response).then(resolve);
+  const resolution = createEntityResolutionSession();
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution,
+    },
+    "resolve_task",
+    JSON.stringify({
+      task_id: null,
+      project_id: projectId,
+      name: "Revisar Discoveri",
+    }),
+  ) as { status: string; data?: { resolution?: { state?: string } } };
+  assertEquals(result.status, "ok");
+  assertEquals(
+    ["UNIQUE_CANDIDATE", "AMBIGUOUS"].includes(
+      result.data?.resolution?.state || "",
+    ),
+    true,
+  );
+  assertEquals(resolution.exactTaskIds.size, 0);
+});
+
+Deno.test("missing or cross-organization tasks remain indistinguishable", async () => {
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "neq", "order"]) {
+    chain[method] = () => chain;
+  }
+  const response = { data: [], error: null };
+  chain.limit = () => chain;
+  chain.then = (resolve: (value: typeof response) => unknown) =>
+    Promise.resolve(response).then(resolve);
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution: createEntityResolutionSession(),
+    },
+    "resolve_task",
+    JSON.stringify({
+      task_id: "55555555-5555-4555-8555-555555555555",
+      project_id: null,
+      name: null,
+    }),
+  );
+  assertEquals(result, {
+    status: "ok",
+    data: {
+      entity_type: "task",
+      resolution: {
+        state: "NOT_FOUND",
+        requested: "esta tarea",
+        candidates: [],
+      },
+    },
+  });
+});
+
+Deno.test("task update and status tools only prepare persisted proposals", async () => {
+  const taskId = "55555555-5555-4555-8555-555555555555";
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const resolution = createEntityResolutionSession();
+  resolution.exactTaskIds.add(taskId);
+  resolution.exactTaskProjectIds.set(taskId, projectId);
+  const client = {
+    from: () => emptyPendingQuery(),
+    rpc: (name: string, args: Record<string, unknown>) => {
+      calls.push([name, args]);
+      return Promise.resolve({
+        data: {
+          id: "proposal",
+          action_type: name.includes("status")
+            ? "change_project_task_status"
+            : "update_project_task",
+          status: "proposed",
+          arguments_hash: "a".repeat(64),
+          expires_at: "2026-08-29T12:00:00Z",
+          display_payload: {},
+        },
+        error: null,
+      });
+    },
+  };
+  const base = {
+    client: client as never,
+    organizationId: "org",
+    userId: "user",
+    conversationId: "11111111-1111-4111-8111-111111111111",
+    userMessageId: "22222222-2222-4222-8222-222222222222",
+    permissions: { ...denied, projects: true },
+    resolution,
+    now: new Date("2026-08-29T10:00:00Z"),
+  };
+  const update = await executeOrbTool(
+    base,
+    "prepare_update_project_task",
+    JSON.stringify({
+      task_id: taskId,
+      change_fields: ["priority"],
+      title: null,
+      instructions: null,
+      assignee_id: null,
+      priority: "high",
+      due_at: null,
+    }),
+  );
+  const status = await executeOrbTool(
+    base,
+    "prepare_change_project_task_status",
+    JSON.stringify({ task_id: taskId, target_status: "in_progress" }),
+  );
+  assertEquals(update.status, "ok");
+  assertEquals(status.status, "ok");
+  assertEquals(calls.map(([name]) => name), [
+    "prepare_orb_update_project_task_proposal",
+    "prepare_orb_task_status_proposal",
+  ]);
+  assertEquals(calls[0][1].requested_changes, { priority: "high" });
 });
 
 Deno.test("candidate, ambiguous and missing entities cannot prepare an action", async () => {

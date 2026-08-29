@@ -15,8 +15,8 @@ const OrbPanelExperience = lazy(() =>
 export default function OrbGlobal() {
   const location = useLocation();
   const surface = useMemo(
-    () => getOrbGlobalSurface(location.pathname),
-    [location.pathname],
+    () => getOrbGlobalSurface(location.pathname, location.search),
+    [location.pathname, location.search],
   );
   const [state, dispatch] = useReducer(orbGlobalReducer, {
     open: false,
@@ -105,7 +105,7 @@ export default function OrbGlobal() {
           </div>
           <div className="orb-global-header-actions">
             <Link
-              to={buildOrbDestination(location.pathname)}
+              to={buildOrbDestination(location.pathname, location.search)}
               onClick={() => dispatch({ type: "close" })}
               aria-label="Abrir Orb en página completa"
             >

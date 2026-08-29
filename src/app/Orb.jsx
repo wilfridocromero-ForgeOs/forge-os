@@ -286,7 +286,14 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   function handleSubmit(event) { event.preventDefault(); void sendMessage(); }
   async function handleConfirmProposal(proposal) {
     setError("");
-    try { await confirmOrbActionProposal(proposal.id, proposal.arguments_hash); await loadProposals(proposal.conversation_id); }
+    try {
+      const result = await confirmOrbActionProposal(proposal.id, proposal.arguments_hash);
+      await loadProposals(proposal.conversation_id);
+      const projectId = result?.project_id || proposal.display_payload?.project_id;
+      if (result?.status === "completed" && projectId && result.task_id) {
+        window.dispatchEvent(new CustomEvent("orvesen:project-task-changed", { detail: { projectId, taskId: result.task_id } }));
+      }
+    }
     catch (requestError) { setError(requestError.message || "No se pudo confirmar la acción."); await loadProposals(proposal.conversation_id).catch(() => {}); }
   }
   async function handleCancelProposal(proposal) {

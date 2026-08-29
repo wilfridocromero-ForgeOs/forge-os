@@ -8,12 +8,18 @@ function entitySurface(type, route, prefix, pattern = UUID_PATTERN) {
     : null;
 }
 
-export function deriveOrbSurfaceContext(pathname) {
+export function deriveOrbSurfaceContext(pathname, searchParams = null) {
   const route = typeof pathname === "string" ? pathname : "";
   if (route === "/") return { type: "dashboard", route };
   if (route === "/orvesen-ia") return { type: "orvesen_ai", route };
   if (route === "/clientes") return { type: "clients", route };
-  if (route.startsWith("/proyectos/")) return entitySurface("project", route, "/proyectos/");
+  if (route.startsWith("/proyectos/")) {
+    const surface = entitySurface("project", route, "/proyectos/");
+    const taskId = searchParams?.get?.("task");
+    return surface && UUID_PATTERN.test(taskId || "")
+      ? { ...surface, task_id: taskId }
+      : surface;
+  }
   if (route === "/proyectos") return { type: "projects", route };
   if (route.startsWith("/clientes/")) return entitySurface("client", route, "/clientes/", CLIENT_ID_PATTERN);
   if (route === "/discovery") return { type: "discovery", route };
@@ -42,14 +48,21 @@ export function deriveOrbSurfaceContext(pathname) {
 export function deriveOrbSurfaceFromSearch(searchParams) {
   const source = searchParams?.get?.("from");
   if (source === "dashboard") return deriveOrbSurfaceContext("/");
-  if (source?.startsWith("/")) return deriveOrbSurfaceContext(source);
+  if (source?.startsWith("/")) {
+    const parsed = new URL(source, "https://orvesen.local");
+    return deriveOrbSurfaceContext(parsed.pathname, parsed.searchParams);
+  }
   return deriveOrbSurfaceContext("/orvesen-ia");
 }
 
-export function buildOrbDestination(pathname) {
-  const surface = deriveOrbSurfaceContext(pathname);
+export function buildOrbDestination(pathname, search = "") {
+  const searchParams = new URLSearchParams(search);
+  const surface = deriveOrbSurfaceContext(pathname, searchParams);
   if (!surface || surface.type === "orvesen_ai") return "/orvesen-ia";
-  return `/orvesen-ia?from=${encodeURIComponent(surface.route)}`;
+  const source = surface.task_id
+    ? `${surface.route}?tab=work&task=${surface.task_id}`
+    : surface.route;
+  return `/orvesen-ia?from=${encodeURIComponent(source)}`;
 }
 
 export function buildOrbRequestPayload({ conversationId, clientMessageId, message, surface = null, timezone = null }) {

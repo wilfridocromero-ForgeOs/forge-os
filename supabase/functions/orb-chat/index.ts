@@ -409,6 +409,7 @@ export async function handleOrbChat(request: Request) {
                     userMessageId: turn.user_message_id,
                     permissions: toolPermissions,
                     resolution: entityResolution,
+                    surface: payload.surface,
                     timezone: payload.timezone,
                   },
                   name,

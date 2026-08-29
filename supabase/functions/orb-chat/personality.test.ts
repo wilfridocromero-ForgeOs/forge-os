@@ -283,10 +283,20 @@ Deno.test("separates persisted facts from analysis and rejects data instructions
 Deno.test("task actions require the concrete UI confirmation", () => {
   assert(
     ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
-      "prepare_create_project_task solo puede preparar una propuesta",
+      "Las herramientas prepare_* solo crean propuestas visibles y confirmables",
     ),
     "proposal-only tool boundary",
   );
+  for (
+    const expected of [
+      "usa resolve_task",
+      "Surface Context incluya task_id",
+      "prepare_update_project_task admite exclusivamente",
+      "prepare_change_project_task_status",
+    ]
+  ) {
+    assert(ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(expected), expected);
+  }
   assert(
     ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
       "Una frase como sí, confirmo o hazlo no ejecuta acciones",
