@@ -18,7 +18,12 @@ export type OrbChatRequest = {
 };
 
 export class OrbRequestError extends Error {
-  constructor(public code: string, public status: number, message: string) {
+  constructor(
+    public code: string,
+    public status: number,
+    message: string,
+    public diagnostic?: Record<string, string | number | null>,
+  ) {
     super(message);
   }
 }

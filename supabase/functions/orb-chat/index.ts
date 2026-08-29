@@ -453,6 +453,9 @@ export async function handleOrbChat(request: Request) {
               code: failureCode,
               conversationId: turn.conversation_id,
               assistantMessageId,
+              ...(error instanceof OrbRequestError && error.diagnostic
+                ? { provider: error.diagnostic }
+                : {}),
             });
             send("error", {
               code: failureCode,

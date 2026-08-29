@@ -143,6 +143,78 @@ Deno.test("OpenAI receives a proposal tool but no action executor", () => {
   );
 });
 
+Deno.test("update tool keeps a strict compatible schema and backend duplicate authority", async () => {
+  const tool = getAuthorizedToolDefinitions({ ...denied, projects: true })
+    .find((candidate) => candidate.name === "prepare_update_project_task");
+  const schema = tool?.parameters as {
+    required?: string[];
+    properties?: Record<string, Record<string, unknown>>;
+  };
+  assertEquals(tool?.strict, true);
+  assertEquals(schema.required, [
+    "task_id",
+    "change_fields",
+    "title",
+    "instructions",
+    "assignee_id",
+    "priority",
+    "due_at",
+  ]);
+  assertEquals(
+    "uniqueItems" in (schema.properties?.change_fields || {}),
+    false,
+  );
+
+  let rpcCalled = false;
+  const taskId = "55555555-5555-4555-8555-555555555555";
+  const resolution = createEntityResolutionSession();
+  resolution.exactTaskIds.add(taskId);
+  const base = {
+    client: {
+      from: () => emptyPendingQuery(),
+      rpc: () => {
+        rpcCalled = true;
+        return Promise.resolve({ data: null, error: null });
+      },
+    } as never,
+    organizationId: "org",
+    userId: "user",
+    conversationId: "11111111-1111-4111-8111-111111111111",
+    userMessageId: "22222222-2222-4222-8222-222222222222",
+    permissions: { ...denied, projects: true },
+    resolution,
+  };
+  const duplicate = await executeOrbTool(
+    base,
+    tool!.name,
+    JSON.stringify({
+      task_id: taskId,
+      change_fields: ["priority", "priority"],
+      title: null,
+      instructions: null,
+      assignee_id: null,
+      priority: "high",
+      due_at: null,
+    }),
+  );
+  const unknown = await executeOrbTool(
+    base,
+    tool!.name,
+    JSON.stringify({
+      task_id: taskId,
+      change_fields: ["status"],
+      title: null,
+      instructions: null,
+      assignee_id: null,
+      priority: null,
+      due_at: null,
+    }),
+  );
+  assertEquals(duplicate, { status: "invalid_arguments" });
+  assertEquals(unknown, { status: "invalid_arguments" });
+  assertEquals(rpcCalled, false);
+});
+
 Deno.test("project resolver reads only organization-scoped RLS data and records only exact ids", async () => {
   const filters: Array<[string, unknown]> = [];
   const chain: Record<string, unknown> = {};

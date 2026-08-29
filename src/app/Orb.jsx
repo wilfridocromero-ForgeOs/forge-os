@@ -16,7 +16,7 @@ import {
   reconcileAssistantStart,
   shouldFollowStreamGrowth,
 } from "../features/orb/orbStream";
-import { cancelOrbActionProposal, confirmOrbActionProposal, createOrbConversation, friendlyError, listOrbActionProposals, listOrbConversations, listOrbMessages, streamOrbMessage } from "../services/OrbService";
+import { cancelOrbActionProposal, confirmOrbActionProposal, createOrbConversation, listOrbActionProposals, listOrbConversations, listOrbMessages, streamOrbMessage } from "../services/OrbService";
 import "./Orb.css";
 
 const ACTIVE_CONVERSATION_KEY = "orvesen-orb-active-conversation";
@@ -253,7 +253,6 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
         if (type === "error") {
           discardPendingDeltas();
           setMessages((current) => failAssistantStream(current, streamedAssistantId, payload.code));
-          const streamError = new Error(friendlyError(payload.code)); streamError.code = payload.code; throw streamError;
         }
       } });
       flushPendingDeltas();
@@ -267,7 +266,13 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
         setError(requestError.message || "Orb no pudo responder.");
       }
       if (conversationId) {
-        listOrbMessages(conversationId).then((rows) => setMessages(normalizeOrbMessages(rows))).catch(() => {});
+        listOrbMessages(conversationId).then((rows) => {
+          const normalized = normalizeOrbMessages(rows);
+          const terminalAssistant = normalized.find((item) =>
+            item.id === streamedAssistantId && ["completed", "failed"].includes(item.displayStatus)
+          );
+          if (terminalAssistant) setMessages(normalized);
+        }).catch(() => {});
         loadProposals(conversationId).catch(() => {});
       }
     } finally { requestController.current = null; setSending(false); }

@@ -474,7 +474,6 @@ const definitions: Definition[] = [
         },
         minItems: 1,
         maxItems: 5,
-        uniqueItems: true,
       },
       title: { type: ["string", "null"], maxLength: 180 },
       instructions: { type: ["string", "null"], maxLength: 2000 },

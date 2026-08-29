@@ -43,6 +43,29 @@ export function createOrbEventParser(onEvent) {
   };
 }
 
+export async function consumeOrbEventReader(reader, onEvent) {
+  const decoder = new TextDecoder();
+  let terminalError = null;
+  const parser = createOrbEventParser((type, payload) => {
+    if (type === "error") terminalError = payload;
+    onEvent(type, payload);
+  });
+
+  try {
+    while (!terminalError) {
+      const { done, value } = await reader.read();
+      parser.push(decoder.decode(value || new Uint8Array(), { stream: !done }));
+      if (done) break;
+    }
+    const terminal = parser.finish();
+    if (terminalError) return { error: terminalError };
+    if (!terminal) throw new Error("La respuesta de Orb se interrumpió antes de terminar.");
+    return { error: null };
+  } finally {
+    if (terminalError) await reader.cancel().catch(() => {});
+  }
+}
+
 export function reconcileAssistantStart(messages, optimisticId, assistantId) {
   if (!assistantId || optimisticId === assistantId) return messages;
   const serverMessageExists = messages.some((message) =>

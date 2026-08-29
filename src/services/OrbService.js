@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { createOrbEventParser } from "../features/orb/orbStream";
+import { consumeOrbEventReader } from "../features/orb/orbStream";
 import { buildOrbRequestPayload } from "../features/orb/orbSurfaceContext";
 
 const ORB_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orb-chat`;
@@ -94,15 +94,12 @@ export async function streamOrbMessage({ conversationId, clientMessageId, messag
     throw error;
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const parser = createOrbEventParser(onEvent);
-  while (true) {
-    const { done, value } = await reader.read();
-    parser.push(decoder.decode(value || new Uint8Array(), { stream: !done }));
-    if (done) break;
+  const terminal = await consumeOrbEventReader(response.body.getReader(), onEvent);
+  if (terminal.error) {
+    const error = new Error(friendlyError(terminal.error.code));
+    error.code = terminal.error.code || "ORB_REQUEST_FAILED";
+    throw error;
   }
-  if (!parser.finish()) throw new Error("La respuesta de Orb se interrumpió antes de terminar.");
 }
 
 export { friendlyError };

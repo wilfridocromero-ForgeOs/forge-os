@@ -8,6 +8,7 @@ type ProviderError = {
   code?: unknown;
   type?: unknown;
   message?: unknown;
+  param?: unknown;
 } | null;
 
 type ProviderStreamEvent = {
@@ -32,7 +33,26 @@ function providerFailure(error: ProviderError) {
     ),
     502,
     "Orb could not obtain a model response.",
+    providerDiagnostic(null, error),
   );
+}
+
+function sanitizedDiagnosticValue(value: unknown, maximum = 160) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/[^a-zA-Z0-9_.\[\]-]/g, "_");
+  return normalized ? normalized.slice(0, maximum) : null;
+}
+
+export function providerDiagnostic(
+  status: number | null,
+  error: ProviderError,
+) {
+  return {
+    status,
+    code: sanitizedDiagnosticValue(error?.code, 80),
+    type: sanitizedDiagnosticValue(error?.type, 80),
+    param: sanitizedDiagnosticValue(error?.param),
+  };
 }
 
 async function providerHttpFailure(response: Response) {
@@ -50,6 +70,7 @@ async function providerHttpFailure(response: Response) {
     ),
     502,
     "Orb could not obtain a model response.",
+    providerDiagnostic(response.status, error),
   );
 }
 
