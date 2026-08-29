@@ -64,6 +64,164 @@ Deno.test("model can answer without a tool", async () => {
   assertEquals(result.output, "Hola");
   assertEquals(output, "Hola");
 });
+
+Deno.test("v24 could skip contextual resolution when the model emitted no tool call", async () => {
+  const clarification =
+    "Veo una tarea candidata parecida, pero no puedo identificar con seguridad cuál es “esta tarea” solo con ese texto.";
+  let executions = 0;
+  const result = await runOrbToolLoop({
+    input: [{
+      role: "user",
+      content:
+        "Pásale esta tarea a Joseph para mañana y ponla en prioridad alta.",
+    }],
+    request: () => Promise.resolve(completedText(clarification)),
+    execute: () => {
+      executions += 1;
+      return Promise.resolve({});
+    },
+    onDelta: () => {},
+  });
+  assertEquals(result.output, clarification);
+  assertEquals(executions, 0);
+});
+
+Deno.test("contextual current-task preflight revalidates before the model can skip resolve_task", async () => {
+  const projectId = "2a79d843-032b-468e-87ba-ab9410f97155";
+  const taskId = "0a01449d-3526-4f26-b1c8-e154eeed3c56";
+  const assigneeId = "0139263c-8d42-41aa-8426-60d0baaa2749";
+  const dueAt = "2026-08-30T23:59:59.999Z";
+  const surface = {
+    type: "project" as const,
+    route: `/proyectos/${projectId}`,
+    entity_id: projectId,
+    task_id: taskId,
+  };
+  const resolution = {
+    exactProjectIds: new Set<string>(),
+    exactClientIds: new Set<number>(),
+    exactAssigneeIds: new Map<string, Set<string>>(),
+    exactTaskDates: new Set<string>(),
+    exactTaskIds: new Set<string>(),
+    exactTaskProjectIds: new Map<string, string>(),
+  };
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "neq", "order"]) {
+    chain[method] = () => chain;
+  }
+  chain.limit = () => chain;
+  chain.then = (resolve: (value: unknown) => unknown) =>
+    Promise.resolve({
+      data: [{
+        id: taskId,
+        project_id: projectId,
+        title: "Activar notificaciones",
+        status: "pending",
+        due_at: "2026-08-22T14:46:00Z",
+        project: { id: projectId, name: "Pruebas para Orvesen" },
+      }],
+      error: null,
+    }).then(resolve);
+  let round = 0;
+  let firstInput: unknown[] = [];
+  let proposalReached = 0;
+  const result = await runOrbToolLoop({
+    input: [{
+      role: "user",
+      content:
+        "Pásale esta tarea a Joseph para mañana y ponla en prioridad alta.",
+    }],
+    preflightToolCalls: [{
+      name: "resolve_task",
+      arguments: JSON.stringify({
+        task_id: taskId,
+        project_id: projectId,
+        name: null,
+      }),
+    }],
+    request: (input) => {
+      round += 1;
+      if (round === 1) {
+        firstInput = input;
+        return Promise.resolve(toolCalls([
+          {
+            name: "resolve_project_assignee",
+            callId: "call_assignee",
+            args: JSON.stringify({ project_id: projectId, name: "Joseph" }),
+          },
+          {
+            name: "resolve_task_date",
+            callId: "call_date",
+            args: JSON.stringify({ expression: "mañana" }),
+          },
+          {
+            name: "prepare_update_project_task",
+            callId: "call_prepare",
+            args: JSON.stringify({
+              task_id: taskId,
+              assigned_to: assigneeId,
+              due_at: dueAt,
+              priority: "high",
+            }),
+          },
+        ]));
+      }
+      return Promise.resolve(completedText("Propuesta preparada."));
+    },
+    execute: async (name, args) => {
+      if (name === "resolve_task") {
+        return await executeOrbTool(
+          {
+            client: { from: () => chain } as never,
+            organizationId: "7070c469-2b6a-427c-bc33-bfec8b493201",
+            userId: "user",
+            permissions: {
+              projects: true,
+              discovery: false,
+              clients: false,
+              area_score: false,
+              calendar: false,
+            },
+            resolution,
+            surface,
+          },
+          name,
+          args,
+        );
+      }
+      if (name === "resolve_project_assignee") {
+        if (!resolution.exactTaskIds.has(taskId)) {
+          throw new Error("TASK_NOT_EXACT");
+        }
+        resolution.exactAssigneeIds.set(projectId, new Set([assigneeId]));
+        return { status: "ok", data: { resolution: { state: "EXACT" } } };
+      }
+      if (name === "resolve_task_date") {
+        resolution.exactTaskDates.add(dueAt);
+        return { status: "ok", data: { state: "EXACT", value: dueAt } };
+      }
+      if (name === "prepare_update_project_task") {
+        if (
+          !resolution.exactTaskIds.has(taskId) ||
+          !resolution.exactAssigneeIds.get(projectId)?.has(assigneeId) ||
+          !resolution.exactTaskDates.has(dueAt)
+        ) throw new Error("DEPENDENCY_NOT_EXACT");
+        proposalReached += 1;
+        return { status: "ok", data: { confirmation_required: true } };
+      }
+      throw new Error("UNEXPECTED_TOOL");
+    },
+    onDelta: () => {},
+  });
+  const preflightOutput = firstInput.find((item) =>
+    (item as { type?: string }).type === "function_call_output"
+  ) as { output: string };
+  assertEquals(preflightOutput.output.includes('"state":"EXACT"'), true);
+  assertEquals(resolution.exactTaskIds.has(taskId), true);
+  assertEquals(resolution.exactTaskProjectIds.get(taskId), projectId);
+  assertEquals(proposalReached, 1);
+  assertEquals(result.output, "Propuesta preparada.");
+});
 Deno.test("valid tool call is executed and returned to the next round", async () => {
   let calls = 0;
   let secondInput: unknown[] = [];

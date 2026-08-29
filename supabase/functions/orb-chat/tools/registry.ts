@@ -92,22 +92,30 @@ function assertKeys(args: Record<string, unknown>, allowed: string[]) {
   ) throw new Error("INVALID_ARGUMENTS");
 }
 
+export function contextualTaskResolutionCall(
+  message: string,
+  surface?: OrbSurfaceContext | null,
+): string | null {
+  if (
+    surface?.type !== "project" ||
+    !surface.task_id || !surface.entity_id ||
+    !/\besta\s+tarea\b/iu.test(message.normalize("NFKC"))
+  ) return null;
+  return JSON.stringify({
+    task_id: surface.task_id,
+    project_id: surface.entity_id,
+    name: null,
+  });
+}
+
 export function contextualTaskResolutionArguments(
   toolName: string,
   rawArguments: string,
   message: string,
   surface?: OrbSurfaceContext | null,
 ) {
-  if (
-    toolName !== "resolve_task" || surface?.type !== "project" ||
-    !surface.task_id || !surface.entity_id ||
-    !/\besta\s+tarea\b/iu.test(message.normalize("NFKC"))
-  ) return rawArguments;
-  return JSON.stringify({
-    task_id: surface.task_id,
-    project_id: surface.entity_id,
-    name: null,
-  });
+  if (toolName !== "resolve_task") return rawArguments;
+  return contextualTaskResolutionCall(message, surface) ?? rawArguments;
 }
 
 function taskCandidateLabel(task: {

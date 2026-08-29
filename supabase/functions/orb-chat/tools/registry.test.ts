@@ -1,5 +1,6 @@
 import {
   contextualTaskResolutionArguments,
+  contextualTaskResolutionCall,
   createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
@@ -333,6 +334,18 @@ Deno.test("deictic task requests deterministically prefer the contextual id", ()
     project_id: projectId,
     name: null,
   });
+  assertEquals(
+    contextualTaskResolutionCall(
+      "Pásale esta tarea a Joseph para mañana y ponla en prioridad alta.",
+      {
+        type: "project",
+        route: `/proyectos/${projectId}`,
+        entity_id: projectId,
+        task_id: taskId,
+      },
+    ),
+    JSON.stringify({ task_id: taskId, project_id: projectId, name: null }),
+  );
 });
 
 Deno.test("non-deictic task names remain nominal outside and inside task surfaces", () => {

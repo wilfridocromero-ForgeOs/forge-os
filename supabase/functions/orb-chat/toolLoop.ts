@@ -11,6 +11,11 @@ type ToolCall = {
   arguments: string;
 };
 
+type PreflightToolCall = {
+  name: string;
+  arguments: string;
+};
+
 const TOOL_EXECUTION_PHASES: Readonly<Record<string, number>> = Object.freeze({
   resolve_project_assignee: 1,
   resolve_task_date: 1,
@@ -45,15 +50,40 @@ export type OrbToolLoopResult = {
 };
 
 export async function runOrbToolLoop(
-  { request, input, execute, onDelta, maxRounds = MAX_TOOL_ROUNDS }: {
+  {
+    request,
+    input,
+    execute,
+    onDelta,
+    preflightToolCalls = [],
+    maxRounds = MAX_TOOL_ROUNDS,
+  }: {
     request: (input: unknown[]) => Promise<Response>;
     input: unknown[];
     execute: (name: string, args: string) => Promise<unknown>;
     onDelta: (delta: string) => void;
+    preflightToolCalls?: PreflightToolCall[];
     maxRounds?: number;
   },
 ): Promise<OrbToolLoopResult> {
   let currentInput = [...input];
+  for (const [index, call] of preflightToolCalls.entries()) {
+    const callId = `orb_preflight_${index}`;
+    const value = await execute(call.name, call.arguments);
+    currentInput.push(
+      {
+        type: "function_call",
+        call_id: callId,
+        name: call.name,
+        arguments: call.arguments,
+      },
+      {
+        type: "function_call_output",
+        call_id: callId,
+        output: JSON.stringify(value).slice(0, 24000),
+      },
+    );
+  }
   const executedSignatures = new Set<string>();
   const controlledStop = (
     result: OrbToolLoopResult,

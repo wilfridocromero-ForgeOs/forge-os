@@ -17,6 +17,7 @@ import { runOrbToolLoop } from "./toolLoop.ts";
 import { getOrbToolPermissions } from "./tools/authorization.ts";
 import {
   contextualTaskResolutionArguments,
+  contextualTaskResolutionCall,
   createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
@@ -345,6 +346,10 @@ export async function handleOrbChat(request: Request) {
     );
     const authorizedTools = getAuthorizedToolDefinitions(toolPermissions);
     const entityResolution = createEntityResolutionSession();
+    const contextualTaskCall = contextualTaskResolutionCall(
+      payload.message,
+      payload.surface,
+    );
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -386,6 +391,9 @@ export async function handleOrbChat(request: Request) {
             };
             const providerStream = await runOrbToolLoop({
               input: history,
+              preflightToolCalls: contextualTaskCall
+                ? [{ name: "resolve_task", arguments: contextualTaskCall }]
+                : [],
               request: (roundInput) =>
                 fetch("https://api.openai.com/v1/responses", {
                   method: "POST",
