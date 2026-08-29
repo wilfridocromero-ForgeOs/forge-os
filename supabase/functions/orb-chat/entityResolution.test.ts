@@ -1,5 +1,6 @@
 import {
   entityNameSimilarity,
+  entityResolutionMessage,
   normalizeEntityName,
   readTerminalEntityResolution,
   resolveEntityName,
@@ -92,4 +93,18 @@ Deno.test("terminal clarifications expose names but never candidate ids", () => 
   const message = readTerminalEntityResolution(output) || "";
   assertEquals(message.includes("Pruebas para Orvesen"), true);
   assertEquals(message.includes("project-1"), false);
+});
+
+Deno.test("Spanish deterministic clarifications remain valid UTF-8", () => {
+  const message = entityResolutionMessage("tarea", {
+    state: "AMBIGUOUS",
+    requested: "Activar notificaciones",
+    candidates: [{ name: "Opción áéíóú ñ" }, { name: "Otra opción" }],
+  });
+  assertEquals(
+    message,
+    "Encontré más de un tarea parecido:\n- Opción áéíóú ñ\n- Otra opción\n¿Cuál quieres usar?",
+  );
+  assertEquals(message?.includes("Ã"), false);
+  assertEquals(message?.includes("Â"), false);
 });

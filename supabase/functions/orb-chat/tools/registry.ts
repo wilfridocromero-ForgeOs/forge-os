@@ -91,6 +91,44 @@ function assertKeys(args: Record<string, unknown>, allowed: string[]) {
     Object.keys(args).some((key) => !allowed.includes(key))
   ) throw new Error("INVALID_ARGUMENTS");
 }
+
+export function contextualTaskResolutionArguments(
+  toolName: string,
+  rawArguments: string,
+  message: string,
+  surface?: OrbSurfaceContext | null,
+) {
+  if (
+    toolName !== "resolve_task" || surface?.type !== "project" ||
+    !surface.task_id || !surface.entity_id ||
+    !/\besta\s+tarea\b/iu.test(message.normalize("NFKC"))
+  ) return rawArguments;
+  return JSON.stringify({
+    task_id: surface.task_id,
+    project_id: surface.entity_id,
+    name: null,
+  });
+}
+
+function taskCandidateLabel(task: {
+  title: string;
+  status?: string | null;
+  due_at?: string | null;
+  project?: unknown;
+}) {
+  const project = relation(
+    task.project as
+      | { name?: string | null }
+      | Array<{ name?: string | null }>
+      | null,
+  );
+  return [
+    task.title,
+    project?.name || null,
+    task.status || null,
+    task.due_at ? `vence ${task.due_at}` : null,
+  ].filter(Boolean).join(" — ");
+}
 function relation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
@@ -145,7 +183,7 @@ const definitions: Definition[] = [
         throw new Error("ENTITY_NOT_RESOLVED");
       }
       let query = client.from("project_tasks").select(
-        "id,project_id,title,project:projects!inner(id,name,organization_id)",
+        "id,project_id,title,status,due_at,project:projects!inner(id,name,organization_id)",
       ).eq("project.organization_id", organizationId).eq(
         "is_recurrence_template",
         false,
@@ -180,10 +218,21 @@ const definitions: Definition[] = [
           project_id: task.project_id,
         };
       }
-      const resolved = resolveEntityName(
-        requested || "",
-        (data || []).map((task) => ({ id: task.id, name: task.title })),
+      const exactTitleMatches = (data || []).filter((task) =>
+        normalizeEntityName(task.title) === normalizeEntityName(requested || "")
       );
+      const resolved = exactTitleMatches.length > 1
+        ? {
+          state: "AMBIGUOUS" as const,
+          requested: requested || "",
+          candidates: exactTitleMatches.slice(0, 3).map((task) => ({
+            name: taskCandidateLabel(task),
+          })),
+        }
+        : resolveEntityName(
+          requested || "",
+          (data || []).map((task) => ({ id: task.id, name: task.title })),
+        );
       if (resolved.state === "EXACT") {
         const task = (data || []).find((item) =>
           item.id === resolved.entity.id

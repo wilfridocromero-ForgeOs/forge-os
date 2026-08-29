@@ -1,4 +1,5 @@
 import {
+  contextualTaskResolutionArguments,
   createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
@@ -309,6 +310,62 @@ Deno.test("task resolver authorizes only exact visible tasks and binds their pro
   );
 });
 
+Deno.test("deictic task requests deterministically prefer the contextual id", () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const taskId = "55555555-5555-4555-8555-555555555555";
+  const result = contextualTaskResolutionArguments(
+    "resolve_task",
+    JSON.stringify({
+      task_id: null,
+      project_id: projectId,
+      name: "Activar notificaciones",
+    }),
+    "Pásale esta tarea a Joseph para mañana.",
+    {
+      type: "project",
+      route: `/proyectos/${projectId}`,
+      entity_id: projectId,
+      task_id: taskId,
+    },
+  );
+  assertEquals(JSON.parse(result), {
+    task_id: taskId,
+    project_id: projectId,
+    name: null,
+  });
+});
+
+Deno.test("non-deictic task names remain nominal outside and inside task surfaces", () => {
+  const raw = JSON.stringify({
+    task_id: null,
+    project_id: null,
+    name: "Activar notificaciones",
+  });
+  assertEquals(
+    contextualTaskResolutionArguments(
+      "resolve_task",
+      raw,
+      "Actualiza Activar notificaciones",
+      null,
+    ),
+    raw,
+  );
+  assertEquals(
+    contextualTaskResolutionArguments(
+      "resolve_task",
+      raw,
+      "Actualiza la tarea Activar notificaciones",
+      {
+        type: "project",
+        route: "/proyectos/33333333-3333-4333-8333-333333333333",
+        entity_id: "33333333-3333-4333-8333-333333333333",
+        task_id: "55555555-5555-4555-8555-555555555555",
+      },
+    ),
+    raw,
+  );
+});
+
 Deno.test("a manipulated task surface is rejected before a business query", async () => {
   let queried = false;
   const result = await executeOrbTool(
@@ -389,6 +446,62 @@ Deno.test("task fuzzy candidates never become executable identities", async () =
     true,
   );
   assertEquals(resolution.exactTaskIds.size, 0);
+});
+
+Deno.test("duplicate task names remain ambiguous with safe distinguishable metadata", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "neq", "order"]) {
+    chain[method] = () => chain;
+  }
+  const response = {
+    data: [
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        project_id: projectId,
+        title: "Activar notificaciones",
+        status: "completed",
+        due_at: "2026-08-22T14:44:00Z",
+        project: { name: "Pruebas para Orvesen" },
+      },
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        project_id: projectId,
+        title: "Activar notificaciones",
+        status: "pending",
+        due_at: "2026-08-22T14:46:00Z",
+        project: { name: "Pruebas para Orvesen" },
+      },
+    ],
+    error: null,
+  };
+  chain.limit = () => chain;
+  chain.then = (resolve: (value: typeof response) => unknown) =>
+    Promise.resolve(response).then(resolve);
+  const result = await executeOrbTool(
+    {
+      client: { from: () => chain } as never,
+      organizationId: "org",
+      userId: "user",
+      permissions: { ...denied, projects: true },
+      resolution: createEntityResolutionSession(),
+    },
+    "resolve_task",
+    JSON.stringify({
+      task_id: null,
+      project_id: projectId,
+      name: "Activar notificaciones",
+    }),
+  );
+  const data = result.data as {
+    resolution: { state: string; candidates: Array<{ name: string }> };
+  };
+  assertEquals(data.resolution.state, "AMBIGUOUS");
+  assertEquals(data.resolution.candidates.length, 2);
+  assertEquals(data.resolution.candidates[0].name.includes("completed"), true);
+  assertEquals(data.resolution.candidates[1].name.includes("pending"), true);
+  assertEquals(JSON.stringify(data).includes("55555555"), false);
+  assertEquals(JSON.stringify(data).includes("66666666"), false);
 });
 
 Deno.test("missing or cross-organization tasks remain indistinguishable", async () => {

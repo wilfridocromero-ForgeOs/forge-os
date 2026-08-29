@@ -174,6 +174,17 @@ Deno.test("sanitizes provider errors and emits only the Orb protocol", () => {
   assertEquals(event.includes("orb-stream-v1"), true);
 });
 
+Deno.test("SSE preserves Spanish UTF-8 through encoding and decoding", () => {
+  const original = "Encontré: áéíóú ñ. ¿Cuál quieres usar?";
+  const encoded = new TextEncoder().encode(
+    orbEvent("delta", { delta: original }),
+  );
+  const decoded = new TextDecoder("utf-8", { fatal: true }).decode(encoded);
+  assertEquals(decoded.includes(original), true);
+  assertEquals(decoded.includes("Ã"), false);
+  assertEquals(decoded.includes("Â"), false);
+});
+
 Deno.test("bounds backend-only cost controls", () => {
   assertEquals(boundedInteger("99999", 800, 128, 2000), 2000);
   assertEquals(boundedInteger("1", 800, 128, 2000), 128);

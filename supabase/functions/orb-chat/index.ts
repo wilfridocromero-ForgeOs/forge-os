@@ -16,6 +16,7 @@ import { loadDashboardContextSafely } from "./dashboardContext.ts";
 import { runOrbToolLoop } from "./toolLoop.ts";
 import { getOrbToolPermissions } from "./tools/authorization.ts";
 import {
+  contextualTaskResolutionArguments,
   createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
@@ -413,7 +414,12 @@ export async function handleOrbChat(request: Request) {
                     timezone: payload.timezone,
                   },
                   name,
-                  args,
+                  contextualTaskResolutionArguments(
+                    name,
+                    args,
+                    payload.message,
+                    payload.surface,
+                  ),
                 ),
               onDelta: (delta) => {
                 output += delta;
