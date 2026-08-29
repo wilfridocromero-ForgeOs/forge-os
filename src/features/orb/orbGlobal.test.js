@@ -6,6 +6,7 @@ import { buildOrbRequestPayload } from "./orbSurfaceContext.js";
 import { getOrbGlobalSurface, orbGlobalReducer } from "./orbGlobalState.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const TASK_ID = "44444444-4444-4444-8444-444444444444";
 const ASSESSMENT_ID = "22222222-2222-4222-8222-222222222222";
 
 test("launcher supports protected business surfaces and stays absent on Orb itself", () => {
@@ -41,6 +42,33 @@ test("open and close preserve unrelated page state and never encode navigation",
   assert.equal(closed.mounted, true);
   assert.equal(closed.pageState, pageState);
   assert.deepEqual(Object.keys(closed).sort(), ["mounted", "open", "pageState"]);
+});
+
+test("project and task workspaces keep the same mounted Orb state and update only the task hint", () => {
+  const projectSurface = getOrbGlobalSurface(`/proyectos/${PROJECT_ID}`, "?tab=work");
+  const taskSurface = getOrbGlobalSurface(`/proyectos/${PROJECT_ID}`, `?tab=work&task=${TASK_ID}`);
+  const closedTaskSurface = getOrbGlobalSurface(`/proyectos/${PROJECT_ID}`, "?tab=work");
+  assert.deepEqual(projectSurface, { type: "project", route: `/proyectos/${PROJECT_ID}`, entity_id: PROJECT_ID });
+  assert.deepEqual(taskSurface, { ...projectSurface, task_id: TASK_ID });
+  assert.deepEqual(closedTaskSurface, projectSurface);
+
+  const opened = orbGlobalReducer({ open: false, mounted: false, conversationId: "conversation" }, { type: "open" });
+  const afterTaskNavigation = orbGlobalReducer(opened, { type: "location-change", surface: taskSurface });
+  assert.equal(afterTaskNavigation, opened);
+  assert.equal(afterTaskNavigation.open, true);
+  assert.equal(afterTaskNavigation.mounted, true);
+  assert.equal(afterTaskNavigation.conversationId, "conversation");
+});
+
+test("Orb launcher stays above the full-screen task workspace on desktop and mobile", () => {
+  const orbCss = readFileSync(new URL("./OrbGlobal.css", import.meta.url), "utf8");
+  const taskWorkspace = readFileSync(new URL("../projects/TaskWorkspace.jsx", import.meta.url), "utf8");
+  const launcherZ = Number(orbCss.match(/\.orb-global-launcher\s*\{[\s\S]*?z-index:\s*(\d+)/)?.[1]);
+  const taskWorkspaceZ = Number(taskWorkspace.match(/className="[^"]*\bz-(\d+)\b/)?.[1]);
+  assert.ok(Number.isFinite(launcherZ));
+  assert.ok(Number.isFinite(taskWorkspaceZ));
+  assert.ok(launcherZ > taskWorkspaceZ);
+  assert.match(orbCss, /@media \(max-width: 767px\)[\s\S]*\.orb-global-launcher/);
 });
 
 test("each turn payload receives only the current surface and no authority fields", () => {

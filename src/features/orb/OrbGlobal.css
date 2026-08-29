@@ -2,7 +2,7 @@
   position: fixed;
   right: max(1.25rem, env(safe-area-inset-right));
   bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + .75rem));
-  z-index: 38;
+  z-index: 60;
   display: flex;
   min-width: 4.9rem;
   min-height: 3.25rem;
