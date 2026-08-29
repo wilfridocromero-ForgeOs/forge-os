@@ -23,15 +23,16 @@ export function classifyBuild(currentBuild, remoteValue) {
 export function createLatestRequestObserver(observe, onIgnored = () => {}) {
   let latestRequest = 0;
   return {
-    begin(source = "poll") {
+    begin(source = "poll", requestContext = {}) {
       const request = ++latestRequest;
-      return (value) => {
+      return (value, responseContext = {}) => {
+        const context = { ...requestContext, ...responseContext, source, request };
         if (request !== latestRequest) {
           const decision = { status: "ignored", build: normalizeBuild(value), reason: "out_of_order_response" };
-          onIgnored(decision, { source, request });
+          onIgnored(decision, context);
           return decision;
         }
-        return observe(value, { source, request });
+        return observe(value, context);
       };
     },
   };

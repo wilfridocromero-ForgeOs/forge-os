@@ -133,6 +133,27 @@ test("out-of-order HTTP responses cannot downgrade the latest observation", () =
   assert.equal(decisions[0].reason, "out_of_order_response");
 });
 
+test("latest request observer transports sanitized diagnostic context without changing classification", () => {
+  const value = fixture();
+  let receivedContext = null;
+  const requests = createLatestRequestObserver(
+    (build, context) => {
+      receivedContext = context;
+      return value.controller.observeRemote(build, context);
+    },
+  );
+  requests.begin("pageshow", { pageshowPersisted: true })(NEXT, {
+    headers: { etag: "manifest-etag" },
+  });
+  assert.deepEqual(receivedContext, {
+    pageshowPersisted: true,
+    headers: { etag: "manifest-etag" },
+    source: "pageshow",
+    request: 1,
+  });
+  assert.equal(value.controller.getState().status, "update_available");
+});
+
 test("a completed update is current even when its manifest timestamp differs", () => {
   const updated = createVersionUpdateController({
     currentBuild: { version: "next-sha", builtAt: 2000 },

@@ -11,6 +11,29 @@ type ToolCall = {
   arguments: string;
 };
 
+const TOOL_EXECUTION_PHASES: Readonly<Record<string, number>> = Object.freeze({
+  resolve_project_assignee: 1,
+  resolve_task_date: 1,
+  prepare_create_project_task: 2,
+});
+
+export function getToolExecutionPhase(name: string): number {
+  return TOOL_EXECUTION_PHASES[name] ?? 0;
+}
+
+function readTemporalClarification(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const wrapper = value as { status?: unknown; data?: { state?: unknown } };
+  if (wrapper.status !== "ok") return null;
+  if (wrapper.data?.state === "NEEDS_TIMEZONE") {
+    return "Necesito una zona horaria válida para interpretar esa fecha. Indícame la fecha exacta con zona horaria.";
+  }
+  if (wrapper.data?.state === "AMBIGUOUS") {
+    return "No pude interpretar esa fecha con seguridad. Indícame una fecha exacta y, si corresponde, la hora.";
+  }
+  return null;
+}
+
 export type OrbToolLoopResult = {
   output: string;
   responseId: string;
@@ -82,37 +105,39 @@ export async function runOrbToolLoop(
       );
     }
     signatures.forEach((signature) => executedSignatures.add(signature));
-    const executions = await Promise.all(
-      calls.map(async (call) => ({
-        call,
-        value: await execute(call.name, call.arguments),
-      })),
-    );
-    const clarification = executions
-      .map(({ value }) => readTerminalEntityResolution(value))
-      .find((value): value is string => Boolean(value));
-    if (clarification) return controlledStop(result, clarification);
-    const temporalClarification = executions.map(({ value }) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        return null;
+    const executions = new Map<string, unknown>();
+    const phases = [
+      ...new Set(calls.map((call) => getToolExecutionPhase(call.name))),
+    ]
+      .sort((left, right) => left - right);
+    for (const phase of phases) {
+      const phaseCalls = calls.filter((call) =>
+        getToolExecutionPhase(call.name) === phase
+      );
+      const phaseExecutions = await Promise.all(
+        phaseCalls.map(async (call) => ({
+          call,
+          value: await execute(call.name, call.arguments),
+        })),
+      );
+      phaseExecutions.forEach(({ call, value }) =>
+        executions.set(call.call_id, value)
+      );
+      const clarification = phaseExecutions
+        .map(({ value }) => readTerminalEntityResolution(value))
+        .find((value): value is string => Boolean(value));
+      if (clarification) return controlledStop(result, clarification);
+      const temporalClarification = phaseExecutions
+        .map(({ value }) => readTemporalClarification(value))
+        .find((value): value is string => Boolean(value));
+      if (temporalClarification) {
+        return controlledStop(result, temporalClarification);
       }
-      const wrapper = value as { status?: unknown; data?: { state?: unknown } };
-      if (wrapper.status !== "ok") return null;
-      if (wrapper.data?.state === "NEEDS_TIMEZONE") {
-        return "Necesito una zona horaria válida para interpretar esa fecha. Indícame la fecha exacta con zona horaria.";
-      }
-      if (wrapper.data?.state === "AMBIGUOUS") {
-        return "No pude interpretar esa fecha con seguridad. Indícame una fecha exacta y, si corresponde, la hora.";
-      }
-      return null;
-    }).find(Boolean);
-    if (temporalClarification) {
-      return controlledStop(result, temporalClarification);
     }
-    const outputs = executions.map(({ call, value }) => ({
+    const outputs = calls.map((call) => ({
       type: "function_call_output",
       call_id: call.call_id,
-      output: JSON.stringify(value).slice(0, 24000),
+      output: JSON.stringify(executions.get(call.call_id)).slice(0, 24000),
     }));
     currentInput = [...currentInput, ...result.outputItems, ...outputs];
   }

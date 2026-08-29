@@ -7,6 +7,10 @@ import {
   normalizeBuild,
   UPDATE_ATTEMPT_KEY,
 } from "./versionUpdateCore";
+import {
+  createVersionDiagnosticHistory,
+  VERSION_DIAGNOSTIC_TAB_KEY,
+} from "./versionDiagnostics";
 
 const CURRENT_BUILD = normalizeBuild({
   version: import.meta.env.VITE_APP_VERSION,
@@ -20,6 +24,7 @@ let installed = false;
 let checking = false;
 let controller = null;
 let lastDiagnostic = null;
+let diagnosticHistory = null;
 
 function storageRead(key) {
   try {
@@ -43,6 +48,23 @@ function storageRemove(key) {
     sessionStorage.removeItem(key);
   } catch {
     // Storage can be unavailable.
+  }
+}
+
+function getDiagnosticTabId() {
+  const existing = storageRead(VERSION_DIAGNOSTIC_TAB_KEY);
+  if (typeof existing === "string" && existing.length <= 80) return existing;
+  const generated = globalThis.crypto?.randomUUID?.()
+    || `tab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  storageWrite(VERSION_DIAGNOSTIC_TAB_KEY, generated);
+  return generated;
+}
+
+function getDiagnosticStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
 }
 
@@ -124,13 +146,33 @@ function renderUpdateState(state) {
   action.onclick = () => controller?.acceptUpdate({ hasUnsavedWork: hasUnsavedWork() });
 }
 
-function recordDecision(decision, context = {}) {
+function recordDecision(decision, context = {}, previous = { status: "unknown" }) {
+  const stateAfter = controller?.getState?.() || previous;
+  const bannerEvent = previous.status !== "update_available" && stateAfter.status === "update_available"
+    ? "shown"
+    : previous.status === "update_available" && stateAfter.status === "current"
+      ? "hidden"
+      : null;
   lastDiagnostic = Object.freeze({
     current: Object.freeze({ ...CURRENT_BUILD }),
     remote: decision.build ? Object.freeze({ ...decision.build }) : null,
     decision: decision.status,
     source: context.source || "unknown",
     reason: decision.reason || "unspecified",
+  });
+  diagnosticHistory?.push({
+    source: context.source,
+    current: CURRENT_BUILD,
+    remote: decision.build,
+    stateBefore: previous.status,
+    classification: decision.status,
+    stateAfter: stateAfter.status,
+    reason: decision.reason,
+    requestId: context.request,
+    visibility: document.visibilityState,
+    pageshowPersisted: context.pageshowPersisted,
+    headers: context.headers,
+    bannerEvent,
   });
 }
 
@@ -139,13 +181,25 @@ async function fetchCurrentBuild() {
     cache: "no-store",
     headers: { Accept: "application/json" },
   });
-  return response.ok ? response.json() : null;
+  const headers = {
+    etag: response.headers.get("etag"),
+    age: response.headers.get("age"),
+    xVercelCache: response.headers.get("x-vercel-cache"),
+  };
+  return {
+    build: response.ok ? await response.json() : null,
+    headers,
+  };
 }
 
 export function installVersionGuard() {
   if (!import.meta.env.PROD || installed || !CURRENT_BUILD) return () => {};
   installed = true;
   completeAssetRecoveryBootstrap();
+  diagnosticHistory = createVersionDiagnosticHistory({
+    storage: getDiagnosticStorage(),
+    tabId: getDiagnosticTabId(),
+  });
 
   controller = createVersionUpdateController({
     currentBuild: CURRENT_BUILD,
@@ -170,12 +224,14 @@ export function installVersionGuard() {
     value: Object.freeze({
       current: Object.freeze({ ...CURRENT_BUILD }),
       snapshot: () => lastDiagnostic,
+      history: () => diagnosticHistory?.history() || [],
+      clearHistory: () => diagnosticHistory?.clear(),
     }),
   });
 
   const channel = "BroadcastChannel" in window ? new BroadcastChannel(CHANNEL_NAME) : null;
-  const observe = (build, { broadcast = true, source = "unknown", request } = {}) => {
-    const decision = controller.observeRemote(build, { source, request });
+  const observe = (build, { broadcast = true, ...context } = {}) => {
+    const decision = controller.observeRemote(build, context);
     if (broadcast && decision.status === "update_available") {
       channel?.postMessage({ type: "build", build: decision.build });
     }
@@ -190,13 +246,13 @@ export function installVersionGuard() {
     recordDecision,
   );
 
-  const checkForCurrentVersion = async (source = "poll") => {
+  const checkForCurrentVersion = async (source = "poll", eventContext = {}) => {
     if (checking) return;
     checking = true;
-    const completeRequest = requestObserver.begin(typeof source === "string" ? source : source?.type || "event");
+    const completeRequest = requestObserver.begin(source, eventContext);
     try {
-      const remoteBuild = await fetchCurrentBuild();
-      completeRequest(remoteBuild);
+      const remote = await fetchCurrentBuild();
+      completeRequest(remote.build, { headers: remote.headers });
     } catch {
       // A temporary network failure must not interrupt the active application.
     } finally {
@@ -210,7 +266,9 @@ export function installVersionGuard() {
   const interval = window.setInterval(() => checkForCurrentVersion("poll"), CHECK_INTERVAL_MS);
   const checkOnFocus = () => checkForCurrentVersion("focus");
   const checkWhenOnline = () => checkForCurrentVersion("online");
-  const checkOnPageShow = () => checkForCurrentVersion("pageshow");
+  const checkOnPageShow = (event) => checkForCurrentVersion("pageshow", {
+    pageshowPersisted: Boolean(event.persisted),
+  });
   window.addEventListener("focus", checkOnFocus);
   window.addEventListener("online", checkWhenOnline);
   window.addEventListener("pageshow", checkOnPageShow);
@@ -229,6 +287,7 @@ export function installVersionGuard() {
     delete window.__ORVESEN_VERSION_DEBUG__;
     controller = null;
     lastDiagnostic = null;
+    diagnosticHistory = null;
     installed = false;
   };
 }

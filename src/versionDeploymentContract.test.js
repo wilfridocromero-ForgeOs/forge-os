@@ -78,6 +78,16 @@ test("version guard installation is globally idempotent and cleanup is symmetric
   assert.match(source, /channel\?\.close\(\)/);
 });
 
+test("version diagnostics extend the debug API without changing the update latch", () => {
+  const guard = fs.readFileSync("src/versionGuard.js", "utf8");
+  const core = fs.readFileSync("src/versionUpdateCore.js", "utf8");
+  assert.match(guard, /snapshot: \(\) => lastDiagnostic/);
+  assert.match(guard, /history: \(\) => diagnosticHistory\?\.history\(\)/);
+  assert.match(guard, /clearHistory: \(\) => diagnosticHistory\?\.clear\(\)/);
+  assert.match(core, /decision\.status === "current" && state\.status !== "update_available"/);
+  assert.match(core, /decision\.status === "stale" && state\.status !== "update_available"/);
+});
+
 test("build configuration reuses one canonical timestamp for runtime and manifest", () => {
   const source = fs.readFileSync("vite.config.js", "utf8");
   assert.equal((source.match(/Date\.now\(\)/g) || []).length, 1);
