@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef } from "react";
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ArrowUpRight, LoaderCircle, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { buildOrbDestination } from "./orbSurfaceContext";
 import { getOrbGlobalSurface, orbGlobalReducer } from "./orbGlobalState";
+import OrbSphere from "./OrbSphere";
 import "./OrbGlobal.css";
 
 const OrbPanelExperience = lazy(() =>
@@ -22,6 +23,7 @@ export default function OrbGlobal() {
     open: false,
     mounted: false,
   });
+  const [visualState, setVisualState] = useState("resting");
   const launcherRef = useRef(null);
   const closeRef = useRef(null);
   const panelRef = useRef(null);
@@ -75,8 +77,8 @@ export default function OrbGlobal() {
       aria-controls="orb-global-panel"
       onClick={() => dispatch({ type: state.open ? "close" : "open" })}
     >
-      <span className="orb-global-launcher-mark"><img src="/orvesen-mark.png" alt="" /></span>
-      <span>Orb</span>
+      <OrbSphere size={44} state={visualState} />
+      <span className="orb-global-launcher-label">Orb</span>
     </button>
 
     {state.mounted ? <div
@@ -99,9 +101,13 @@ export default function OrbGlobal() {
         role="dialog"
       >
         <header className="orb-global-header">
-          <div>
-            <span className="orb-global-kicker">ORVESEN IA</span>
-            <strong>Orb</strong>
+          <div className="orb-global-identity">
+            <OrbSphere size={48} state={visualState} />
+            <div>
+              <span className="orb-global-kicker">ORVESEN IA</span>
+              <strong>Orb</strong>
+              <small>{visualState === "thinking" ? "Pensando…" : visualState === "executing" ? "Ejecutando…" : visualState === "complete" ? "Completado" : "Disponible"}</small>
+            </div>
           </div>
           <div className="orb-global-header-actions">
             <Link
@@ -123,7 +129,7 @@ export default function OrbGlobal() {
         </header>
         <div className="orb-global-content">
           <Suspense fallback={<div className="orb-global-loading"><LoaderCircle size={20} /> Cargando Orb</div>}>
-            <OrbPanelExperience mode="panel" surfaceOverride={surface} />
+            <OrbPanelExperience mode="panel" surfaceOverride={surface} onVisualStateChange={setVisualState} />
           </Suspense>
         </div>
       </aside>

@@ -64,6 +64,7 @@
 .orb-global-content .orb-history { padding: 1.1rem .8rem; }
 .orb-global-content .orb-welcome,
 .orb-global-content .orb-message-column { padding-right: 1rem; padding-left: 1rem; }
+.orb-global-content .orb-welcome-sphere { --orb-sphere-size: 94px !important; }
 .orb-global-loading { display: flex; height: 100%; align-items: center; justify-content: center; gap: .55rem; color: #71717a; font-size: .8rem; }
 .orb-global-loading svg { animation: orb-global-spin .8s linear infinite; }
 
@@ -90,7 +91,8 @@ html[data-theme="light"] .orb-global-header-actions button:hover { background: #
   .orb-global-backdrop { display: none; }
   .orb-global-header { padding-right: max(.65rem, env(safe-area-inset-right)); padding-left: max(1rem, env(safe-area-inset-left)); }
   .orb-global-content .orb-page { height: 100%; }
-  .orb-global-content .orb-welcome { padding-top: 4rem; }
+  .orb-global-content .orb-welcome { padding-top: max(1.25rem, env(safe-area-inset-top)); }
+  .orb-global-content .orb-welcome-sphere { --orb-sphere-size: 78px !important; }
   .orb-global-content .orb-composer-shell { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
 }
 
@@ -98,3 +100,28 @@ html[data-theme="light"] .orb-global-header-actions button:hover { background: #
   .orb-global-launcher,
   .orb-global-panel { transition: none; animation: none; }
 }
+
+/* Orb Visual V2: the launcher is a touch target around the Crystal Orb, not a chat button. */
+.orb-global-launcher{width:3.75rem;height:3.75rem;min-width:3.75rem;min-height:3.75rem;border:0;border-radius:50%;background:transparent;padding:.35rem;color:#fff;box-shadow:none;backdrop-filter:none;transition:transform .22s ease,filter .22s ease}
+.orb-global-launcher:hover{transform:translateY(-2px);background:transparent;filter:brightness(1.08)}
+.orb-global-launcher:active{transform:translateY(0) scale(.97)}
+.orb-global-launcher:focus-visible{outline:2px solid rgba(255,255,255,.92);outline-offset:4px}
+.orb-global-launcher-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.orb-global-panel{border-left-color:rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(17,18,21,.98),rgba(5,6,8,.99) 45%,#08090b);box-shadow:-1.5rem 0 5rem rgba(0,0,0,.48),inset 1px 0 rgba(255,255,255,.035)}
+.orb-global-header{min-height:4.75rem;border-bottom-color:rgba(255,255,255,.09);background:linear-gradient(110deg,rgba(255,255,255,.035),transparent 56%);padding:.55rem 1rem .55rem 1.15rem}
+.orb-global-identity{display:flex!important;align-items:center!important;gap:.8rem!important}
+.orb-global-identity>div{display:grid;grid-template-columns:auto auto;align-items:baseline;column-gap:.55rem}
+.orb-global-kicker{color:#c5a44b}
+.orb-global-header strong{color:#fff;font-size:1.08rem;letter-spacing:-.02em}
+.orb-global-identity small{grid-column:1/-1;margin-top:.08rem;color:#71717a;font-size:.62rem;font-weight:550;letter-spacing:.025em}
+.orb-global-header-actions a,.orb-global-header-actions button{border:1px solid transparent;color:#8b8b93;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.orb-global-header-actions a:hover,.orb-global-header-actions button:hover{border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.055)}
+.orb-global-backdrop{background:rgba(0,0,0,.46);backdrop-filter:blur(3px)}
+html[data-theme="light"] .orb-global-launcher{border:0;background:transparent;color:#18181b;box-shadow:none}
+html[data-theme="light"] .orb-global-launcher:focus-visible{outline-color:#18181b}
+html[data-theme="light"] .orb-global-panel{border-color:rgba(24,24,27,.12);background:linear-gradient(155deg,rgba(255,255,255,.99),rgba(247,247,248,.99) 52%,#f4f4f5);box-shadow:-1.5rem 0 5rem rgba(24,24,27,.16)}
+html[data-theme="light"] .orb-global-header{border-color:rgba(24,24,27,.1);background:linear-gradient(110deg,rgba(24,24,27,.035),transparent 56%)}
+html[data-theme="light"] .orb-global-header strong{color:#09090b}
+html[data-theme="light"] .orb-global-identity small{color:#71717a}
+html[data-theme="light"] .orb-global-header-actions a:hover,html[data-theme="light"] .orb-global-header-actions button:hover{border-color:rgba(24,24,27,.09);background:rgba(24,24,27,.05)}
+@media(max-width:767px){.orb-global-launcher{right:max(.7rem,env(safe-area-inset-right));bottom:max(.7rem,calc(env(safe-area-inset-bottom) + .4rem));width:3.7rem;height:3.7rem;min-width:3.7rem;min-height:3.7rem;border-radius:50%;padding:.3rem}.orb-global-header{min-height:4.5rem;padding-left:max(.75rem,env(safe-area-inset-left))}.orb-global-identity .orb-sphere{--orb-sphere-size:42px!important}}

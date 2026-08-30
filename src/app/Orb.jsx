@@ -5,6 +5,7 @@ import { AlertCircle, ArrowDown, LoaderCircle, Menu, MessageSquareText, Plus, Ro
 import { useAuth } from "../Context/AuthContext";
 import OrbMarkdown from "../features/orb/OrbMarkdown";
 import OrbActionProposal from "../features/orb/OrbActionProposal";
+import OrbSphere from "../features/orb/OrbSphere";
 import { normalizeOrbMessages } from "../features/orb/orbMessageOrder";
 import { deriveOrbSurfaceFromSearch } from "../features/orb/orbSurfaceContext";
 import {
@@ -35,7 +36,7 @@ const OrbMessage = memo(function OrbMessage({ message, sending, onRetry, proposa
   </article>;
 });
 
-export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
+export function OrbExperience({ surfaceOverride = null, mode = "page", onVisualStateChange = null }) {
   const [searchParams] = useSearchParams();
   const { session } = useAuth();
   const routeSurface = useMemo(() => deriveOrbSurfaceFromSearch(searchParams), [searchParams]);
@@ -50,6 +51,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [actionVisualState, setActionVisualState] = useState("resting");
   const [showLatest, setShowLatest] = useState(false);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
@@ -62,6 +64,11 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   const deltaTimer = useRef(null);
   const pendingDeltas = useRef(new Map());
   const retryHandler = useRef(null);
+  const completeTimer = useRef(null);
+
+  useEffect(() => {
+    onVisualStateChange?.(sending ? "thinking" : actionVisualState);
+  }, [actionVisualState, onVisualStateChange, sending]);
 
   const scrollToLatest = useCallback((behavior = "smooth") => {
     followLatest.current = reactivateFollow();
@@ -154,6 +161,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   useEffect(() => () => {
     stopScheduledFollow();
     discardPendingDeltas();
+    if (completeTimer.current) window.clearTimeout(completeTimer.current);
   }, [discardPendingDeltas, stopScheduledFollow]);
 
   useEffect(() => {
@@ -291,6 +299,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
   function handleSubmit(event) { event.preventDefault(); void sendMessage(); }
   async function handleConfirmProposal(proposal) {
     setError("");
+    setActionVisualState("executing");
     try {
       const result = await confirmOrbActionProposal(proposal.id, proposal.arguments_hash);
       await loadProposals(proposal.conversation_id);
@@ -298,8 +307,13 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
       if (result?.status === "completed" && projectId && result.task_id) {
         window.dispatchEvent(new CustomEvent("orvesen:project-task-changed", { detail: { projectId, taskId: result.task_id } }));
       }
+      setActionVisualState(result?.status === "completed" ? "complete" : "resting");
+      if (result?.status === "completed") {
+        if (completeTimer.current) window.clearTimeout(completeTimer.current);
+        completeTimer.current = window.setTimeout(() => setActionVisualState("resting"), 900);
+      }
     }
-    catch (requestError) { setError(requestError.message || "No se pudo confirmar la acción."); await loadProposals(proposal.conversation_id).catch(() => {}); }
+    catch (requestError) { setActionVisualState("resting"); setError(requestError.message || "No se pudo confirmar la acción."); await loadProposals(proposal.conversation_id).catch(() => {}); }
   }
   async function handleCancelProposal(proposal) {
     setError("");
@@ -324,7 +338,7 @@ export function OrbExperience({ surfaceOverride = null, mode = "page" }) {
 
     <section className={`orb-chat ${hasConversation ? "has-conversation" : "is-empty"}`}>
       {!hasConversation ? <div className="orb-welcome">
-        <div className="orb-mark"><img src="/orvesen-mark.png" alt="" /></div><p className="orb-eyebrow">ORVESEN IA</p><h1>Orb</h1><h2>¿En qué trabajamos hoy?</h2><p className="orb-welcome-copy">Tu inteligencia para pensar, decidir y operar mejor.</p>
+        <OrbSphere size={88} state={sending ? "thinking" : actionVisualState} className="orb-welcome-sphere" /><p className="orb-eyebrow">ORVESEN IA</p><h1>Orb</h1><h2>¿En qué trabajamos hoy?</h2><p className="orb-welcome-copy">Tu inteligencia para pensar, decidir y operar mejor.</p>
         <div className="orb-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void sendMessage(suggestion)}>{suggestion}</button>)}</div>
       </div> : <div className="orb-message-scroll" ref={scrollRef} onScroll={handleScroll}><div className="orb-message-column">
         {loadingMessages ? <div className="orb-centered-state"><LoaderCircle className="orb-spin" size={22} /> Cargando conversación</div> : null}
