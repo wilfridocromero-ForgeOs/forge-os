@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { CAPABILITIES, getRoleCapabilities } from "../config/capabilities";
 import { updateOrganizationName as persistOrganizationName } from "../services/OrganizationService";
+import { createIdentityRequestKey } from "./authIdentityRequest";
 
 const AuthContext = createContext();
 const IDENTITY_RETRY_DELAYS_MS = [0, 500, 1500];
@@ -32,6 +33,8 @@ export function AuthProvider({ children }) {
     moduleAccess: [],
     error: null,
   });
+  const sessionUserId = session?.user?.id ?? null;
+  const identityRequestKey = createIdentityRequestKey(sessionUserId, identityRevision);
 
   useEffect(() => {
     let active = true;
@@ -66,7 +69,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
-    const userId = session?.user?.id;
+    const userId = sessionUserId;
 
     if (!userId) return undefined;
 
@@ -184,7 +187,7 @@ export function AuthProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [session?.access_token, session?.user?.id, identityRevision]);
+  }, [identityRequestKey, sessionUserId]);
 
   useEffect(() => {
     if (identity.status !== "error") return undefined;
