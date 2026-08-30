@@ -32,6 +32,9 @@ const steps = [
 const blankTemplate = { name: "", description: "", division_id: "" };
 
 function friendlyError(error, fallback = "No se pudo completar la operación.") {
+  if (error?.message === "DISCOVERY_TEMPLATE_DIVISION_LOCKED") {
+    return "No puedes cambiar la división de esta plantilla porque ya tiene evaluaciones asociadas. Duplica la plantilla o crea una nueva versión para utilizar otra división.";
+  }
   if (error?.code === "42501") return "No tienes permiso para realizar esta acción.";
   if (error?.code === "23503") return "Este elemento está en uso y no se puede eliminar.";
   if (error?.code === "23514") return "Uno de los valores no cumple las reglas de Discovery.";
@@ -202,8 +205,10 @@ export default function Discovery() {
 
   async function saveTemplateField(field, value) {
     if (!selected || selected[field] === value) return;
+    const previousValue = selected[field];
     updateSelected({ [field]: value });
-    await runAction(`template-${field}`, () => updateDiscoveryTemplate(selected.id, { [field]: value || null }), "Cambios guardados.");
+    const result = await runAction(`template-${field}`, () => updateDiscoveryTemplate(selected.id, { [field]: value || null }), "Cambios guardados.");
+    if (result === null) updateSelected({ [field]: previousValue });
   }
 
   async function handleCreate(event) {
@@ -417,10 +422,11 @@ export default function Discovery() {
 }
 
 function Information({ template, divisions, saveField }) {
+  const divisionLocked = Boolean(template.has_assessments);
   return <div className="db-content-narrow"><StageTitle number="01" title="Información general" text="Define la identidad y el contexto de este Discovery." />
     <div className="db-card db-form-grid">
       <label className="wide">Nombre del Discovery<input defaultValue={template.name} onBlur={(e) => saveField("name", e.target.value.trim())} placeholder="Ej. Discovery de crecimiento" /></label>
-      <label>División<select value={template.division_id || ""} onChange={(e) => saveField("division_id", e.target.value)}><option value="">Todas las divisiones</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select></label>
+      <label>División<select value={template.division_id || ""} disabled={divisionLocked} onChange={(e) => saveField("division_id", e.target.value)}><option value="">Todas las divisiones</option>{divisions.map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select>{divisionLocked && <small>Esta plantilla ya tiene evaluaciones asociadas. Duplica la plantilla o crea una nueva versión para utilizar otra división.</small>}</label>
       <label>Versión<input value={`v${template.version}`} disabled /></label>
       <label className="wide">Descripción<textarea defaultValue={template.description || ""} onBlur={(e) => saveField("description", e.target.value.trim())} rows={5} placeholder="Explica cuándo y para qué debe utilizarse..." /></label>
     </div>

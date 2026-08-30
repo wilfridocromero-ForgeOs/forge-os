@@ -8,9 +8,12 @@ export function assessmentQuestionIds(assessment) {
 }
 
 export function assessmentStructureMatches(left, right) {
+  const leftScopeMatches = (left?.division_id || null) === (left?.discovery_templates?.division_id || null);
+  const rightScopeMatches = (right?.division_id || null) === (right?.discovery_templates?.division_id || null);
   const leftIds = new Set(assessmentQuestionIds(left));
   const rightIds = new Set(assessmentQuestionIds(right));
-  return leftIds.size === rightIds.size
+  return leftScopeMatches && rightScopeMatches
+    && leftIds.size === rightIds.size
     && [...leftIds].every((questionId) => rightIds.has(questionId));
 }
 

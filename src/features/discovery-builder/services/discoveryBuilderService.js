@@ -88,13 +88,22 @@ export function normalizeTemplate(template) {
 }
 
 export async function getDiscoveryBuilderData() {
-  const templatesResult = await supabase.from("discovery_templates")
-    .select(templateSelect).order("updated_at", { ascending: false });
+  const [templatesResult, assessmentsResult] = await Promise.all([
+    supabase.from("discovery_templates")
+      .select(templateSelect).order("updated_at", { ascending: false }),
+    supabase.from("discovery_assessments").select("discovery_template_id")
+      .not("discovery_template_id", "is", null),
+  ]);
 
-  if (templatesResult.error) throw templatesResult.error;
+  const error = templatesResult.error || assessmentsResult.error;
+  if (error) throw error;
+  const usedTemplateIds = new Set((assessmentsResult.data || []).map((assessment) => assessment.discovery_template_id));
 
   return {
-    templates: (templatesResult.data || []).map(normalizeTemplate),
+    templates: (templatesResult.data || []).map((template) => normalizeTemplate({
+      ...template,
+      has_assessments: usedTemplateIds.has(template.id),
+    })),
   };
 }
 
@@ -250,6 +259,7 @@ export async function duplicateDiscoveryTemplate(template, name, createdBy) {
 export async function updateDiscoveryTemplate(id, changes) {
   const { error } = await supabase.from("discovery_templates").update(changes).eq("id", id);
   if (error) throw error;
+  return true;
 }
 
 export async function deleteDiscoveryTemplate(id) {

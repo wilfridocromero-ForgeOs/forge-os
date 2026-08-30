@@ -12,7 +12,9 @@ const answered = (value) => value !== null && value !== undefined && value !== "
 
 function assessment(questionIds, responseIds = questionIds) {
   return {
+    division_id: "division-a",
     discovery_templates: {
+      division_id: "division-a",
       discovery_sections: [
         { id: "section-a", discovery_questions: questionIds.slice(0, 10).map((id) => ({ id })) },
         { id: "section-b", discovery_questions: questionIds.slice(10).map((id) => ({ id })) },
@@ -54,6 +56,14 @@ test("a later template edit is detected before finalization", () => {
   assert.equal(assessmentStructureMatches(original, added), false);
   assert.equal(assessmentStructureMatches(original, removed), false);
   assert.equal(assessmentStructureMatches(original, reordered), true);
+});
+
+test("assessment and template division drift is detected before finalization", () => {
+  const original = assessment(["q-1", "q-2"]);
+  const drifted = assessment(["q-1", "q-2"]);
+  drifted.discovery_templates.division_id = "division-b";
+  assert.equal(assessmentStructureMatches(original, drifted), false);
+  assert.equal(assessmentStructureMatches(drifted, drifted), false);
 });
 
 test("finalization diagnostics preserve Supabase fields without leaking identifiers or tokens", () => {
