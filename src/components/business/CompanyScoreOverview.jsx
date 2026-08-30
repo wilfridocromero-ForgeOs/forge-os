@@ -1,6 +1,7 @@
 import { AlertCircle, ArrowRight, CheckCircle2, Clock3, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import Card from "../ui/Card";
+import IntelligentScoreVisual from "./IntelligentScoreVisual";
 import "./CompanyScoreOverview.css";
 
 const LABELS = { unevaluated: "Sin evaluar", insufficient_data: "Datos insuficientes", partial: "Parcial", current: "Actual", stale: "Datos por actualizar" };
@@ -31,9 +32,13 @@ export default function CompanyScoreOverview({ data, loading, error, onEvaluate,
         <span className={`company-score-status is-${status}`}>{statusIcon(status)} {LABELS[status] || status}</span>
       </div>
       <div className="company-score-summary">
-        <div className={`company-score-ring ${hasMasterScore ? "" : "is-insufficient"}`} style={{ "--company-score-progress": `${hasMasterScore ? clamp(Number(snapshot.master_score) / 10) : clamp(coverage)}%` }}>
-          <div>{hasMasterScore ? <><strong>{Number(snapshot.master_score).toLocaleString("es-ES")}</strong><span>/ 1000</span></> : <><strong>Datos</strong><span>insuficientes</span></>}</div>
-        </div>
+        <IntelligentScoreVisual
+          score={hasMasterScore ? snapshot.master_score : null}
+          status={LABELS[status] || status}
+          evaluatedAreas={evaluated}
+          totalAreas={divisions.length}
+          emptyLabel="Datos insuficientes"
+        />
         <div className="company-score-context">
           <div className="company-score-facts">
             {snapshot?.performance_percentage != null && <div><span>Desempeño observado</span><strong>{percent(snapshot.performance_percentage, 2)}</strong></div>}

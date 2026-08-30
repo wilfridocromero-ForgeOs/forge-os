@@ -3,6 +3,7 @@ import { AlertCircle, ArrowLeft, ArrowRight, Brain, ChevronDown } from "lucide-r
 import { Link, useNavigate } from "react-router-dom";
 
 import Card from "../components/ui/Card";
+import IntelligentScoreVisual from "../components/business/IntelligentScoreVisual";
 import Page from "../components/ui/Page";
 import useCompanyScoreDetail from "../hooks/useCompanyScoreDetail";
 import "./Score.css";
@@ -36,8 +37,8 @@ export default function Score() {
   const selectedDivision = divisions.find((division) => division.id === selectedDivisionId) || defaultDivision;
   const divisionTemplates = selectedDivision ? (templatesByDivision[selectedDivision.id] || []) : [];
   const hasMasterScore = snapshot?.master_score != null;
-  const masterProgress = hasMasterScore ? Math.min(100, Math.max(0, Number(snapshot.master_score) / 10)) : 0;
   const pendingCount = divisions.filter((division) => !division.score).length;
+  const evaluatedCount = divisions.length - pendingCount;
   const status = snapshot?.status || "unevaluated";
 
   return (
@@ -50,7 +51,14 @@ export default function Score() {
       </header>
 
       <Card hover={false} contentClassName="score-detail-hero">
-        <div className="score-detail-ring" style={{ "--score-detail-progress": `${masterProgress}%` }}><div><strong>{hasMasterScore ? snapshot.master_score : "—"}</strong><span>/ 1000</span></div></div>
+        <IntelligentScoreVisual
+          score={hasMasterScore ? snapshot.master_score : null}
+          status={LABELS[status] || status}
+          evaluatedAreas={evaluatedCount}
+          totalAreas={divisions.length}
+          size="detail"
+          emptyLabel="Datos insuficientes"
+        />
         <div className="score-detail-hero-copy">
           <span className={`score-detail-badge is-${status}`}>{LABELS[status] || status}</span>
           <h2>ORVESEN Score</h2>
