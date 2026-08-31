@@ -244,6 +244,24 @@ Deno.test("routes deep surfaces to minimal authorized tools without inventing en
   );
 });
 
+Deno.test("orchestrates organizational intelligence with explicit epistemic boundaries", () => {
+  for (
+    const expected of [
+      "get_organizational_intelligence",
+      "hecho observado, inferencia y recomendación",
+      "no demuestra causalidad",
+      "nunca inventes precisión",
+      "No la interpretes como cero",
+      "un único siguiente paso priorizado",
+    ]
+  ) {
+    assert(
+      ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(expected),
+      `missing intelligence rule: ${expected}`,
+    );
+  }
+});
+
 Deno.test("builder surface awareness does not imply access to builder data", () => {
   assert(
     ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(

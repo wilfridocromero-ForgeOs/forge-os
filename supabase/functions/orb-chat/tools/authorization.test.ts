@@ -14,6 +14,7 @@ for (const role of ["founder", "admin"]) {
       },
     };
     assertEquals(await getOrbToolPermissions(client as never, "user", role), {
+      intelligence: true,
       projects: true,
       discovery: true,
       area_score: true,
@@ -36,6 +37,7 @@ Deno.test("member defaults and explicit denial match current module policy", asy
     }),
   };
   assertEquals(await getOrbToolPermissions(client as never, "user", "member"), {
+    intelligence: true,
     projects: false,
     discovery: true,
     area_score: false,
@@ -111,6 +113,7 @@ Deno.test("permission lookup failure fails closed", async () => {
     }),
   };
   assertEquals(await getOrbToolPermissions(client as never, "user", "member"), {
+    intelligence: false,
     projects: false,
     discovery: false,
     area_score: false,

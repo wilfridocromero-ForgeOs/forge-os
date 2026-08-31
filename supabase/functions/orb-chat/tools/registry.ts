@@ -3,6 +3,7 @@ import type { OrbToolPermission, OrbToolPermissions } from "./authorization.ts";
 import { normalizeEntityName, resolveEntityName } from "../entityResolution.ts";
 import { resolveNaturalTaskDate } from "../temporalResolution.ts";
 import type { OrbSurfaceContext } from "../surfaceContext.ts";
+import { loadOrganizationalIntelligence } from "../organizationalIntelligence.ts";
 
 const MAX_LIMIT = 25;
 const DEFAULT_LIMIT = 10;
@@ -709,6 +710,22 @@ const definitions: Definition[] = [
         display: data.display_payload,
         confirmation_required: true,
       };
+    },
+  },
+  {
+    name: "get_organizational_intelligence",
+    description:
+      "Construye un snapshot ejecutivo compacto y trazable de la organización activa. Úsalo primero para preguntas amplias sobre estado, prioridades, debilidades, riesgos o qué atender; consulta tools específicas solo si hace falta profundizar.",
+    permission: "intelligence",
+    parameters: objectSchema({}, []),
+    async handler({ client, organizationId, permissions, now }, args) {
+      assertKeys(args, []);
+      return await loadOrganizationalIntelligence(
+        client,
+        organizationId,
+        permissions,
+        now || new Date(),
+      );
     },
   },
   {

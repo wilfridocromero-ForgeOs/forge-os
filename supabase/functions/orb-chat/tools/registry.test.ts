@@ -13,6 +13,7 @@ function assertEquals(actual: unknown, expected: unknown) {
 }
 
 const denied = {
+  intelligence: false,
   projects: false,
   discovery: false,
   area_score: false,
@@ -45,6 +46,12 @@ Deno.test("only authorized tools are offered", () => {
     "list_tasks",
     "get_project_summary",
   ]);
+});
+
+Deno.test("organizational intelligence is offered independently but gates every source internally", () => {
+  const names = getAuthorizedToolDefinitions({ ...denied, intelligence: true })
+    .map((tool) => tool.name);
+  assertEquals(names, ["get_organizational_intelligence"]);
 });
 
 Deno.test("area_score controls whether score tools are offered", () => {
@@ -94,6 +101,7 @@ Deno.test("authorized get_score_summary is executable with user-scoped client", 
 
 Deno.test("registry exposes the bounded read tools for an administrator", () => {
   const tools = getAuthorizedToolDefinitions({
+    intelligence: true,
     projects: true,
     discovery: true,
     area_score: true,
@@ -109,6 +117,7 @@ Deno.test("registry exposes the bounded read tools for an administrator", () => 
     "prepare_create_project_task",
     "prepare_update_project_task",
     "prepare_change_project_task_status",
+    "get_organizational_intelligence",
     "list_projects",
     "list_tasks",
     "get_project_summary",

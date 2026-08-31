@@ -176,6 +176,7 @@ Deno.test("contextual current-task preflight revalidates before the model can sk
             organizationId: "7070c469-2b6a-427c-bc33-bfec8b493201",
             userId: "user",
             permissions: {
+              intelligence: false,
               projects: true,
               discovery: false,
               clients: false,
@@ -650,6 +651,7 @@ Deno.test("unknown tool executes no business query and the loop remains controll
     },
   };
   const permissions = {
+    intelligence: false,
     projects: true,
     discovery: false,
     area_score: false,

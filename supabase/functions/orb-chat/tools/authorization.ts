@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type OrbToolPermission =
+  | "intelligence"
   | "projects"
   | "discovery"
   | "area_score"
@@ -10,6 +11,7 @@ export type OrbToolPermissions = Record<OrbToolPermission, boolean>;
 
 const ADMIN_ROLES = new Set(["founder", "admin"]);
 const DENIED: OrbToolPermissions = {
+  intelligence: false,
   projects: false,
   discovery: false,
   area_score: false,
@@ -24,6 +26,7 @@ export async function getOrbToolPermissions(
 ): Promise<OrbToolPermissions> {
   if (ADMIN_ROLES.has(role)) {
     return {
+      intelligence: true,
       projects: true,
       discovery: true,
       area_score: true,
@@ -44,6 +47,7 @@ export async function getOrbToolPermissions(
     const access = (key: string, fallback: boolean) =>
       configured.has(key) ? configured.get(key) === true : fallback;
     return {
+      intelligence: true,
       projects: access("projects", true),
       discovery: access("discovery", true),
       area_score: access("area_score", false),
