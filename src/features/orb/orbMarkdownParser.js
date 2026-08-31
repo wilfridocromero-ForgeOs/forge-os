@@ -115,6 +115,22 @@ function parseList(lines, startIndex, baseIndent) {
   let index = startIndex;
 
   while (index < lines.length) {
+    if (!lines[index].trim()) {
+      let nextIndex = index;
+      while (nextIndex < lines.length && !lines[nextIndex].trim()) nextIndex += 1;
+      const next = nextIndex < lines.length ? listMatch(lines[nextIndex]) : null;
+      const expectedOrdered = list.type === "ordered-list";
+      if (
+        next &&
+        next.indent === baseIndent &&
+        next.ordered === expectedOrdered
+      ) {
+        index = nextIndex;
+        continue;
+      }
+      break;
+    }
+
     const current = listMatch(lines[index]);
     if (!current || current.indent < baseIndent) break;
 

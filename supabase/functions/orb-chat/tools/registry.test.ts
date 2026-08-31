@@ -4,6 +4,7 @@ import {
   createEntityResolutionSession,
   executeOrbTool,
   getAuthorizedToolDefinitions,
+  mapTaskReadDetail,
 } from "./registry.ts";
 
 function assertEquals(actual: unknown, expected: unknown) {
@@ -152,6 +153,64 @@ Deno.test("OpenAI receives a proposal tool but no action executor", () => {
     names.some((name) => /confirm|execute|cancel/.test(name)),
     false,
   );
+});
+
+Deno.test("task reads distinguish stored detail from fields undefined in ORVESEN", () => {
+  const stored = mapTaskReadDetail({
+    id: "task-1",
+    assigned_to: "user-1",
+    due_at: "2026-09-01T23:59:59.999Z",
+    priority: "high",
+    project: { id: "project-1", name: "ORVESEN OS" },
+    assignee: { id: "user-1", first_name: "Joseph" },
+  });
+  assertEquals(stored.detail_availability, {
+    assignee: "stored",
+    due_at: "stored",
+    priority: "stored",
+  });
+  assertEquals(
+    (stored.assignee as { first_name: string }).first_name,
+    "Joseph",
+  );
+
+  const absent = mapTaskReadDetail({
+    id: "task-2",
+    assigned_to: null,
+    due_at: null,
+    priority: null,
+    project: { id: "project-1", name: "ORVESEN OS" },
+    assignee: null,
+  });
+  assertEquals(absent.detail_availability, {
+    assignee: "undefined_in_orvesen",
+    due_at: "undefined_in_orvesen",
+    priority: "undefined_in_orvesen",
+  });
+});
+
+Deno.test("unauthorized execution detail is not offered or queried", async () => {
+  const names = getAuthorizedToolDefinitions({ ...denied, intelligence: true })
+    .map((tool) => tool.name);
+  assertEquals(names.includes("list_tasks"), false);
+  let queried = false;
+  const result = await executeOrbTool(
+    {
+      client: {
+        from: () => {
+          queried = true;
+          throw new Error("must not query");
+        },
+      } as never,
+      organizationId: "organization-1",
+      userId: "user-1",
+      permissions: { ...denied, intelligence: true },
+    },
+    "list_tasks",
+    '{"scope":"open","project_id":null,"limit":3}',
+  );
+  assertEquals(result, { status: "unauthorized" });
+  assertEquals(queried, false);
 });
 
 Deno.test("update tool keeps a strict compatible schema and backend duplicate authority", async () => {

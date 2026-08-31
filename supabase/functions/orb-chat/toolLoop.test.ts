@@ -392,6 +392,113 @@ Deno.test("two tool rounds preserve each call_id and return only the final answe
   assertEquals(result.output.includes("count"), false);
 });
 
+Deno.test("adaptive detail follows intelligence with one targeted task read", async () => {
+  const executed: string[] = [];
+  let round = 0;
+  const result = await runOrbToolLoop({
+    input: [{
+      role: "user",
+      content: "Prepárame una lista ejecutable con responsables y fechas.",
+    }],
+    request: () => {
+      round += 1;
+      if (round === 1) {
+        return Promise.resolve(toolCall(
+          "get_organizational_intelligence",
+          "call_intelligence",
+        ));
+      }
+      if (round === 2) {
+        return Promise.resolve(toolCall(
+          "list_tasks",
+          "call_detail",
+          '{"scope":"open","project_id":"11111111-1111-4111-8111-111111111111","limit":3}',
+        ));
+      }
+      return Promise.resolve(completedText(
+        "Activar notificaciones — Joseph — vence mañana — prioridad alta.",
+      ));
+    },
+    execute: (name) => {
+      executed.push(name);
+      return Promise.resolve(
+        name === "list_tasks"
+          ? {
+            status: "ok",
+            data: {
+              items: [{
+                title: "Activar notificaciones",
+                assignee: { first_name: "Joseph" },
+                due_at: "2026-09-01T23:59:59.999Z",
+                priority: "high",
+                detail_availability: {
+                  assignee: "stored",
+                  due_at: "stored",
+                  priority: "stored",
+                },
+              }],
+            },
+          }
+          : {
+            status: "ok",
+            data: { recommended_focus: { kind: "execution_risk" } },
+          },
+      );
+    },
+    onDelta: () => {},
+  });
+  assertEquals(executed, ["get_organizational_intelligence", "list_tasks"]);
+  assertEquals(result.output.includes("Joseph"), true);
+  assertEquals(executed.some((name) => name.startsWith("prepare_")), false);
+});
+
+Deno.test("follow-up detail retrieval does not restart organizational analysis", async () => {
+  const executed: string[] = [];
+  let round = 0;
+  const result = await runOrbToolLoop({
+    input: [
+      {
+        role: "assistant",
+        content: "El proyecto ORVESEN OS concentra el trabajo operativo.",
+      },
+      {
+        role: "user",
+        content:
+          "Ahora conviértelo en una lista ejecutable con responsables y fechas.",
+      },
+    ],
+    request: () => {
+      round += 1;
+      return Promise.resolve(
+        round === 1
+          ? toolCall(
+            "list_tasks",
+            "call_targeted",
+            '{"scope":"open","project_id":"11111111-1111-4111-8111-111111111111","limit":3}',
+          )
+          : completedText("El responsable no está definido en ORVESEN."),
+      );
+    },
+    execute: (name) => {
+      executed.push(name);
+      return Promise.resolve({
+        status: "ok",
+        data: {
+          items: [{
+            assigned_to: null,
+            detail_availability: { assignee: "undefined_in_orvesen" },
+          }],
+        },
+      });
+    },
+    onDelta: () => {},
+  });
+  assertEquals(result.output.includes("no está definido"), true);
+  assertEquals(executed, ["list_tasks"]);
+  assertEquals(executed.includes("get_organizational_intelligence"), false);
+  assertEquals(executed.some((name) => name.startsWith("prepare_")), false);
+});
+
 Deno.test("multiple tools in one round preserve call ids and isolate a partial failure", async () => {
   let round = 0;
   let secondInput: unknown[] = [];

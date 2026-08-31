@@ -141,6 +141,23 @@ function taskCandidateLabel(task: {
 function relation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
+
+export function mapTaskReadDetail(row: Record<string, unknown>) {
+  const project = relation(row.project as Record<string, unknown> | null);
+  const assignee = relation(row.assignee as Record<string, unknown> | null);
+  return {
+    ...row,
+    project,
+    assignee,
+    detail_availability: {
+      assignee: row.assigned_to
+        ? assignee ? "stored" : "stored_reference_name_unavailable"
+        : "undefined_in_orvesen",
+      due_at: row.due_at ? "stored" : "undefined_in_orvesen",
+      priority: row.priority ? "stored" : "undefined_in_orvesen",
+    },
+  };
+}
 function safeError(error: unknown) {
   if (error instanceof Error && error.message === "ENTITY_NOT_RESOLVED") {
     return "entity_not_resolved";
@@ -806,11 +823,7 @@ const definitions: Definition[] = [
       const { data, error } = await query;
       if (error) throw error;
       return {
-        items: (data || []).map((row) => ({
-          ...row,
-          project: relation(row.project),
-          assignee: relation(row.assignee),
-        })),
+        items: (data || []).map((row) => mapTaskReadDetail(row)),
         limit: take,
         truncated: (data?.length || 0) === take,
       };

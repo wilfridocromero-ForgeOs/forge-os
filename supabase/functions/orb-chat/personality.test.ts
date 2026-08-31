@@ -262,6 +262,25 @@ Deno.test("orchestrates organizational intelligence with explicit epistemic boun
   }
 });
 
+Deno.test("retrieves missing execution detail before asking and preserves planning boundaries", () => {
+  for (
+    const expected of [
+      "UNKNOWN_TO_SNAPSHOT",
+      "STORED_FACT",
+      "UNDEFINED_IN_ORVESEN",
+      "USER_DECISION",
+      "list_tasks puede confirmar responsable, due_at, status y priority",
+      "no llames herramientas prepare_*",
+      "confirmación segura en la interfaz",
+    ]
+  ) {
+    assert(
+      ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(expected),
+      `missing adaptive-detail rule: ${expected}`,
+    );
+  }
+});
+
 Deno.test("builder surface awareness does not imply access to builder data", () => {
   assert(
     ORB_AUTHORIZED_TOOLS_INSTRUCTIONS.includes(
