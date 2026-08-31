@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
 import { navigationGroups } from "../../config/navigation";
 import Logo from "../display/Logo";
@@ -8,6 +8,9 @@ import { buildOrbDestination } from "../../features/orb/orbSurfaceContext";
 export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
+  collapsed = false,
+  collapsible = false,
+  onCollapsedChange,
 }) {
   const { displayName, initial, displayTitle, canAccess, hasCapability, isInternalOrganization } = useAuth();
   const location = useLocation();
@@ -48,6 +51,7 @@ export default function Sidebar({
           flex
           h-screen
           w-[290px]
+          ${collapsed ? "lg:w-[76px]" : "lg:w-[290px]"}
           max-w-[85vw]
           flex-col
 
@@ -56,7 +60,7 @@ export default function Sidebar({
 
           bg-[#09090B]
 
-          transition-transform
+          transition-[transform,width]
           duration-200
           ease-out
 
@@ -71,11 +75,24 @@ export default function Sidebar({
       >
         {/* Logo */}
 
-        <div className="px-5 pt-7">
+        <div className={`${collapsed ? "lg:px-2" : ""} px-5 pt-7`}>
 
           <div className="relative flex items-center justify-center">
 
-            <Logo compact size="small" />
+            <div className={collapsed ? "lg:hidden" : "contents"}>
+              <Logo compact size="small" />
+            </div>
+
+            {collapsible && <button
+              type="button"
+              onClick={onCollapsedChange}
+              className={`${collapsed ? "lg:static" : "absolute right-0"} hidden rounded-xl p-2 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white lg:block`}
+              aria-label={collapsed ? "Expandir navegaciÃ³n" : "Contraer navegaciÃ³n"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Expandir navegaciÃ³n" : "Contraer navegaciÃ³n"}
+            >
+              {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>}
 
             <button
               onClick={() => setSidebarOpen(false)}
@@ -96,14 +113,14 @@ export default function Sidebar({
 
         {/* Navegación */}
 
-        <div className="mt-10 flex-1 overflow-y-auto px-5">
+        <div className={`${collapsed ? "lg:px-2" : ""} mt-10 flex-1 overflow-y-auto px-5`}>
 
           {navigationGroups.map((section) => (
             <div
               key={section.title}
               className="mb-10"
             >
-              <p className="mb-4 px-3 text-xs tracking-[0.30em] text-zinc-500">
+              <p className={`${collapsed ? "lg:hidden" : ""} mb-4 px-3 text-xs tracking-[0.30em] text-zinc-500`}>
                 {section.title}
               </p>
 
@@ -128,7 +145,7 @@ export default function Sidebar({
                         return `
                         flex
                         items-center
-                        gap-4
+                        ${collapsed ? "lg:justify-center lg:gap-0 lg:px-0" : "gap-4"}
 
                         rounded-2xl
 
@@ -148,7 +165,7 @@ export default function Sidebar({
                     >
                       <Icon size={20} />
 
-                      <span className="font-medium">
+                      <span className={`${collapsed ? "lg:sr-only" : ""} font-medium`}>
                         {item.label}
                       </span>
 
@@ -165,7 +182,7 @@ export default function Sidebar({
 
         {/* Usuario */}
 
-        <div className="border-t border-zinc-800 p-6">
+        <div className={`${collapsed ? "lg:p-3" : ""} border-t border-zinc-800 p-6`}>
 
           <div className="flex items-center gap-4">
 
@@ -173,7 +190,7 @@ export default function Sidebar({
               {initial}
             </div>
 
-            <div>
+            <div className={collapsed ? "lg:hidden" : ""}>
 
               <p className="font-semibold text-white">
                 {displayName}
