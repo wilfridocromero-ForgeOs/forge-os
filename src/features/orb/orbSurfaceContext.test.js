@@ -12,6 +12,7 @@ const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "42";
 const ASSESSMENT_ID = "33333333-3333-4333-8333-333333333333";
 const TASK_ID = "44444444-4444-4444-8444-444444444444";
+const BUILDER_NODE_ID = "55555555-5555-4555-8555-555555555555";
 
 test("derives all supported ORVESEN surfaces from real routes", () => {
   assert.deepEqual(deriveOrbSurfaceContext("/"), { type: "dashboard", route: "/" });
@@ -54,6 +55,11 @@ test("keeps requests without Surface Context backward compatible", () => {
     client_message_id: "message",
     message: "Hola",
   });
+});
+
+test("derives Builder system and selected-node hints", () => {
+  assert.deepEqual(deriveOrbSurfaceContext(`/construir/sistemas/${PROJECT_ID}`, new URLSearchParams(`node=${BUILDER_NODE_ID}`)), { type: "builder_system", route: `/construir/sistemas/${PROJECT_ID}`, entity_id: PROJECT_ID, node_id: BUILDER_NODE_ID });
+  assert.equal(deriveOrbSurfaceContext("/construir/sistemas/not-a-uuid"), null);
 });
 
 test("sends the browser IANA timezone without authority fields", () => {

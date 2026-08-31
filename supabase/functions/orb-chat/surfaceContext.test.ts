@@ -9,6 +9,7 @@ function assertEquals(actual: unknown, expected: unknown) {
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "42";
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
+const BUILDER_NODE_ID = "33333333-3333-4333-8333-333333333333";
 
 Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
   assertEquals(
@@ -78,6 +79,32 @@ Deno.test("accepts global list and builder surfaces without granting entity data
   ) {
     assertEquals(normalizeOrbSurfaceContext(surface), surface);
   }
+});
+
+Deno.test("accepts Builder system hints but rejects malformed node identity", () => {
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "builder_system",
+      route: `/construir/sistemas/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      node_id: BUILDER_NODE_ID,
+    }),
+    {
+      type: "builder_system",
+      route: `/construir/sistemas/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      node_id: BUILDER_NODE_ID,
+    },
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "builder_system",
+      route: `/construir/sistemas/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      node_id: "bad",
+    }),
+    null,
+  );
 });
 
 Deno.test("rejects invented surfaces, invalid ids and mismatched routes", () => {

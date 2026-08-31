@@ -11,6 +11,7 @@ export const ORB_SURFACE_TYPES = [
   "score_builder",
   "calendar",
   "builder_hub",
+  "builder_system",
   "brain",
   "settings",
 ] as const;
@@ -21,6 +22,7 @@ export type OrbSurfaceContext = {
   route: string;
   entity_id?: string;
   task_id?: string;
+  node_id?: string;
   label?: string;
 };
 
@@ -34,6 +36,7 @@ const ALLOWED_KEYS = new Set([
   "route",
   "entity_id",
   "task_id",
+  "node_id",
   "label",
 ]);
 
@@ -70,6 +73,9 @@ function validRoute(type: OrbSurfaceType, route: string, entityId?: string) {
     return route === "/discovery/builder" && !entityId;
   }
   if (type === "builder_hub") return route === "/construir" && !entityId;
+  if (type === "builder_system") {
+    return Boolean(entityId) && route === `/construir/sistemas/${entityId}`;
+  }
   if (type === "brain") return route === "/cerebro" && !entityId;
   return type === "settings" &&
     (route === "/configuracion" || route.startsWith("/configuracion/")) &&
@@ -109,6 +115,15 @@ export function normalizeOrbSurfaceContext(
   if (candidate.task_id !== undefined && (!taskId || type !== "project")) {
     return null;
   }
+  const nodeId = typeof candidate.node_id === "string" &&
+      UUID_PATTERN.test(candidate.node_id)
+    ? candidate.node_id
+    : undefined;
+  if (
+    candidate.node_id !== undefined && (!nodeId || type !== "builder_system")
+  ) {
+    return null;
+  }
   if (!validRoute(type, candidate.route, entityId)) return null;
 
   const label = typeof candidate.label === "string"
@@ -122,6 +137,7 @@ export function normalizeOrbSurfaceContext(
     route: candidate.route,
     ...(entityId ? { entity_id: entityId } : {}),
     ...(taskId ? { task_id: taskId } : {}),
+    ...(nodeId ? { node_id: nodeId } : {}),
     ...(label ? { label } : {}),
   };
 }

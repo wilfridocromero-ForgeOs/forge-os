@@ -21,7 +21,6 @@ import Projects from "./app/Projects";
 import ProjectPage from "./app/ProjectPage";
 import Score from "./app/Score";
 import SettingsHub, { AccountSettings, CompanySettings, DivisionsSettings, MembersSettingsPage } from "./app/SettingsHub";
-import BuilderHub from "./app/BuilderHub";
 import Calendar from "./app/Calendar";
 import Brain from "./app/Brain";
 import ScoreBuilder from "./app/ScoreBuilder";
@@ -29,6 +28,8 @@ import BusinessScore from "./app/BusinessScore";
 import { useAuth } from "./Context/AuthContext";
 
 const Orb = lazy(() => import("./app/Orb"));
+const BuilderHub = lazy(() => import("./app/BuilderHub"));
+const BuilderWorkspace = lazy(() => import("./features/builder/pages/BuilderWorkspace"));
 
 
 export default function App() {
@@ -101,7 +102,9 @@ export default function App() {
 
         <Route path="/orvesen-ia" element={<Suspense fallback={<OrbRouteLoading />}><Orb /></Suspense>} />
 
-        <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><BuilderHub /></CapabilityRoute>} />
+        <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><Suspense fallback={<BuilderRouteLoading />}><BuilderHub /></Suspense></CapabilityRoute>} />
+
+        <Route path="/construir/sistemas/:systemId" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><Suspense fallback={<BuilderRouteLoading />}><BuilderWorkspace /></Suspense></CapabilityRoute>} />
 
         <Route path="/score-builder" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><ScoreBuilder /></CapabilityRoute>} />
 
@@ -125,6 +128,10 @@ export default function App() {
 
 function OrbRouteLoading() {
   return <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-500">Cargando Orb…</div>;
+}
+
+function BuilderRouteLoading() {
+  return <div className="flex min-h-[60vh] items-center justify-center text-sm text-zinc-500">Cargando Builder…</div>;
 }
 
 function InternalOnly({ children }) {

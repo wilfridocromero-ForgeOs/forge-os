@@ -1,0 +1,4 @@
+import { ArrowDown, ChevronRight } from "lucide-react";
+export default function BuilderFlowList({ nodes, edges, onSelect, onConnect }) {
+  return <div className="builder-flow-list" aria-label="Flujo estructurado móvil">{nodes.map((node, index) => { const next = nodes[index + 1]; const connected = next && edges.some((edge) => edge.source_node_id === node.id && edge.target_node_id === next.id); return <div key={node.id}><button type="button" onClick={() => onSelect(node.id)}><span><small>Paso {index + 1}</small><strong>{node.label}</strong></span><ChevronRight size={18}/></button>{next && (connected ? <ArrowDown className="builder-flow-arrow" aria-label="Conectado con el siguiente paso" size={16}/> : <button className="builder-connect-next" type="button" onClick={() => onConnect({ source: node.id, target: next.id })}>Conectar con el siguiente</button>)}</div>; })}</div>;
+}
