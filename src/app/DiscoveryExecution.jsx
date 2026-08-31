@@ -3,13 +3,13 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft, ArrowRight, BarChart3, BookOpen, Building2, Check, CheckCircle2,
   ChevronRight, CircleAlert, ClipboardCheck, LoaderCircle, PencilRuler,
-  Play, Plus, Search, Target, TrendingUp, UserRound, X,
+  MoreHorizontal, Play, Plus, Search, Target, Trash2, TrendingUp, UserRound, X,
 } from "lucide-react";
 
 import Page from "../components/ui/Page";
 import { useAuth } from "../Context/AuthContext";
 import {
-  createAssessment, deleteDiscoveryResponse, finalizeAssessment, getAssessment,
+  createAssessment, deleteDiscoveryResponse, deleteInProgressAssessment, finalizeAssessment, getAssessment,
   getExecutionDashboardData, saveDiscoveryResponse,
 } from "../features/discovery-execution/services/discoveryExecutionService";
 import {
@@ -56,6 +56,9 @@ function formatDate(value) {
 }
 
 function friendlyError(error, fallback = "No se pudo completar la operación.") {
+  if (error?.message?.includes("DISCOVERY_ASSESSMENT_NOT_DELETABLE")) return "Este diagnóstico ya fue finalizado y no se puede eliminar.";
+  if (error?.message?.includes("DISCOVERY_ASSESSMENT_HAS_RESULTS")) return "Este diagnóstico contiene resultados protegidos y no se puede eliminar.";
+  if (error?.message?.includes("DISCOVERY_ASSESSMENT_NOT_AVAILABLE")) return "El diagnóstico ya no está disponible.";
   if (error?.code === "42501") return "No tienes permiso para realizar esta acción.";
   if (error?.code === "23514") return error.message || "La respuesta no cumple las reglas del Discovery.";
   if (error?.message?.includes("Faltan")) return error.message;
@@ -75,6 +78,8 @@ export default function DiscoveryExecution() {
   const [historyFilter, setHistoryFilter] = useState("all");
   const [historySearch, setHistorySearch] = useState("");
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!organizationId) return;
@@ -136,6 +141,26 @@ export default function DiscoveryExecution() {
     }
   }
 
+  async function removeAssessment() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteInProgressAssessment(deleteTarget.id);
+      setData((current) => ({
+        ...current,
+        assessments: current.assessments.filter((item) => item.id !== deleteTarget.id),
+      }));
+      setDeleteTarget(null);
+      setError("");
+    } catch (reason) {
+      setError(friendlyError(reason, "No se pudo eliminar el diagnóstico."));
+      await load();
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const inProgress = data.assessments.filter((item) => item.status !== "completed");
   const view = searchParams.get("view") || "home";
   const visibleTemplates = view === "catalog" ? data.templates : data.templates.slice(0, 6);
@@ -156,7 +181,7 @@ export default function DiscoveryExecution() {
     {error && <div className="dx-alert" role="alert"><CircleAlert size={17} /><span>{error}</span><button aria-label="Cerrar aviso" onClick={() => setError("")}><X size={16} /></button></div>}
 
     {loading ? <Loading text="Cargando diagnósticos..." /> : view === "history" ? <HistoryView assessments={filteredHistory} filter={historyFilter} setFilter={setHistoryFilter} search={historySearch} setSearch={setHistorySearch} /> : <>
-      {view === "home" && inProgress.length > 0 && <section className="dx-home-section"><SectionHeading title="Continuar" text="Retoma los diagnósticos que dejaste pendientes." /><div className="dx-continue-grid">{inProgress.slice(0, 4).map((assessment) => <ContinueCard key={assessment.id} assessment={assessment} />)}</div></section>}
+      {view === "home" && inProgress.length > 0 && <section className="dx-home-section"><SectionHeading title="Continuar" text="Retoma los diagnósticos que dejaste pendientes." /><div className="dx-continue-grid">{inProgress.slice(0, 4).map((assessment) => <ContinueCard key={assessment.id} assessment={assessment} canDelete={canManageUsers} onDelete={setDeleteTarget} />)}</div></section>}
 
       <section className="dx-home-section"><div className="dx-section-bar"><SectionHeading title="Diagnósticos" text="Selecciona un diagnóstico para comenzar." />{view === "home" && data.templates.length > 6 && <Link to="/discovery?view=catalog">Ver todos <ChevronRight size={15} /></Link>}</div><div className="dx-template-grid">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} onStart={() => openStart(template.id)} />)}{!data.templates.length && <Empty title="No hay diagnósticos publicados" text="Cuando exista un diagnóstico disponible aparecerá aquí." />}</div></section>
 
@@ -166,12 +191,13 @@ export default function DiscoveryExecution() {
     </>}
 
     {startOpen && <StartModal templates={data.templates} clients={data.clients} selection={selection} setSelection={setSelection} onClose={() => setStartOpen(false)} onSubmit={startDiscovery} busy={starting} />}
+    {deleteTarget && <DiscoveryDeleteModal assessment={deleteTarget} deleting={deleting} onClose={() => !deleting && setDeleteTarget(null)} onConfirm={removeAssessment} />}
   </Page>;
 }
 
 export function DiscoveryRunner() {
   const { assessmentId } = useParams();
-  const { user } = useAuth();
+  const { user, canManageUsers } = useAuth();
   const navigate = useNavigate();
   const [assessment, setAssessment] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -183,6 +209,8 @@ export function DiscoveryRunner() {
   const [saveErrors, setSaveErrors] = useState(0);
   const [error, setError] = useState("");
   const [finalizing, setFinalizing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const responsesRef = useRef({});
   const savedValuesRef = useRef({});
   const queuesRef = useRef({});
@@ -338,6 +366,20 @@ export function DiscoveryRunner() {
     }
   }
 
+  async function removeAssessment() {
+    setDeleting(true);
+    try {
+      await deleteInProgressAssessment(assessmentId);
+      navigate("/discovery", { replace: true });
+    } catch (reason) {
+      setError(friendlyError(reason, "No se pudo eliminar el diagnóstico."));
+      setDeleteOpen(false);
+      await hydrate();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) return <Page className="dx-page"><Loading text="Preparando Discovery..." /></Page>;
   if (!assessment) return <Page className="dx-page"><ErrorState text={error} /></Page>;
 
@@ -353,7 +395,7 @@ export function DiscoveryRunner() {
   return <div className="dx-runner-page">
     <header className="dx-runner-topbar">
       <Link to="/discovery" className="dx-back"><ArrowLeft size={17} /> Evaluaciones</Link>
-      <div className={`dx-save-state ${saveStatus}`}>{saveStatus === "saving" ? <><LoaderCircle className="dx-spin" size={14} /> Guardando...</> : saveStatus === "error" ? <><CircleAlert size={14} /> Error al guardar</> : <><Check size={14} /> Guardado</>}</div>
+      <div className="dx-runner-actions"><div className={`dx-save-state ${saveStatus}`}>{saveStatus === "saving" ? <><LoaderCircle className="dx-spin" size={14} /> Guardando...</> : saveStatus === "error" ? <><CircleAlert size={14} /> Error al guardar</> : <><Check size={14} /> Guardado</>}</div>{canManageUsers && <button type="button" className="dx-delete-trigger" aria-label="Eliminar diagnóstico" onClick={() => setDeleteOpen(true)}><Trash2 size={15} /><span>Eliminar diagnóstico</span></button>}</div>
     </header>
     <main className="dx-runner-shell">
       <div className="dx-runner-intro">
@@ -385,6 +427,7 @@ export function DiscoveryRunner() {
         </div>
       </>}
     </main>
+    {deleteOpen && <DiscoveryDeleteModal assessment={assessment} deleting={deleting} onClose={() => !deleting && setDeleteOpen(false)} onConfirm={removeAssessment} />}
   </div>;
 }
 
@@ -483,14 +526,28 @@ function TemplateCard({ template, onStart }) {
   </article>;
 }
 
-function ContinueCard({ assessment }) {
+function ContinueCard({ assessment, canDelete, onDelete }) {
   const progress = progressFor(assessment);
   return <article className="dx-continue-card">
     <div className="dx-continue-context"><div><small>{assessment.clients ? "Cliente" : "Organización"}</small><strong>{subjectLabel(assessment)}</strong>{assessment.clients?.contact_name && <span>{assessment.clients.contact_name}</span>}</div><div><small>División</small><strong>{assessment.discovery_templates?.divisions?.name || "Organización"}</strong></div></div>
     <div className="dx-continue-diagnostic"><small>Diagnóstico</small><h3>{assessment.discovery_templates?.name || "Diagnóstico"}</h3></div>
     <div className="dx-mini-progress"><i><span style={{ width: `${progress}%` }} /></i><b>{progress}%</b></div>
-    <footer><time>Actualizado {formatDate(assessment.updated_at)}</time><Link to={`/discovery/evaluaciones/${assessment.id}`}>Continuar <ChevronRight size={15} /></Link></footer>
+    <footer><time>Actualizado {formatDate(assessment.updated_at)}</time><div className="dx-card-actions"><Link to={`/discovery/evaluaciones/${assessment.id}`}>Continuar <ChevronRight size={15} /></Link>{canDelete && <button type="button" aria-label={`Eliminar ${assessment.discovery_templates?.name || "diagnóstico"}`} title="Eliminar diagnóstico" onClick={() => onDelete(assessment)}><MoreHorizontal size={17} /></button>}</div></footer>
   </article>;
+}
+
+function DiscoveryDeleteModal({ assessment, deleting, onClose, onConfirm }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => { if (event.key === "Escape" && !deleting) onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [deleting, onClose]);
+
+  return <div className="dx-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !deleting && onClose()}><section className="dx-modal dx-delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="dx-delete-title">
+    <div className="dx-modal-head"><div><span className="dx-eyebrow">Acción permanente</span><h2 id="dx-delete-title">Eliminar diagnóstico</h2></div><button type="button" aria-label="Cerrar" disabled={deleting} onClick={onClose}><X size={20} /></button></div>
+    <div className="dx-delete-warning"><CircleAlert size={21} /><div><strong>{assessment.discovery_templates?.name || "Diagnóstico en progreso"}</strong><p>Este diagnóstico está en progreso. Se eliminarán el diagnóstico y las respuestas guardadas. Esta acción no se puede deshacer.</p></div></div>
+    <div className="dx-modal-actions"><button type="button" className="dx-button" disabled={deleting} onClick={onClose}>Cancelar</button><button type="button" className="dx-button dx-danger" disabled={deleting} onClick={onConfirm}>{deleting ? <LoaderCircle className="dx-spin" size={16} /> : <Trash2 size={16} />} {deleting ? "Eliminando..." : "Eliminar diagnóstico"}</button></div>
+  </section></div>;
 }
 
 function RecentActivityRow({ assessment }) {

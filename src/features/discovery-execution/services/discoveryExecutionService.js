@@ -199,6 +199,14 @@ export async function deleteDiscoveryResponse(responseId) {
   if (error) throw error;
 }
 
+export async function deleteInProgressAssessment(assessmentId) {
+  const { data, error } = await supabase.rpc("delete_in_progress_discovery_assessment", {
+    target_assessment_id: assessmentId,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function finalizeAssessment(assessmentId) {
   const { data, error } = await supabase.rpc("finalize_discovery", {
     target_assessment_id: assessmentId,
