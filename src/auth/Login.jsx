@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import Logo from "../components/display/Logo";
 import LoginForm from "../components/forms/LoginForm";
 import AuthBackground from "../components/display/AuthBackground";
@@ -6,8 +8,22 @@ import "./Login.css";
 const lightPoints = Array.from({ length: 9 }, (_, index) => index);
 
 export default function Login() {
+  const [motionReady, setMotionReady] = useState(false);
+
+  useEffect(() => {
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => setMotionReady(true));
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, []);
+
   return (
-    <main className="login-experience relative min-h-screen w-full overflow-x-hidden overflow-y-auto bg-[#09090B] px-4 py-5 sm:px-6 sm:py-8">
+    <main className={`login-experience${motionReady ? " is-motion-ready" : ""} relative min-h-screen w-full overflow-x-hidden overflow-y-auto bg-[#09090B] px-4 py-5 sm:px-6 sm:py-8`}>
       <AuthBackground />
 
       <div className="login-ambient" aria-hidden="true">
