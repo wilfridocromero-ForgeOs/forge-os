@@ -2,6 +2,10 @@ import { supabase } from "../../../lib/supabase";
 
 function fail(error) { if (error) throw error; }
 
+export class BuilderDraftConflictError extends Error {
+  constructor(cause) { super("BUILDER_DRAFT_CONFLICT", { cause }); this.name = "BuilderDraftConflictError"; }
+}
+
 export async function listBuilderAssets({ assetType = null, includeArchived = true } = {}) {
   let query = supabase
     .from("builder_assets")
@@ -55,4 +59,26 @@ export async function loadBuilderAsset(id) {
   }
   const systemById = new Map(systems.map((system) => [system.id, system]));
   return { asset, versions: versions || [], usages: (nodes || []).map((node) => ({ ...node, system: systemById.get(node.system_id) || null })) };
+}
+
+export async function loadBuilderAssetDraft(assetId) {
+  const { data, error } = await supabase
+    .from("builder_asset_drafts")
+    .select("asset_id,organization_id,schema_version,document,revision,updated_by,created_at,updated_at")
+    .eq("asset_id", assetId)
+    .single();
+  fail(error);
+  return data;
+}
+
+export async function saveBuilderAssetDraft({ assetId, expectedRevision, document }) {
+  const { data, error } = await supabase.rpc("save_builder_asset_draft", {
+    target_asset_id: assetId,
+    expected_revision: expectedRevision,
+    requested_schema_version: document.schema_version,
+    requested_document: document,
+  });
+  if (error?.message?.includes("BUILDER_DRAFT_CONFLICT")) throw new BuilderDraftConflictError(error);
+  fail(error);
+  return data;
 }
