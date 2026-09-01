@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import Page from "../../../components/ui/Page";
 import { BUILDER_ASSET_TYPES, isBuilderAssetType, latestBuilderAssetVersion } from "../model/builderAssets";
 import { loadBuilderAsset, updateBuilderAsset } from "../services/BuilderAssetService";
+import LandingPageEditor from "../editor/LandingPageEditor";
 import "../Builder.css";
 import "../BuilderAssets.css";
 
@@ -34,6 +35,7 @@ export default function BuilderAssetWorkspace() {
   }
 
   if (!model) return <div className="builder-loading">{routeError || error || "Cargando asset…"}</div>;
+  if (model.asset.asset_type === "landing_page") return <LandingPageEditor asset={model.asset}/>;
   const TypeIcon = model.asset.asset_type === "form" ? FormInput : FileText;
 
   return <Page className="builder-page builder-asset-workspace">

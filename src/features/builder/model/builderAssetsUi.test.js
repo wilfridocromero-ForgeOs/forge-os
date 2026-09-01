@@ -20,12 +20,13 @@ test("node inspector supports compatible selection, atomic creation, open and un
   assert.match(source, /Desvincular/);
 });
 
-test("asset workspace is informative, responsive and not a premature editor", async () => {
+test("asset workspace routes Landing pages into the editor and preserves Form metadata", async () => {
   const page = await read("../pages/BuilderAssetWorkspace.jsx");
   const styles = await read("../BuilderAssets.css");
+  assert.match(page, /LandingPageEditor/);
+  assert.match(page, /asset_type === "landing_page"/);
   assert.match(page, /Editor visual pendiente/);
   assert.match(page, /Dónde participa/);
-  assert.doesNotMatch(page, /drag|drop|publish/i);
   assert.match(styles, /@media \(max-width: 767px\)/);
   assert.match(styles, /var\(--bb-card\)/);
 });

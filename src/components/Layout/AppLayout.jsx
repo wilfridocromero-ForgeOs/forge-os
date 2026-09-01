@@ -8,7 +8,7 @@ import { readBuilderWorkspacePreferences, writeBuilderWorkspacePreferences } fro
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
-  const isBuilderWorkspace = /^\/construir\/sistemas\/[^/]+/.test(location.pathname);
+  const isBuilderWorkspace = /^\/construir\/(?:sistemas\/[^/]+|assets\/landing_page\/[^/]+)/.test(location.pathname);
   const [builderSidebarCollapsed, setBuilderSidebarCollapsed] = useState(
     () => readBuilderWorkspacePreferences().globalSidebarCollapsed,
   );

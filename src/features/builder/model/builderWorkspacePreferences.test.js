@@ -82,7 +82,7 @@ test("workspace source preserves mobile list and inspector while panels affect c
 test("global sidebar collapse is scoped to Builder workspace and remains restorable", async () => {
   const layout = await readFile(new URL("../../../components/Layout/AppLayout.jsx", import.meta.url), "utf8");
   const sidebar = await readFile(new URL("../../../components/Layout/Sidebar.jsx", import.meta.url), "utf8");
-  assert.match(layout, /\^\\\/construir\\\/sistemas/);
+  assert.match(layout, /assets\\\/landing_page/);
   assert.match(layout, /sidebarCollapsed = isBuilderWorkspace/);
   assert.match(sidebar, /aria-expanded=\{!collapsed\}/);
   assert.match(sidebar, /Expandir navegaci/);
