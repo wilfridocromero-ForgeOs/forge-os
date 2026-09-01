@@ -30,6 +30,7 @@ import { useAuth } from "./Context/AuthContext";
 const Orb = lazy(() => import("./app/Orb"));
 const BuilderHub = lazy(() => import("./app/BuilderHub"));
 const BuilderWorkspace = lazy(() => import("./features/builder/pages/BuilderWorkspace"));
+const BuilderAssetWorkspace = lazy(() => import("./features/builder/pages/BuilderAssetWorkspace"));
 
 
 export default function App() {
@@ -105,6 +106,8 @@ export default function App() {
         <Route path="/construir" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><Suspense fallback={<BuilderRouteLoading />}><BuilderHub /></Suspense></CapabilityRoute>} />
 
         <Route path="/construir/sistemas/:systemId" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><Suspense fallback={<BuilderRouteLoading />}><BuilderWorkspace /></Suspense></CapabilityRoute>} />
+
+        <Route path="/construir/assets/:assetType/:assetId" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><Suspense fallback={<BuilderRouteLoading />}><BuilderAssetWorkspace /></Suspense></CapabilityRoute>} />
 
         <Route path="/score-builder" element={<CapabilityRoute capability={CAPABILITIES.accessBuilderHub}><ScoreBuilder /></CapabilityRoute>} />
 

@@ -12,6 +12,7 @@ export const ORB_SURFACE_TYPES = [
   "calendar",
   "builder_hub",
   "builder_system",
+  "builder_asset",
   "brain",
   "settings",
 ] as const;
@@ -23,6 +24,8 @@ export type OrbSurfaceContext = {
   entity_id?: string;
   task_id?: string;
   node_id?: string;
+  asset_id?: string;
+  asset_type?: "landing_page" | "form";
   label?: string;
 };
 
@@ -37,6 +40,8 @@ const ALLOWED_KEYS = new Set([
   "entity_id",
   "task_id",
   "node_id",
+  "asset_id",
+  "asset_type",
   "label",
 ]);
 
@@ -75,6 +80,11 @@ function validRoute(type: OrbSurfaceType, route: string, entityId?: string) {
   if (type === "builder_hub") return route === "/construir" && !entityId;
   if (type === "builder_system") {
     return Boolean(entityId) && route === `/construir/sistemas/${entityId}`;
+  }
+  if (type === "builder_asset") {
+    return Boolean(entityId) &&
+      (route === `/construir/assets/landing_page/${entityId}` ||
+        route === `/construir/assets/form/${entityId}`);
   }
   if (type === "brain") return route === "/cerebro" && !entityId;
   return type === "settings" &&
@@ -124,6 +134,25 @@ export function normalizeOrbSurfaceContext(
   ) {
     return null;
   }
+  const assetId = typeof candidate.asset_id === "string" &&
+      UUID_PATTERN.test(candidate.asset_id)
+    ? candidate.asset_id
+    : undefined;
+  if (
+    candidate.asset_id !== undefined && (!assetId || type !== "builder_system")
+  ) return null;
+  const assetType =
+    candidate.asset_type === "landing_page" || candidate.asset_type === "form"
+      ? candidate.asset_type
+      : undefined;
+  if (
+    candidate.asset_type !== undefined &&
+    (!assetType || type !== "builder_asset")
+  ) return null;
+  if (
+    type === "builder_asset" &&
+    (!assetType || !candidate.route.includes(`/assets/${assetType}/`))
+  ) return null;
   if (!validRoute(type, candidate.route, entityId)) return null;
 
   const label = typeof candidate.label === "string"
@@ -138,6 +167,8 @@ export function normalizeOrbSurfaceContext(
     ...(entityId ? { entity_id: entityId } : {}),
     ...(taskId ? { task_id: taskId } : {}),
     ...(nodeId ? { node_id: nodeId } : {}),
+    ...(assetId ? { asset_id: assetId } : {}),
+    ...(assetType ? { asset_type: assetType } : {}),
     ...(label ? { label } : {}),
   };
 }

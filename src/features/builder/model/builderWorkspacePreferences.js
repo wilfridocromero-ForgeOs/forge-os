@@ -38,5 +38,5 @@ export function getBuilderNodePresentation(node, definition) {
   const customLabel = node.label?.trim() && node.label.trim() !== definition.defaultLabel
     ? node.label.trim()
     : null;
-  return { typeLabel: definition.label, customLabel, statusLabel: "Sin configurar" };
+  return { typeLabel: definition.label, customLabel, statusLabel: node.asset_id ? "Asset vinculado" : "Sin configurar" };
 }

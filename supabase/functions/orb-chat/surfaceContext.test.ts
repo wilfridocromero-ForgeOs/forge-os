@@ -10,6 +10,7 @@ const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "42";
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
 const BUILDER_NODE_ID = "33333333-3333-4333-8333-333333333333";
+const BUILDER_ASSET_ID = "44444444-4444-4444-8444-444444444444";
 
 Deno.test("accepts allowlisted surfaces and the legacy Dashboard hint", () => {
   assertEquals(
@@ -102,6 +103,48 @@ Deno.test("accepts Builder system hints but rejects malformed node identity", ()
       route: `/construir/sistemas/${PROJECT_ID}`,
       entity_id: PROJECT_ID,
       node_id: "bad",
+    }),
+    null,
+  );
+});
+
+Deno.test("accepts typed Builder asset hints and optional system asset identity", () => {
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "builder_asset",
+      route: `/construir/assets/form/${BUILDER_ASSET_ID}`,
+      entity_id: BUILDER_ASSET_ID,
+      asset_type: "form",
+    }),
+    {
+      type: "builder_asset",
+      route: `/construir/assets/form/${BUILDER_ASSET_ID}`,
+      entity_id: BUILDER_ASSET_ID,
+      asset_type: "form",
+    },
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "builder_system",
+      route: `/construir/sistemas/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      node_id: BUILDER_NODE_ID,
+      asset_id: BUILDER_ASSET_ID,
+    }),
+    {
+      type: "builder_system",
+      route: `/construir/sistemas/${PROJECT_ID}`,
+      entity_id: PROJECT_ID,
+      node_id: BUILDER_NODE_ID,
+      asset_id: BUILDER_ASSET_ID,
+    },
+  );
+  assertEquals(
+    normalizeOrbSurfaceContext({
+      type: "builder_asset",
+      route: `/construir/assets/form/${BUILDER_ASSET_ID}`,
+      entity_id: BUILDER_ASSET_ID,
+      asset_type: "landing_page",
     }),
     null,
   );

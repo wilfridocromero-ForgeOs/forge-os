@@ -13,6 +13,7 @@ const CLIENT_ID = "42";
 const ASSESSMENT_ID = "33333333-3333-4333-8333-333333333333";
 const TASK_ID = "44444444-4444-4444-8444-444444444444";
 const BUILDER_NODE_ID = "55555555-5555-4555-8555-555555555555";
+const BUILDER_ASSET_ID = "66666666-6666-4666-8666-666666666666";
 
 test("derives all supported ORVESEN surfaces from real routes", () => {
   assert.deepEqual(deriveOrbSurfaceContext("/"), { type: "dashboard", route: "/" });
@@ -58,8 +59,13 @@ test("keeps requests without Surface Context backward compatible", () => {
 });
 
 test("derives Builder system and selected-node hints", () => {
-  assert.deepEqual(deriveOrbSurfaceContext(`/construir/sistemas/${PROJECT_ID}`, new URLSearchParams(`node=${BUILDER_NODE_ID}`)), { type: "builder_system", route: `/construir/sistemas/${PROJECT_ID}`, entity_id: PROJECT_ID, node_id: BUILDER_NODE_ID });
+  assert.deepEqual(deriveOrbSurfaceContext(`/construir/sistemas/${PROJECT_ID}`, new URLSearchParams(`node=${BUILDER_NODE_ID}&asset=${BUILDER_ASSET_ID}`)), { type: "builder_system", route: `/construir/sistemas/${PROJECT_ID}`, entity_id: PROJECT_ID, node_id: BUILDER_NODE_ID, asset_id: BUILDER_ASSET_ID });
   assert.equal(deriveOrbSurfaceContext("/construir/sistemas/not-a-uuid"), null);
+});
+
+test("derives typed Builder asset hints without treating them as authorization", () => {
+  assert.deepEqual(deriveOrbSurfaceContext(`/construir/assets/landing_page/${BUILDER_ASSET_ID}`), { type: "builder_asset", route: `/construir/assets/landing_page/${BUILDER_ASSET_ID}`, entity_id: BUILDER_ASSET_ID, asset_type: "landing_page" });
+  assert.equal(deriveOrbSurfaceContext(`/construir/assets/store/${BUILDER_ASSET_ID}`), null);
 });
 
 test("sends the browser IANA timezone without authority fields", () => {

@@ -52,6 +52,7 @@ test("nodes avoid repeating the default label and retain configuration status", 
     statusLabel: "Sin configurar",
   });
   assert.equal(getBuilderNodePresentation({ label: "Landing principal" }, definition).customLabel, "Landing principal");
+  assert.equal(getBuilderNodePresentation({ label: "Landing", asset_id: "asset" }, definition).statusLabel, "Asset vinculado");
 });
 
 test("canvas source keeps native zoom, fit, resize and accessible controls", async () => {

@@ -38,10 +38,21 @@ export function deriveOrbSurfaceContext(pathname, searchParams = null) {
   if (route === "/calendario") return { type: "calendar", route };
   if (route === "/score-builder") return { type: "score_builder", route };
   if (route === "/construir") return { type: "builder_hub", route };
+  if (route.startsWith("/construir/assets/")) {
+    const parts = route.split("/").filter(Boolean);
+    const assetType = parts[2];
+    const assetId = parts[3];
+    return parts.length === 4 && (assetType === "landing_page" || assetType === "form") && UUID_PATTERN.test(assetId || "")
+      ? { type: "builder_asset", route, entity_id: assetId, asset_type: assetType }
+      : null;
+  }
   if (route.startsWith("/construir/sistemas/")) {
     const surface = entitySurface("builder_system", route, "/construir/sistemas/");
     const nodeId = searchParams?.get?.("node");
-    return surface && UUID_PATTERN.test(nodeId || "") ? { ...surface, node_id: nodeId } : surface;
+    const assetId = searchParams?.get?.("asset");
+    return surface && UUID_PATTERN.test(nodeId || "")
+      ? { ...surface, node_id: nodeId, ...(UUID_PATTERN.test(assetId || "") ? { asset_id: assetId } : {}) }
+      : surface;
   }
   if (route === "/cerebro") return { type: "brain", route };
   if (route === "/configuracion" || route.startsWith("/configuracion/")) {
