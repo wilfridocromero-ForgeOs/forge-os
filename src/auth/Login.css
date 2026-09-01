@@ -1,0 +1,354 @@
+.login-experience {
+  isolation: isolate;
+}
+
+.login-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-ambient::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    radial-gradient(circle at 26% 38%, rgba(255, 255, 255, 0.035), transparent 25%),
+    radial-gradient(circle at 72% 66%, rgba(191, 154, 86, 0.025), transparent 22%);
+  opacity: 0;
+  animation: login-atmosphere-in 650ms ease-out 40ms forwards;
+}
+
+.login-orbit,
+.login-thread {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  opacity: 0;
+}
+
+.login-orbit {
+  left: 26%;
+  top: 50%;
+  width: min(58rem, 88vw);
+  aspect-ratio: 1.8;
+  border-radius: 50%;
+}
+
+.login-orbit--outer {
+  transform: translate(-53%, -49%) rotate(-21deg) scale(0.9);
+  animation:
+    login-orbit-in 850ms cubic-bezier(0.22, 1, 0.36, 1) 240ms forwards,
+    login-orbit-drift 32s ease-in-out 1.7s infinite alternate;
+}
+
+.login-orbit--inner {
+  width: min(42rem, 68vw);
+  border-color: rgba(255, 255, 255, 0.075);
+  transform: translate(-47%, -52%) rotate(25deg) scale(0.88);
+  animation:
+    login-orbit-inner-in 880ms cubic-bezier(0.22, 1, 0.36, 1) 310ms forwards,
+    login-orbit-inner-drift 38s ease-in-out 1.8s infinite alternate;
+}
+
+.login-thread {
+  left: 9%;
+  width: 42%;
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  transform-origin: right center;
+}
+
+.login-thread--one {
+  --login-thread-angle: 11deg;
+  top: 34%;
+  transform: rotate(11deg) scaleX(0.65);
+  animation: login-thread-in 780ms ease-out 320ms forwards;
+}
+
+.login-thread--two {
+  --login-thread-angle: -9deg;
+  top: 68%;
+  transform: rotate(-9deg) scaleX(0.65);
+  animation: login-thread-in 780ms ease-out 440ms forwards;
+}
+
+.login-point {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.34);
+  opacity: 0;
+  animation:
+    login-point-organize 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    login-point-breathe 11s ease-in-out 1.7s infinite alternate;
+}
+
+.login-point--1 { --point-from-x: -42px; --point-from-y: -22px; left: 12%; top: 28%; animation-delay: 180ms, 1.8s; }
+.login-point--2 { --point-from-x: -28px; --point-from-y: 38px; left: 18%; top: 67%; animation-delay: 240ms, 2.1s; }
+.login-point--3 { --point-from-x: 8px; --point-from-y: -45px; left: 27%; top: 20%; animation-delay: 300ms, 2.4s; }
+.login-point--4 { --point-from-x: 36px; --point-from-y: 34px; left: 35%; top: 63%; animation-delay: 360ms, 1.9s; }
+.login-point--5 { --point-from-x: 55px; --point-from-y: -18px; left: 43%; top: 31%; animation-delay: 420ms, 2.5s; }
+.login-point--6 { --point-from-x: 52px; --point-from-y: 30px; left: 57%; top: 75%; animation-delay: 300ms, 2.2s; }
+.login-point--7 { --point-from-x: 38px; --point-from-y: -38px; left: 70%; top: 17%; animation-delay: 380ms, 2s; }
+.login-point--8 { --point-from-x: 64px; --point-from-y: 6px; left: 83%; top: 49%; animation-delay: 460ms, 2.3s; }
+.login-point--9 { --point-from-x: 46px; --point-from-y: 34px; left: 92%; top: 81%; animation-delay: 520ms, 2.6s; }
+
+.login-shell {
+  opacity: 0;
+  transform: translateY(8px) scale(0.995);
+  animation: login-shell-in 500ms cubic-bezier(0.22, 1, 0.36, 1) 120ms forwards;
+}
+
+.login-brand {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-brand::before {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 13rem;
+  height: 13rem;
+  border-radius: 50%;
+  content: "";
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 62%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.7);
+  animation: login-brand-light 600ms ease-out 570ms forwards;
+}
+
+.login-brand > div {
+  position: relative;
+}
+
+.login-brand img[src="/orvesen-mark.png"] {
+  --login-mark-scale: 1.22;
+  transform: scale(1.22);
+  animation: login-mark-reveal 500ms cubic-bezier(0.22, 1, 0.36, 1) 550ms both;
+}
+
+.login-brand h1 {
+  --login-wordmark-spacing: 0.32em;
+  animation: login-wordmark-in 450ms ease-out 850ms both;
+}
+
+.login-brand h1 + p {
+  animation: login-copy-in 430ms ease-out 1.05s both;
+}
+
+.login-brand > div > p {
+  animation: login-copy-in 420ms ease-out 1.16s both;
+}
+
+.login-form-panel {
+  animation: login-form-in 550ms cubic-bezier(0.22, 1, 0.36, 1) 1.05s both;
+}
+
+@keyframes login-atmosphere-in {
+  to { opacity: 1; }
+}
+
+@keyframes login-orbit-in {
+  to { opacity: 1; transform: translate(-50%, -50%) rotate(-18deg) scale(1); }
+}
+
+@keyframes login-orbit-inner-in {
+  to { opacity: 1; transform: translate(-50%, -50%) rotate(21deg) scale(1); }
+}
+
+@keyframes login-orbit-drift {
+  to { transform: translate(-49%, -51%) rotate(-15deg) scale(1.015); }
+}
+
+@keyframes login-orbit-inner-drift {
+  to { transform: translate(-51%, -49%) rotate(18deg) scale(0.99); }
+}
+
+@keyframes login-thread-in {
+  to { opacity: 1; transform: rotate(var(--login-thread-angle, 0deg)) scaleX(1); }
+}
+
+@keyframes login-point-organize {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--point-from-x), var(--point-from-y), 0) scale(0.45);
+  }
+  55% { opacity: 0.9; }
+  to { opacity: 0.62; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes login-point-breathe {
+  to { opacity: 0.32; transform: translate3d(1px, -2px, 0) scale(0.88); }
+}
+
+@keyframes login-shell-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes login-brand-light {
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes login-mark-reveal {
+  from { opacity: 0; filter: brightness(0.62); transform: scale(calc(var(--login-mark-scale) * 0.92)); }
+  72% { filter: brightness(1.16) drop-shadow(0 0 10px rgba(255, 255, 255, 0.22)); }
+  to { opacity: 1; filter: brightness(1); transform: scale(var(--login-mark-scale)); }
+}
+
+@keyframes login-wordmark-in {
+  from { opacity: 0; letter-spacing: 0.52em; transform: translateY(4px); }
+  to { opacity: 1; letter-spacing: var(--login-wordmark-spacing); transform: translateY(0); }
+}
+
+@keyframes login-copy-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes login-form-in {
+  from { opacity: 0; transform: translate3d(7px, 7px, 0); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 639px) {
+  .login-point:nth-child(n + 6) {
+    display: none;
+  }
+
+  .login-orbit {
+    left: 50%;
+    top: 22%;
+    width: 38rem;
+  }
+
+  .login-orbit--inner {
+    width: 29rem;
+  }
+
+  .login-thread {
+    display: none;
+  }
+
+  .login-brand img[src="/orvesen-mark.png"] {
+    --login-mark-scale: 1.16;
+    transform: scale(1.16);
+    animation-duration: 420ms;
+    animation-delay: 380ms;
+  }
+
+  .login-shell {
+    animation-duration: 380ms;
+    animation-delay: 80ms;
+  }
+
+  .login-orbit--outer {
+    animation: login-orbit-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 130ms forwards,
+      login-orbit-drift 36s ease-in-out 1.3s infinite alternate;
+  }
+
+  .login-orbit--inner {
+    animation: login-orbit-inner-in 720ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards,
+      login-orbit-inner-drift 42s ease-in-out 1.35s infinite alternate;
+  }
+
+  .login-brand::before {
+    animation-duration: 450ms;
+    animation-delay: 400ms;
+  }
+
+  .login-brand h1 {
+    animation-duration: 380ms;
+    animation-delay: 600ms;
+  }
+
+  .login-brand h1 + p {
+    animation-duration: 350ms;
+    animation-delay: 760ms;
+  }
+
+  .login-form-panel {
+    animation-duration: 460ms;
+    animation-delay: 760ms;
+  }
+}
+
+@media (min-width: 640px) {
+  .login-brand h1 {
+    --login-wordmark-spacing: 0.4em;
+  }
+}
+
+@media (max-height: 720px) {
+  .login-experience {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-ambient::before,
+  .login-orbit,
+  .login-thread,
+  .login-point,
+  .login-shell,
+  .login-brand::before,
+  .login-brand img[src="/orvesen-mark.png"],
+  .login-brand h1,
+  .login-brand h1 + p,
+  .login-brand > div > p,
+  .login-form-panel {
+    animation: none;
+  }
+
+  .login-ambient::before,
+  .login-orbit,
+  .login-thread,
+  .login-point,
+  .login-shell,
+  .login-brand::before,
+  .login-brand img[src="/orvesen-mark.png"],
+  .login-brand h1,
+  .login-brand h1 + p,
+  .login-brand > div > p,
+  .login-form-panel {
+    opacity: 1;
+  }
+
+  .login-point {
+    opacity: 0.42;
+  }
+
+  .login-orbit--outer {
+    transform: translate(-50%, -50%) rotate(-18deg) scale(1);
+  }
+
+  .login-orbit--inner {
+    transform: translate(-50%, -50%) rotate(21deg) scale(1);
+  }
+
+  .login-thread--one {
+    transform: rotate(11deg) scaleX(1);
+  }
+
+  .login-thread--two {
+    transform: rotate(-9deg) scaleX(1);
+  }
+
+  .login-brand::before {
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .login-shell,
+  .login-brand h1,
+  .login-brand h1 + p,
+  .login-brand > div > p,
+  .login-form-panel {
+    transform: none;
+  }
+}
