@@ -40,3 +40,13 @@ test("duplicate and reorder create valid immutable documents with fresh ids", ()
   assert.equal(moved.sections[1].id, firstId);
   assert.equal(state.document.sections.length, 2);
 });
+
+test("action alignment remains in the canonical document across save and reload", () => {
+  const initial = draft();
+  const action = initial.document.sections[0].regions[0].blocks.find((block) => block.type === "action_group");
+  let state = createLandingEditorState(initial);
+  state = landingEditorReducer(state, { type: "operation", operation: { type: "update_block_style", block_id: action.id, changes: { align: "center" } }, group: "style" });
+  const reloaded = createLandingEditorState({ revision: 5, document: structuredClone(state.document) });
+  const persisted = reloaded.document.sections[0].regions[0].blocks.find((block) => block.id === action.id);
+  assert.equal(persisted.style.align, "center");
+});
