@@ -50,3 +50,13 @@ test("action alignment remains in the canonical document across save and reload"
   const persisted = reloaded.document.sections[0].regions[0].blocks.find((block) => block.id === action.id);
   assert.equal(persisted.style.align, "center");
 });
+
+test("heading can reach a real empty string and undo/redo preserves it", () => {
+  const initial = draft(); const heading = initial.document.sections[0].regions[0].blocks.find((block) => block.type === "heading");
+  let state = createLandingEditorState(initial);
+  for (const [index, text] of ["abc", "ab", "a", ""].entries()) state = landingEditorReducer(state, { type: "operation", operation: { type: "update_block_content", block_id: heading.id, changes: { text } }, group: "typing", at: 1000 + index * 800 });
+  assert.equal(state.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "");
+  assert.match(JSON.stringify(state.document), /"text":""/);
+  state = landingEditorReducer(state, { type: "undo" }); assert.equal(state.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "a");
+  state = landingEditorReducer(state, { type: "redo" }); assert.equal(state.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "");
+});
