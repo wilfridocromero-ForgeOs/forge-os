@@ -26,6 +26,17 @@ test("video parser permits only controlled YouTube and Vimeo HTTPS URLs", () => 
   for (const value of ["http://youtube.com/watch?v=abcdefghijk", "https://evil.test/embed/x", "javascript:alert(1)", "https://youtube.com.evil.test/watch?v=abcdefghijk"]) assert.equal(safeVideoEmbedUrl(value), null);
 });
 
+test("public links accept only the approved V1 protocols", () => {
+  for (const href of ["https://orvesen.com/start", "#contacto", "mailto:hola@orvesen.com", "tel:+591 700-00000"]) {
+    const block = createPrimitiveBlock("action_group", id(), { actions: [{ label: "Contactar", href }] });
+    assert.equal(validateLandingDocument(documentWith(block)).valid, true, href);
+  }
+  for (const href of ["javascript:alert(1)", "data:text/html,test", "ftp://orvesen.com", "mailto:test\nBcc:evil@example.com"]) {
+    const block = createPrimitiveBlock("action_group", id(), { actions: [{ label: "No permitido", href }] });
+    assert.equal(validateLandingDocument(documentWith(block)).valid, false, href);
+  }
+});
+
 test("every professional pattern expands to valid primitives with unique identities", () => {
   for (const pattern of LANDING_PATTERN_CATALOG) {
     const section = createLandingPattern(pattern.id);

@@ -8,6 +8,14 @@ const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-22
 const documentWith = (block) => ({ ...createLandingDocument(), sections: [{ id: ids[0], layout: "stack", regions: [{ id: ids[1], span: 12, blocks: [block] }] }] });
 
 test("accepts an empty canonical document", () => assert.equal(validateLandingDocument(createLandingDocument()).valid, true));
+test("validates publication metadata without changing schema version", () => {
+  const valid = createLandingDocument(); valid.settings.seo = { title: "Landing ORVESEN", description: "Una descripción pública controlada." };
+  assert.equal(validateLandingDocument(valid).valid, true);
+  for (const seo of [{ title: 42, description: "" }, { title: "x".repeat(121), description: "" }, { title: "", description: "x".repeat(301) }, { title: "", description: "", extra: true }]) {
+    const document = createLandingDocument(); document.settings.seo = seo;
+    assert.equal(validateLandingDocument(document).valid, false);
+  }
+});
 test("rejects schema, type and unknown root keys", () => {
   for (const patch of [{ schema_version: 2 }, { document_type: "form" }, { surprise: true }]) assert.equal(validateLandingDocument({ ...createLandingDocument(), ...patch }).valid, false);
 });

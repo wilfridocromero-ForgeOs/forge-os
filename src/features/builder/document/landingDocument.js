@@ -23,7 +23,12 @@ const validHttpsUrl = (value) => {
   try { return new URL(value).protocol === "https:"; } catch { return false; }
 };
 const validOptionalHttpsUrl = (value) => value === null || value === "" || validHttpsUrl(value);
-const validSafeLink = (value) => typeof value === "string" && (value.startsWith("#") || value.startsWith("mailto:") || validHttpsUrl(value));
+const validSafeLink = (value) => {
+  if (typeof value !== "string" || [...value].some((character) => character.charCodeAt(0) <= 31 || character.charCodeAt(0) === 127)) return false;
+  if (/^#[^\s]*$/.test(value) || /^mailto:[^\s]+$/.test(value)) return true;
+  if (/^tel:\+?[0-9(). -]+$/.test(value)) return true;
+  return !/\s/.test(value) && validHttpsUrl(value);
+};
 const validateExactObject = (content, keys, errors, path, code) => {
   if (!plainObject(content) || !ownKeysValid(content, new Set(keys))) { errors.push({ path, code }); return false; }
   return true;
@@ -94,7 +99,7 @@ export const BLOCK_REGISTRY = Object.freeze({
     if (!plainObject(content) || !ownKeysValid(content, new Set(["actions"])) || !Array.isArray(content.actions) || content.actions.length < 1 || content.actions.length > 2) return errors.push({ path, code: "INVALID_ACTION_GROUP" });
     content.actions.forEach((action, index) => {
       if (!plainObject(action) || !ownKeysValid(action, new Set(["label", "href", "variant", "size", "width", "radius", "shadow", "border", "background", "text_color", "border_color"])) || !validText(action.label, 80, false) || !validText(action.href, 2048, false) || (action.variant !== undefined && !["primary", "secondary", "outline", "ghost"].includes(action.variant)) || (action.size !== undefined && !["sm", "md", "lg"].includes(action.size)) || (action.width !== undefined && !["auto", "full"].includes(action.width)) || (action.radius !== undefined && !["none", "sm", "md", "lg", "pill"].includes(action.radius)) || (action.shadow !== undefined && !["none", "subtle", "soft", "medium"].includes(action.shadow)) || (action.border !== undefined && !["none", "subtle", "standard"].includes(action.border)) || !validToken(action.background) || !validToken(action.text_color) || !validToken(action.border_color)) errors.push({ path: `${path}.actions.${index}`, code: "INVALID_ACTION" });
-      if (typeof action?.href === "string" && !action.href.startsWith("#") && !validHttpsUrl(action.href)) errors.push({ path: `${path}.actions.${index}.href`, code: "UNSAFE_URL" });
+      if (typeof action?.href === "string" && !validSafeLink(action.href)) errors.push({ path: `${path}.actions.${index}.href`, code: "UNSAFE_URL" });
     });
   } },
   form_reference: { version: 1, operations: ["update_content", "update_style", "move", "remove"], defaults: { asset_id: null, label: "Formulario" }, validate(content, errors, path) {
@@ -163,6 +168,8 @@ export function validateLandingDocument(document) {
   if (document.document_type !== "landing_page") errors.push({ path: "$.document_type", code: "INVALID_DOCUMENT_TYPE" });
   if (!validText(document.locale, 16, false)) errors.push({ path: "$.locale", code: "INVALID_LOCALE" });
   if (!plainObject(document.settings) || !ownKeysValid(document.settings, new Set(["seo", "design_system"]))) errors.push({ path: "$.settings", code: "INVALID_SETTINGS" });
+  const seo = document.settings?.seo;
+  if (!plainObject(seo) || !ownKeysValid(seo, new Set(["title", "description"])) || !validText(seo.title, 120) || !validText(seo.description, 300)) errors.push({ path: "$.settings.seo", code: "INVALID_SEO" });
   const design = document.settings?.design_system;
   if (!plainObject(design) || !ownKeysValid(design, new Set(DESIGN_KEYS)) || DESIGN_KEYS.some((key) => !plainObject(design[key]))) errors.push({ path: "$.settings.design_system", code: "INVALID_DESIGN_SYSTEM" });
   else for (const category of DESIGN_KEYS) for (const [name, value] of Object.entries(design[category])) {
