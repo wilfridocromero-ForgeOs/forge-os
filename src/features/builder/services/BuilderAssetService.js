@@ -9,7 +9,7 @@ export class BuilderDraftConflictError extends Error {
 export async function listBuilderAssets({ assetType = null, includeArchived = true } = {}) {
   let query = supabase
     .from("builder_assets")
-    .select("id,organization_id,asset_type,name,lifecycle,created_by,created_at,updated_at,archived_at,builder_asset_versions(id,version_number,state,schema_version,created_at)")
+    .select("id,organization_id,asset_type,name,lifecycle,created_by,created_at,updated_at,archived_at,builder_asset_versions!builder_asset_versions_organization_id_asset_id_fkey(id,version_number,state,schema_version,created_at)")
     .order("updated_at", { ascending: false });
   if (assetType) query = query.eq("asset_type", assetType);
   if (!includeArchived) query = query.neq("lifecycle", "archived");
