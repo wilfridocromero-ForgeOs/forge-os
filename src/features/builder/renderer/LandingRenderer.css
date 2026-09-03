@@ -81,3 +81,9 @@
 .landing-renderer [role=group] a[data-shadow=medium]{box-shadow:0 12px 30px #0005}
 .landing-renderer [role=group] a[data-glow=soft]{box-shadow:0 0 24px color-mix(in srgb,var(--lp-accent) 34%,transparent)}
 .landing-renderer [role=group] a[data-glow=strong]{box-shadow:0 0 38px color-mix(in srgb,var(--lp-accent) 52%,transparent)}
+
+/* ORVESEN Builder V2: never stretch a landing beyond its real content. */
+.landing-renderer{min-height:0!important;height:auto}
+
+/* Builder/renderer natural document height */
+.landing-renderer{min-height:0!important;height:auto!important}

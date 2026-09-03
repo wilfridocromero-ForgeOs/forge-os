@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, GripVertical, Heading, Image, Layers3, Monitor, MousePointerClick, Pilcrow, Redo2, Smartphone, Tablet, Trash2, Undo2, Waypoints } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { validateLandingDocument } from "../document/landingDocument.js";
 import { applyLandingOperations } from "../document/landingOperations.js";
 import { createLandingPattern, LANDING_PATTERN_CATALOG } from "../document/landingPatterns.js";
@@ -31,7 +32,17 @@ const BLOCKS = [
 ];
 const PREVIEWS = [{ id: "desktop", label: "Desktop", Icon: Monitor }, { id: "tablet", label: "Tablet", Icon: Tablet }, { id: "mobile", label: "Mobile", Icon: Smartphone }];
 const PATTERNS = LANDING_PATTERN_CATALOG.map((pattern) => ({ ...pattern, hint: pattern.group }));
-const newSection = () => ({ id: crypto.randomUUID(), layout: "stack", regions: [{ id: crypto.randomUUID(), span: 12, blocks: [] }] });
+const createBuilderId = () => {
+  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto?.getRandomValues === "function") globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0"));
+  return `${hex.slice(0,4).join("")}-${hex.slice(4,6).join("")}-${hex.slice(6,8).join("")}-${hex.slice(8,10).join("")}-${hex.slice(10).join("")}`;
+};
+const newSection = () => ({ id: createBuilderId(), layout: "stack", regions: [{ id: createBuilderId(), span: 12, blocks: [] }] });
 const saveLabel = (status) => ({ saved: "Guardado", saving: "Guardando…", unsaved: "Sin guardar", conflict: "Conflicto", error: "Error" })[status] || status;
 
 export default function LandingPageEditor({ asset }) {
@@ -46,6 +57,8 @@ export default function LandingPageEditor({ asset }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [mobileAddOpen, setMobileAddOpen] = useState(false);
   const [globalStylesOpen, setGlobalStylesOpen] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState("top");
+  const [pendingInsert, setPendingInsert] = useState(null);
   const autosaveRef = useRef(null); const saveDelayRef = useRef(600); const stateRef = useRef(null); const dragRef = useRef(null);
   const libraryDragRef = useRef(null);
 
@@ -113,25 +126,123 @@ export default function LandingPageEditor({ asset }) {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(event.target?.tagName) || event.target?.isContentEditable;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); dispatch({ type: event.shiftKey ? "redo" : "undo" }); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); dispatch({ type: "redo" }); }
-      else if (event.key === "Escape") { if (editing) setEditing(null); else { dispatch({ type: "select", selection: null }); setPanelOpen(false); } }
+      else if (event.key === "Escape") { if (pendingInsert) cancelMobilePlacement(); else if (editing) setEditing(null); else { dispatch({ type: "select", selection: null }); setPanelOpen(false); } }
       else if (!typing && (event.key === "Delete" || event.key === "Backspace") && stateRef.current?.selection) { event.preventDefault(); removeSelection(stateRef.current.selection); }
     };
     window.addEventListener("keydown", keys); return () => window.removeEventListener("keydown", keys);
-  }, [removeSelection, editing]);
+  }, [removeSelection, editing, pendingInsert]);
+
+  useEffect(() => {
+    if (!state || typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(max-width: 900px)");
+    const syncMobilePreview = () => {
+      if (media.matches && state.preview !== "mobile") dispatch({ type: "preview", preview: "mobile" });
+    };
+    syncMobilePreview();
+    media.addEventListener?.("change", syncMobilePreview);
+    return () => media.removeEventListener?.("change", syncMobilePreview);
+  }, [state?.preview]);
 
   function createPattern(id) {
     return createLandingPattern(id, { formAssetId: forms[0]?.id || null });
   }
-  function addBlock(type) {
-    const blockId = crypto.randomUUID();
-    if (!selectedRegion) { const section = newSection(); replace(applyLandingOperations(state.document, [{ type: "add_section", section }, { type: "add_block", region_id: section.regions[0].id, block_type: type, block_id: blockId }]), "insert"); }
-    else apply({ type: "add_block", region_id: selectedRegion.id, block_type: type, block_id: blockId }, "insert");
-    dispatch({ type: "select", selection: { kind: "block", id: blockId } });
+  function revealInserted(kind, id) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const node = document.querySelector(`[data-${kind}-id="${id}"]`);
+      node?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }));
   }
-  function addPattern(id) { const section = createPattern(id); if (!section) return; apply({ type: "add_section", section }, "pattern"); dispatch({ type: "select", selection: { kind: "section", id: section.id } }); }
+
+  function closeMobileTools() {
+    setMobileAddOpen(false);
+    setGlobalStylesOpen(false);
+  }
+
+  const mobileActivate = (handler) => (event) => {
+    event.stopPropagation();
+    handler();
+  };
+
+  function addBlock(type) {
+    const blockId = createBuilderId();
+    if (!selectedRegion) {
+      const section = newSection();
+      replace(applyLandingOperations(state.document, [
+        { type: "add_section", section },
+        { type: "add_block", region_id: section.regions[0].id, block_type: type, block_id: blockId },
+      ]), "insert");
+    } else {
+      apply({ type: "add_block", region_id: selectedRegion.id, block_type: type, block_id: blockId }, "insert");
+    }
+    dispatch({ type: "select", selection: { kind: "block", id: blockId } });
+    closeMobileTools();
+    revealInserted("block", blockId);
+  }
+
+  function addPattern(id) {
+    const section = createPattern(id);
+    const current = stateRef.current?.document || state.document;
+    if (!section || !current) return;
+    const next = applyLandingOperations(current, [{ type: "add_section", section }]);
+    replace(next, "pattern", 120);
+    dispatch({ type: "select", selection: { kind: "section", id: section.id } });
+    closeMobileTools();
+    revealInserted("section", section.id);
+  }
+  function beginMobilePlacement(payload) {
+    setPendingInsert(payload);
+    setMobileAddOpen(false);
+    setGlobalStylesOpen(false);
+    setEditing(null);
+    setPanelOpen(false);
+    dispatch({ type: "select", selection: null });
+    requestAnimationFrame(() => document.querySelector(".landing-renderer")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+  }
+  function placePendingInsert(target) {
+    const payload = pendingInsert;
+    const current = stateRef.current?.document || state.document;
+    if (!payload || !current || !target) return;
+
+    if (payload.kind === "palette-block") {
+      if (!["block-before", "block-after", "region-end"].includes(target.kind) || !target.regionId) return;
+      const region = current.sections.flatMap((section) => section.regions).find((item) => item.id === target.regionId);
+      if (!region) return;
+
+      let index = region.blocks.length;
+      if (target.kind === "block-before" || target.kind === "block-after") {
+        const anchorIndex = region.blocks.findIndex((block) => block.id === target.blockId);
+        if (anchorIndex < 0) return;
+        index = target.kind === "block-before" ? anchorIndex : anchorIndex + 1;
+      }
+
+      const blockId = createBuilderId();
+      const next = applyLandingOperations(current, [{
+        type: "add_block", region_id: region.id, block_type: payload.id, block_id: blockId, index,
+      }]);
+      replace(next, "block-place", 120);
+      setPendingInsert(null);
+      dispatch({ type: "select", selection: { kind: "block", id: blockId } });
+      requestAnimationFrame(() => revealInserted("block", blockId));
+      return;
+    }
+
+    if (payload.kind === "palette-pattern") {
+      if (!isValidLandingDrop(payload, target)) return;
+      const next = applyLandingDrop(current, payload, target, { createPattern });
+      const before = new Set(current.sections.map((item) => item.id));
+      const inserted = next.sections.find((item) => !before.has(item.id));
+      replace(next, "pattern-place", 120);
+      setPendingInsert(null);
+      if (inserted) {
+        dispatch({ type: "select", selection: { kind: "section", id: inserted.id } });
+        requestAnimationFrame(() => revealInserted("section", inserted.id));
+      }
+    }
+  }
+  function cancelMobilePlacement() { setPendingInsert(null); setEditing(null); }
   function insertSavedButton(saved, regionId = selectedRegion?.id) {
     if (!saved?.style) return;
-    const blockId = crypto.randomUUID();
+    const blockId = createBuilderId();
     const targetRegionId = regionId;
     const actions = [{
       label: saved.style.label || saved.name || "Comenzar",
@@ -235,25 +346,49 @@ export default function LandingPageEditor({ asset }) {
   if (!state) return <div className="landing-editor-state">Cargando borrador…</div>;
   if (asset.lifecycle === "archived") return <div className="landing-editor-state"><strong>Landing archivada</strong><p>Este asset no puede editarse.</p><button onClick={() => navigate("/construir")}>Volver</button></div>;
   const validation = validateLandingDocument(state.document);
-  const editorActions = { dropTarget: dragState.target, move: moveSelection, duplicate: duplicateSelection, remove: removeSelection, openPanel, editing };
+  const editorActions = { dropTarget: dragState.target, move: moveSelection, duplicate: duplicateSelection, remove: removeSelection, openPanel, editing, pendingInsert, onPlace: placePendingInsert };
 
   return <div className="landing-editor">
     <header className="landing-editor-bar"><button onClick={leave} aria-label="Volver a Builder"><ArrowLeft/></button><div className="landing-editor-identity"><span>BUILDER · LANDING</span><strong>{asset.name}</strong><small>Borrador</small></div><div className="landing-editor-history"><button onClick={() => dispatch({ type: "undo" })} disabled={!state.past.length} aria-label="Deshacer"><Undo2/></button><button onClick={() => dispatch({ type: "redo" })} disabled={!state.future.length} aria-label="Rehacer"><Redo2/></button></div><div className="landing-preview-switch" aria-label="Vista responsive">{PREVIEWS.map(({ id, label, Icon }) => <button key={id} title={label} className={state.preview === id ? "is-active" : ""} onClick={() => dispatch({ type: "preview", preview: id })} aria-pressed={state.preview === id}><Icon/><span>{label}</span></button>)}</div><span className={`landing-save ${status}`}>{saveLabel(status)}</span></header>
     {(error || status === "conflict") && <div className="landing-editor-alert" role="alert"><span>{status === "conflict" ? "Esta página cambió en otra sesión." : error}</span>{status === "conflict" ? <><button onClick={reloadRemote}>Recargar versión remota</button><button onClick={() => navigator.clipboard?.writeText(JSON.stringify(localConflictDocument, null, 2))}>Copiar cambios locales</button></> : status === "error" && <button onClick={() => autosaveRef.current?.retry()}>Reintentar guardado</button>}</div>}
     <div className={`landing-editor-body ${panelOpen && state.selection ? "has-inspector" : ""} ${mobileAddOpen ? "mobile-add-open" : ""} ${globalStylesOpen ? "has-global-styles" : ""}`}>
-      <aside className={`landing-palette ${mobileAddOpen ? "is-mobile-open" : ""} ${globalStylesOpen ? "is-global-styles" : ""}`}>
+      <aside className="landing-palette">
+        <button type="button" className="landing-mobile-sheet-handle" aria-label="Cerrar panel" onClick={closeMobileTools}><span/></button>
         <div className="landing-palette-tabs">
           <button type="button" className={!globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(false)}>＋ Añadir</button>
-          <button type="button" className={globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(true)}>✦ Estilos globales</button>
+          <button type="button" className={globalStylesOpen ? "is-active" : ""} onClick={() => { setGlobalStylesOpen(true); setMobileAddOpen(true); }}>Estilos de página</button>
         </div>
         {globalStylesOpen ? <DesignControls document={state.document} replace={replace} onInsertSavedButton={insertSavedButton} onStartLibraryDrag={startLibraryDrag}/> : <>
           <span>AÑADIR</span>
           <h2>Blocks</h2>
-          {BLOCKS.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addBlock(type)}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}
+          {BLOCKS.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-block", id: type, label }))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}
           <h2>Patterns</h2>
-          {PATTERNS.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addPattern(item.id)}><PatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}
+          {PATTERNS.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><MobilePatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}
         </>}
       </aside>
+      {mobileAddOpen && typeof document !== "undefined" && createPortal(<div className="orvesen-mobile-add-layer" role="presentation">
+        <button type="button" className="orvesen-mobile-add-backdrop" aria-label="Cerrar panel" onClick={closeMobileTools}/>
+        <section className="orvesen-mobile-add-sheet" role="dialog" aria-modal="true" aria-label={globalStylesOpen ? "Estilos de página" : "Añadir contenido"} onClick={(event) => event.stopPropagation()}>
+          <div className="orvesen-mobile-add-grab"><span/></div>
+          <div className="orvesen-mobile-add-tabs">
+            <button type="button" className={!globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(false)}>＋ Añadir</button>
+            <button type="button" className={globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(true)}>Estilos de página</button>
+            <button type="button" className="orvesen-mobile-add-close" onClick={closeMobileTools} aria-label="Cerrar">×</button>
+          </div>
+          <div className="orvesen-mobile-add-scroll">
+            {globalStylesOpen ? <DesignControls document={state.document} replace={replace} onInsertSavedButton={insertSavedButton} onStartLibraryDrag={startLibraryDrag}/> : <>
+              <div className="orvesen-mobile-add-heading"><span>AÑADIR</span><h2>Elementos</h2><small>Toca un elemento para añadirlo al canvas.</small></div>
+              <div className="orvesen-mobile-add-grid">
+                {BLOCKS.map(({ type, label, hint, Icon }) => <button type="button" key={type} className="orvesen-mobile-add-item" onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-block", id: type, label }))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span></button>)}
+              </div>
+              <div className="orvesen-mobile-add-heading orvesen-mobile-pattern-heading"><h2>Patterns</h2><small>Toca una estructura para insertarla completa.</small></div>
+              <div className="orvesen-mobile-pattern-list">
+                {PATTERNS.map((item) => <button type="button" className="orvesen-mobile-pattern-item" key={item.id} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><MobilePatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span></button>)}
+              </div>
+            </>}
+          </div>
+        </section>
+      </div>, document.body)}
       <main className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p><div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div></div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolveForm={(id, label) => <div className="landing-form-preview"><strong>Form</strong><span>{forms.find((form) => form.id === id)?.name || "Sin formulario asignado"}</span><small>{label}</small></div>}/>}</div></div><output className="landing-editor-announcement" aria-live="polite">{dragState.target ? "Destino de inserción seleccionado" : validation.valid ? "Documento válido" : `${validation.errors.length} errores de documento`}</output></main>
       {state.selection?.kind === "block" && selected && !panelOpen && <ContextualStyleToolbar
         selection={state.selection}
@@ -264,11 +399,20 @@ export default function LandingPageEditor({ asset }) {
         onDuplicate={() => duplicateSelection(state.selection)}
         onDelete={() => removeSelection(state.selection)}
         onClose={() => { setEditing(null); setPanelOpen(false); dispatch({ type: "select", selection: null }); }}
+        position={toolbarPosition}
+        onTogglePosition={() => setToolbarPosition((value) => value === "top" ? "bottom" : "top")}
       />}
       {panelOpen && state.selection && <Inspector selection={state.selection} selected={selected} forms={forms} apply={apply} preview={state.preview} onDelete={() => removeSelection(state.selection)} onDuplicate={() => duplicateSelection(state.selection)} onMove={(delta) => moveSelection(state.selection, delta)} onClose={() => setPanelOpen(false)}/>}
     </div>
-    <nav className="landing-mobile-context" aria-label="Herramientas de edición">
-      {!state.selection ? <><button type="button" onClick={() => setMobileAddOpen((value) => !value)}>＋ Añadir</button><button type="button" onClick={() => dispatch({ type: "preview", preview: state.preview === "mobile" ? "desktop" : "mobile" })}>Preview</button></> : state.selection.kind === "section" ? <><button type="button" onClick={() => openPanel(state.selection)}>Diseño</button><button type="button" onClick={() => duplicateSelection(state.selection)}>Duplicar</button><button type="button" className="is-danger" onClick={() => removeSelection(state.selection)}>Eliminar</button><button type="button" onClick={() => dispatch({ type: "select", selection: null })}>Cerrar</button></> : null}
+    {pendingInsert && <div className="landing-mobile-placement-bar" role="status" aria-live="polite">
+      <div><small>COLOCANDO</small><strong>{pendingInsert.label || (pendingInsert.kind === "palette-pattern" ? "Pattern" : "Elemento")}</strong><span>Toca una zona “+ Colocar aquí”.</span></div>
+      <button type="button" onClick={cancelMobilePlacement}>Cancelar</button>
+    </div>}
+    <nav className="landing-mobile-context" aria-label="Herramientas principales" onClick={(event) => event.stopPropagation()}>
+      <button type="button" onClick={mobileActivate(() => { setPanelOpen(false); setEditing(null); setGlobalStylesOpen(false); setMobileAddOpen(true); })}>＋ Añadir</button>
+      <button type="button" onClick={mobileActivate(() => { setPanelOpen(false); setEditing(null); setGlobalStylesOpen(true); setMobileAddOpen(true); })}>Estilos de página</button>
+      <button type="button" onClick={() => dispatch({ type: "preview", preview: state.preview === "mobile" ? "desktop" : "mobile" })}>Preview</button>
+      {state.selection?.kind === "section" && <button type="button" onClick={() => openPanel(state.selection)}>Editar sección</button>}
     </nav>
   </div>;
 }
@@ -303,7 +447,7 @@ function InlineEditableField({ block, field, value, index, singleLine = false, p
 
 
 const QUICK_FONTS = [
-  ["inherit", "Global", "Aa"],
+  ["inherit", "Página", "Aa"],
   ["sans", "Sans", "Aa"],
   ["serif", "Serif", "Aa"],
   ["display", "Display", "Aa"],
@@ -317,13 +461,17 @@ const QUICK_COLORS = [
 
 function QuickPopover({ id, openMenu, setOpenMenu, label, trigger, children }) {
   const open = openMenu === id;
+  const close = () => setOpenMenu(null);
   return <div className={`landing-quick-popover ${open ? "is-open" : ""}`}>
-    <button type="button" className="landing-quick-trigger" aria-expanded={open} onClick={() => setOpenMenu(open ? null : id)}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
-    {open && <div className="landing-quick-popover-panel" onClick={(event) => event.stopPropagation()}>{label && <strong>{label}</strong>}{children}</div>}
+    <button type="button" className="landing-quick-trigger" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setOpenMenu(open ? null : id); }}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
+    {open && typeof document !== "undefined" && createPortal(
+      <><button type="button" className="landing-quick-portal-backdrop" aria-label="Cerrar opciones" onClick={close}/><div className="landing-quick-popover-panel landing-quick-portal-panel" onClick={(event) => event.stopPropagation()}>{label && <strong>{label}</strong>}{children}</div></>,
+      document.body
+    )}
   </div>;
 }
 
-function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {}, onMore, onDuplicate, onDelete, onClose }) {
+function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {}, onMore, onDuplicate, onDelete, onClose, position = "top", onTogglePosition }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [actionIndex, setActionIndex] = useState(0);
   if (!selection || selection.kind !== "block" || !selected?.block) return null;
@@ -344,11 +492,11 @@ function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {
       const name = window.prompt("Nombre para guardar este botón:", active.label || "Mi botón");
       if (!name?.trim()) return;
       let library=[]; try { library=JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1") || "[]"); } catch {}
-      const item={ id:crypto.randomUUID(), name:name.trim(), style:{...buttonDefaults, ...active} };
+      const item={ id:createBuilderId(), name:name.trim(), style:{...buttonDefaults, ...active} };
       localStorage.setItem("orvesen.builder.buttonStyles.v1", JSON.stringify([item,...library].slice(0,40)));
       window.dispatchEvent(new Event("orvesen-button-library-updated"));
     };
-    return <div className="landing-quick-toolbar landing-button-context" role="toolbar" aria-label="Editar botón" onClick={(e)=>e.stopPropagation()}>
+    return <div className={`landing-quick-toolbar landing-button-context is-${position}`} role="toolbar" aria-label="Editar botón" onClick={(e)=>e.stopPropagation()}>
       {actions.length > 1 && <QuickPopover id="which" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Botón" trigger={<span>{active?.label || "Botón"}</span>}>
         <div className="landing-option-list">{actions.map((item,index)=><button key={index} type="button" className={actionIndex===index?"is-active":""} onClick={()=>{setActionIndex(index);setOpenMenu(null)}}>{item.label}</button>)}</div>
       </QuickPopover>}
@@ -370,32 +518,33 @@ function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {
           <span>Ancho</span><div className="landing-button-direct-grid">{[["auto","Automático"],["full","Completo"]].map(([id,label])=><button key={id} type="button" className={(active?.width||"auto")===id?"is-active":""} onClick={()=>updateAction({width:id})}>{label}</button>)}</div>
         </div>
       </QuickPopover>
+      <div className="landing-button-align" aria-label="Alineación del botón">{[["start","Izquierda","≡"],["center","Centro","≣"],["end","Derecha","≡"]].map(([id,label,glyph])=><button key={id} type="button" className={(style.align||"start")===id?"is-active":""} title={label} aria-label={label} onClick={()=>updateStyle({align:id})}><span className={`landing-align-glyph is-${id}`}>{glyph}</span></button>)}</div>
       <button type="button" onClick={saveCurrent}>Guardar</button>
       <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
         <div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div>
       </QuickPopover>
-      <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+      <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
     </div>;
   }
 
   const typography = block.type === "heading" || block.type === "text";
-  if (!typography) return <div className="landing-quick-toolbar" role="toolbar" aria-label="Edición del bloque" onClick={(e)=>e.stopPropagation()}>
+  if (!typography) return <div className={`landing-quick-toolbar is-${position}`} role="toolbar" aria-label="Edición del bloque" onClick={(e)=>e.stopPropagation()}>
     <span className="landing-quick-kind">{block.type === "image" ? "Imagen" : block.type === "testimonial" ? "Testimonio" : "Bloque"}</span>
-    <button type="button" onClick={resetGlobal}>Usar estilo global</button>
+    <button type="button" onClick={resetGlobal}>Restablecer diseño</button>
     <button type="button" onClick={onMore}>Editar bloque</button>
     <button type="button" onClick={onDuplicate}>Duplicar</button>
     <button type="button" className="is-danger" onClick={onDelete}>Eliminar</button>
-    <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
   </div>;
 
   const size = block.type === "text" ? (style.text_variant || "body") : (style.text_size || "auto");
-  const sizes = block.type === "text" ? [["lead","Grande"],["body","Normal"],["small","Pequeño"]] : [["auto","Global"],["xs","XS"],["sm","S"],["md","M"],["lg","L"],["xl","XL"],["2xl","2XL"]];
-  return <div className="landing-quick-toolbar" role="toolbar" aria-label="Formato de texto" onClick={(e)=>e.stopPropagation()}>
-    <button type="button" className={!Object.keys(style).length ? "is-active" : ""} onClick={resetGlobal}>Global</button>
-    <QuickPopover id="font" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tipografía" trigger={<><span className="landing-font-preview">Aa</span><span>{QUICK_FONTS.find(([id])=>id===(style.font_family||"inherit"))?.[1]||"Global"}</span></>}>
+  const sizes = block.type === "text" ? [["lead","Grande"],["body","Normal"],["small","Pequeño"]] : [["auto","Página"],["xs","XS"],["sm","S"],["md","M"],["lg","L"],["xl","XL"],["2xl","2XL"]];
+  return <div className={`landing-quick-toolbar is-${position}`} role="toolbar" aria-label="Formato de texto" onClick={(e)=>e.stopPropagation()}>
+    <button type="button" className={!Object.keys(style).length ? "is-active" : ""} onClick={resetGlobal}>Restablecer</button>
+    <QuickPopover id="font" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tipografía" trigger={<><span className="landing-font-preview">Aa</span><span>{QUICK_FONTS.find(([id])=>id===(style.font_family||"inherit"))?.[1]||"Página"}</span></>}>
       <div className="landing-font-list">{QUICK_FONTS.map(([id,label,sample])=><button key={id} type="button" className={`${style.font_family===id||(!style.font_family&&id==="inherit")?"is-active":""} font-${id}`} onClick={()=>{updateStyle({font_family:id});setOpenMenu(null)}}><span>{sample}</span><strong>{label}</strong></button>)}</div>
     </QuickPopover>
-    <QuickPopover id="size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tamaño" trigger={<span>{sizes.find(([id])=>id===size)?.[1]||"Global"}</span>}>
+    <QuickPopover id="size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tamaño" trigger={<span>{sizes.find(([id])=>id===size)?.[1]||"Página"}</span>}>
       <div className="landing-option-grid">{sizes.map(([id,label])=><button key={id} type="button" className={size===id?"is-active":""} onClick={()=>{updateStyle(block.type==="text"?{text_variant:id}:{text_size:id==="auto"?undefined:id});setOpenMenu(null)}}>{label}</button>)}</div>
     </QuickPopover>
     <button type="button" className={`landing-quick-bold ${style.text_weight==="bold"?"is-active":""}`} onClick={()=>updateStyle({text_weight:style.text_weight==="bold"?undefined:"bold"})}>B</button>
@@ -404,8 +553,17 @@ function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {
     </QuickPopover>
     <div className="landing-quick-align">{[["start","Izquierda","≡"],["center","Centro","≣"],["end","Derecha","≡"]].map(([id,label,glyph])=><button key={id} type="button" className={(style.align||"start")===id?"is-active":""} title={label} onClick={()=>updateStyle({align:id})}><span className={`landing-align-glyph is-${id}`}>{glyph}</span></button>)}</div>
     <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}><div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div></QuickPopover>
-    <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
   </div>;
+}
+
+function MobilePatternPreview({ type }) {
+  const cells = type === "faq" ? 4 : ["logos","stats","cards","quotes","pricing"].includes(type) ? 3 : 2;
+  return <span className="orvesen-pattern-visual" data-type={type} aria-hidden="true">
+    <i className="orvesen-pattern-visual-head"/>
+    <b>{Array.from({ length: cells }, (_, index) => <em key={index}/>)}</b>
+    <i className="orvesen-pattern-visual-action"/>
+  </span>;
 }
 
 function PatternPreview({ type }) {
@@ -433,7 +591,7 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
   const removeSaved=(id)=>{const next=savedButtons.filter(x=>x.id!==id);setSavedButtons(next);localStorage.setItem("orvesen.builder.buttonStyles.v1",JSON.stringify(next))};
 
   return <div className="landing-global-styles landing-global-v3">
-    <header className="landing-global-header"><span>ESTILOS GLOBALES</span><strong>Diseña toda la página</strong><p>Define la base aquí. Luego toca cualquier elemento para crear una excepción.</p></header>
+    <header className="landing-global-header"><span>ESTILOS DE PÁGINA</span><strong>Diseña toda la página</strong><p>Define la apariencia general de la página. Al seleccionar un elemento puedes personalizarlo.</p></header>
     <nav className="landing-global-nav">
       {[["typography","Tipografía"],["colors","Colores"],["buttons","Botones"],["layout","Diseño"],["library","Biblioteca"]].map(([id,label])=><button key={id} type="button" className={tab===id?"is-active":""} onClick={()=>setTab(id)}>{label}</button>)}
     </nav>
@@ -448,12 +606,12 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
     </section>}
 
     {tab==="colors"&&<section className="landing-global-section">
-      <div className="landing-global-section-title"><strong>Colores globales</strong><small>Cambia el rol una vez; todos los bloques Global responden</small></div>
+      <div className="landing-global-section-title"><strong>Colores de página</strong><small>Cambia el rol una vez; todos los elementos vinculados responden</small></div>
       <div className="landing-global-color-rows">{[["page_background","Fondo de página","#ffffff"],["surface","Superficie / tarjetas","#ffffff"],["text","Texto principal","#151515"],["muted","Texto secundario","#6b6b6b"],["primary","Marca / acción","#9b7618"]].map(([key,label,fallback])=><label key={key}><input type="color" value={design.colors[key]||fallback} onChange={(e)=>update("colors",key,e.target.value)}/><span><strong>{label}</strong><small>{design.colors[key]||fallback}</small></span></label>)}</div>
     </section>}
 
     {tab==="buttons"&&<section className="landing-global-section">
-      <div className="landing-global-section-title"><strong>Botón global</strong><small>Los botones sin personalización heredan este estilo</small></div>
+      <div className="landing-global-section-title"><strong>Estilo base de botones</strong><small>Los botones sin personalización heredan este estilo</small></div>
       <div className="landing-button-hero"><span className="landing-button-live-preview" data-variant={design.buttons.variant||"primary"} data-size={design.buttons.size||"md"} data-radius={design.buttons.radius||"md"} data-shadow={design.buttons.shadow||"none"}>Comenzar</span><small>Vista previa</small></div>
       <span className="landing-global-label">Estilo</span><div className="landing-option-chips">{[["primary","Sólido"],["secondary","Suave"],["outline","Outline"],["ghost","Minimal"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.variant||"primary")===id?"is-active":""} onClick={()=>update("buttons","variant",id)}>{label}</button>)}</div>
       <span className="landing-global-label">Forma</span><div className="landing-option-chips">{[["none","Recto"],["sm","Sutil"],["md","Medio"],["lg","Redondo"],["pill","Píldora"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.radius||"md")===id?"is-active":""} onClick={()=>update("buttons","radius",id)}>{label}</button>)}</div>
@@ -483,7 +641,7 @@ function Inspector({ selection, selected, forms, apply, preview, onDelete, onDup
   function changeLayout(preset) {
     const spans = { stack: [12], "columns-2": [6, 6], "columns-5-7": [5, 7], "columns-7-5": [7, 5], "columns-3": [4, 4, 4], "columns-4": [3, 3, 3, 3] }[preset] || [12];
     const blocks = section.regions.flatMap((region) => region.blocks);
-    const regions = spans.map((span, index) => ({ id: section.regions[index]?.id || crypto.randomUUID(), span, blocks: index === 0 ? blocks : [] }));
+    const regions = spans.map((span, index) => ({ id: section.regions[index]?.id || createBuilderId(), span, blocks: index === 0 ? blocks : [] }));
     apply({ type: "update_section", section_id: section.id, changes: { layout: spans.length === 1 ? "stack" : "columns", regions } }, "section-layout");
   }
   return <aside className="landing-inspector"><header><div><span>PROPIEDADES</span><strong>{block ? block.type.replace("_", " ") : "Section"}</strong></div><button onClick={onClose} aria-label="Cerrar propiedades">×</button></header>

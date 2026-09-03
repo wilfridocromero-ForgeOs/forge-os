@@ -75,7 +75,16 @@ function Block({ block, resolveForm, buttonDefaults = {}, renderField = null, ed
 function DropZone({ target, actions }) {
   if (!actions) return null;
   const active = actions.dropTarget?.kind === target.kind && actions.dropTarget?.blockId === target.blockId && actions.dropTarget?.sectionId === target.sectionId && actions.dropTarget?.regionId === target.regionId;
-  return <button type="button" className={`landing-drop-zone ${active ? "is-active" : ""}`} data-drop-kind={target.kind} data-block-id-target={target.blockId} data-section-id-target={target.sectionId} data-region-id-target={target.regionId} aria-label="Insertar aquí" tabIndex={-1}><span>+ Añadir aquí</span></button>;
+  const placing = Boolean(actions.pendingInsert);
+  const validPlacement = placing && isPlacementTarget(actions.pendingInsert, target);
+  return <button type="button" className={`landing-drop-zone ${active ? "is-active" : ""} ${validPlacement ? "is-mobile-placement" : ""}`} data-drop-kind={target.kind} data-block-id-target={target.blockId} data-section-id-target={target.sectionId} data-region-id-target={target.regionId} aria-label={validPlacement ? "Colocar aquí" : "Insertar aquí"} tabIndex={validPlacement ? 0 : -1} onClick={validPlacement ? (event) => { event.preventDefault(); event.stopPropagation(); actions.onPlace?.(target); } : undefined}><span>{validPlacement ? "+ Colocar aquí" : "+ Añadir aquí"}</span></button>;
+}
+
+function isPlacementTarget(payload, target) {
+  if (!payload || !target) return false;
+  if (payload.kind === "palette-pattern") return target.kind === "section-before" || target.kind === "section-after";
+  if (payload.kind === "palette-block") return target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end";
+  return false;
 }
 
 const tokenValue = (token) => token ? `var(--lp-${token === "page_background" ? "page" : token === "primary" ? "accent" : token})` : undefined;
@@ -92,7 +101,7 @@ export default function LandingRenderer({ document, resolveForm = null, editorMo
   const design = document.settings.design_system;
   const style = { "--lp-page": design.colors.page_background || "#ffffff", "--lp-surface": design.colors.surface || "#ffffff", "--lp-text": design.colors.text || "#151515", "--lp-muted": design.colors.muted || "#6b6b6b", "--lp-accent": design.colors.primary || "#9b7618", "--lp-font": design.typography.body || "Inter, system-ui, sans-serif", "--lp-heading-font": design.typography.headings || design.typography.body || "Inter, system-ui, sans-serif", "--lp-radius": design.radii.button || "12px", "--lp-card-radius": design.radii.card || "16px", "--lp-media-radius": design.radii.media || "16px", "--lp-width": design.content_widths.standard || "1120px" };
   return <main className="landing-renderer" lang={document.locale} style={style}>
-    {document.sections.map((section) => <div className="landing-editor-section-wrap" key={section.id}>
+    {document.sections.map((section, sectionIndex) => <div className="landing-editor-section-wrap" key={section.id}>
       <DropZone target={{ kind: "section-before", sectionId: section.id }} actions={editorActions}/>
       <section draggable={editorMode} data-drag-kind="section" data-drag-id={section.id} data-selected={(selection?.kind === "section" && selection.id === section.id) || undefined} data-section-id={section.id} data-layout={section.layout} data-align={section.style?.align || "start"} data-spacing={section.style?.spacing || "md"} data-padding-top={section.style?.padding_top} data-padding-bottom={section.style?.padding_bottom} data-content-width={section.style?.content_width || "standard"} data-background={typeof section.style?.background === "object" ? section.style.background.type : section.style?.background ? "solid" : "inherit"} data-border={section.style?.border} data-radius={section.style?.radius} data-shadow={section.style?.shadow} data-tablet-align={section.responsive?.tablet?.align} data-mobile-align={section.responsive?.mobile?.align} data-tablet-layout={section.responsive?.tablet?.layout} data-mobile-layout={section.responsive?.mobile?.layout} data-tablet-hidden={section.responsive?.tablet?.hidden || undefined} data-mobile-hidden={section.responsive?.mobile?.hidden || undefined} data-tablet-spacing={section.responsive?.tablet?.spacing} data-mobile-spacing={section.responsive?.mobile?.spacing} style={sectionBackground(section.style?.background)}>
         {editorMode && <SectionChrome section={section} editorActions={editorActions}/>}
@@ -103,12 +112,12 @@ export default function LandingRenderer({ document, resolveForm = null, editorMo
               {editorMode && <BlockChrome block={block} selected={selection?.kind === "block" && selection.id === block.id} editorActions={editorActions}/>}
               <Block block={block} resolveForm={resolveForm} buttonDefaults={design.buttons} renderField={editorMode ? renderField : null} editorMode={editorMode}/>
             </div>
-            <DropZone target={{ kind: "block-after", blockId: block.id, regionId: region.id }} actions={editorActions}/>
+            {!editorActions?.pendingInsert && <DropZone target={{ kind: "block-after", blockId: block.id, regionId: region.id }} actions={editorActions}/>}
           </div>)}
           <DropZone target={{ kind: "region-end", regionId: region.id }} actions={editorActions}/>
         </div>)}
       </section>
-      <DropZone target={{ kind: "section-after", sectionId: section.id }} actions={editorActions}/>
+      {(!editorActions?.pendingInsert || sectionIndex === document.sections.length - 1) && <DropZone target={{ kind: "section-after", sectionId: section.id }} actions={editorActions}/>}
     </div>)}
   </main>;
 }

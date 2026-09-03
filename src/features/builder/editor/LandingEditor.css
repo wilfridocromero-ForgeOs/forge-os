@@ -466,3 +466,492 @@
 .landing-library-button[data-variant=outline]{background:transparent!important;border-width:1px}
 .landing-library-button[data-variant=ghost]{background:transparent!important;border-color:transparent!important}
 .landing-library-button[data-variant=secondary]{opacity:.88}
+
+/* =========================================================
+   ORVESEN Builder — Mobile UX V1
+   Phone = real mobile canvas + bottom-sheet tools.
+   ========================================================= */
+.landing-mobile-sheet-handle,.landing-mobile-sheet-backdrop{display:none}
+
+@media (max-width:900px){
+  .landing-editor{height:calc(100dvh - var(--app-header-height));padding-bottom:4.15rem;overflow:hidden}
+  .landing-editor-bar{height:3.45rem!important;min-height:3.45rem!important;flex-wrap:nowrap!important;gap:.45rem;padding:.42rem .55rem!important}
+  .landing-editor-bar>button{width:2.45rem;height:2.45rem;padding:0;border-radius:.7rem}
+  .landing-editor-identity{min-width:0;flex:1}
+  .landing-editor-identity strong{font-size:.78rem}
+  .landing-editor-history{display:flex;gap:.2rem}
+  .landing-editor-history button{width:2.25rem;height:2.25rem;padding:0}
+  .landing-preview-switch{display:none!important}
+  .landing-save{flex:none;min-width:auto;font-size:.61rem}
+
+  .landing-editor-body,.landing-editor-body.has-inspector,.landing-editor-body.has-global-styles,.landing-editor-body.has-global-styles.has-inspector{display:block!important;height:calc(100% - 3.45rem)!important;overflow:hidden}
+  .landing-canvas-shell{width:100%;height:100%;overflow-x:hidden;overflow-y:auto;padding:0 0 1rem!important;background:var(--le-bg)}
+  .landing-viewport,.landing-viewport-desktop,.landing-viewport-tablet,.landing-viewport-mobile{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}
+  .landing-page-frame,.landing-page-frame.landing-preview-desktop,.landing-page-frame.landing-preview-tablet,.landing-page-frame.landing-preview-mobile{width:100%!important;max-width:none!important;min-width:0!important;min-height:100%!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important}
+  .landing-page-frame>.landing-renderer{width:100%!important;min-width:0!important}
+  .landing-renderer>.landing-editor-section-wrap{width:100%!important;min-width:0!important;max-width:100%!important}
+  .landing-renderer>.landing-editor-section-wrap>[data-section-id]{width:100%!important;max-width:100%!important;box-sizing:border-box}
+
+  .landing-mobile-sheet-backdrop{display:block;position:fixed;z-index:88;inset:0;border:0;background:#0006;backdrop-filter:blur(1px)}
+  .landing-palette,.landing-palette.is-global-styles{display:none!important}
+  .landing-palette.is-mobile-open{display:grid!important;position:fixed!important;z-index:93!important;right:0!important;bottom:calc(3.8rem + env(safe-area-inset-bottom))!important;left:0!important;inset:auto 0 calc(3.8rem + env(safe-area-inset-bottom))!important;width:100%!important;max-width:none!important;height:auto!important;max-height:52dvh!important;margin:0!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:.5rem!important;overflow-y:auto!important;overflow-x:hidden!important;border:1px solid var(--le-line)!important;border-width:1px 0 0!important;border-radius:1.15rem 1.15rem 0 0!important;background:var(--le-panel)!important;padding:.35rem .85rem 1rem!important;box-shadow:0 -22px 60px #0008!important;overscroll-behavior:contain}
+  .landing-palette.is-mobile-open.is-global-styles{display:block!important;max-height:58dvh!important}
+  .landing-mobile-sheet-handle{display:flex!important;grid-column:1/-1;width:100%;height:1.25rem;align-items:center;justify-content:center;border:0;background:transparent;padding:0;position:sticky;top:0;z-index:3}
+  .landing-mobile-sheet-handle span{display:block;width:2.7rem;height:.25rem;border-radius:99px;background:var(--le-line)}
+  .landing-palette-tabs{grid-column:1/-1;position:sticky;top:1.2rem;z-index:2;display:grid!important;grid-template-columns:1fr 1fr!important;min-width:0!important;margin:0 0 .35rem!important;padding:.15rem 0 .35rem;background:var(--le-panel)}
+  .landing-palette.is-mobile-open>span,.landing-palette.is-mobile-open>h2{grid-column:1/-1}
+  .landing-palette.is-mobile-open>span{display:block!important;margin-top:.15rem}
+  .landing-palette.is-mobile-open h2{display:block!important;margin:.35rem 0 .05rem!important}
+  .landing-palette.is-mobile-open>button:not(.landing-mobile-sheet-handle){width:100%!important;min-width:0!important;min-height:3.15rem!important;margin:0!important;padding:.65rem!important}
+  .landing-palette.is-mobile-open>button small{display:none}
+  .landing-pattern-card{min-height:5.1rem!important;align-items:center}
+  .landing-pattern-preview{min-width:5.3rem!important;width:5.3rem!important}
+  .landing-palette.is-global-styles .landing-global-styles{display:grid!important}
+
+  .landing-inspector{z-index:94!important;right:0!important;bottom:calc(3.8rem + env(safe-area-inset-bottom))!important;left:0!important;width:100%!important;max-height:58dvh!important;border-radius:1.15rem 1.15rem 0 0!important;padding:.9rem!important;box-shadow:0 -22px 60px #0008!important}
+
+  .landing-mobile-context{z-index:96;min-height:3.8rem;gap:.45rem;padding:.5rem .7rem calc(.5rem + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--le-panel) 97%,transparent)}
+  .landing-mobile-context button{min-height:2.8rem;max-width:none;border-radius:.75rem;font-size:.72rem}
+  .landing-mobile-context button:first-child{background:#f5f2e9;color:#171717}
+
+  .landing-section-chrome,.landing-block-chrome{display:none!important}
+  .landing-page-frame [data-selected=true]{outline:2px solid color-mix(in srgb,var(--le-gold) 72%,transparent)!important;outline-offset:-2px!important}
+  .landing-inline-field{touch-action:manipulation}
+}
+
+@media (max-width:430px){
+  .landing-editor-history button:nth-child(2){display:none}
+  .landing-save{max-width:4.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .landing-palette.is-mobile-open{max-height:50dvh!important;padding-inline:.65rem!important}
+  .landing-palette.is-mobile-open.is-global-styles{max-height:56dvh!important}
+}
+
+/* =========================================================
+   ORVESEN Builder — Canvas + Mobile UX V2
+   The landing document is only as tall as its real content.
+   Tooling floats outside the document and never creates page fill.
+   ========================================================= */
+.landing-viewport,
+.landing-page-frame,
+.landing-page-frame .landing-renderer{
+  min-height:0!important;
+  height:auto!important;
+}
+.landing-page-frame{
+  align-self:start;
+}
+.landing-canvas-shell{
+  align-content:start;
+}
+.landing-renderer{
+  min-height:0!important;
+}
+
+@media (min-width:901px){
+  .landing-viewport{min-height:0!important;padding-bottom:2rem}
+  .landing-page-frame{min-height:0!important}
+}
+
+@media (max-width:900px){
+  .landing-editor{padding-bottom:3.8rem!important}
+  .landing-editor-body,
+  .landing-editor-body.has-inspector,
+  .landing-editor-body.has-global-styles,
+  .landing-editor-body.has-global-styles.has-inspector{
+    height:calc(100% - 3.45rem)!important;
+  }
+  .landing-canvas-shell{
+    height:100%!important;
+    padding:0!important;
+    overscroll-behavior:contain;
+  }
+  .landing-viewport,
+  .landing-page-frame,
+  .landing-page-frame.landing-preview-desktop,
+  .landing-page-frame.landing-preview-tablet,
+  .landing-page-frame.landing-preview-mobile{
+    min-height:0!important;
+    height:auto!important;
+  }
+  .landing-page-frame>.landing-renderer{min-height:0!important;height:auto!important}
+
+  /* One tool surface at a time. */
+  .landing-editor-body.mobile-add-open .landing-quick-toolbar,
+  .landing-editor-body.mobile-add-open .landing-context-toolbar{display:none!important}
+
+  .landing-mobile-sheet-backdrop{
+    z-index:90!important;
+    bottom:3.8rem!important;
+  }
+  .landing-palette.is-mobile-open,
+  .landing-palette.is-mobile-open.is-global-styles{
+    z-index:93!important;
+    bottom:calc(3.8rem + env(safe-area-inset-bottom))!important;
+    max-height:min(48dvh,32rem)!important;
+    overscroll-behavior:contain;
+  }
+  .landing-palette.is-mobile-open.is-global-styles{max-height:min(54dvh,36rem)!important}
+  .landing-inspector{
+    z-index:94!important;
+    bottom:calc(3.8rem + env(safe-area-inset-bottom))!important;
+    max-height:min(56dvh,38rem)!important;
+    overflow:auto!important;
+    overscroll-behavior:contain;
+  }
+
+  /* Canvas remains visible and starts directly under the editor bar. */
+  .landing-viewport-label{display:none!important}
+  .landing-renderer>.landing-editor-section-wrap:first-child>.landing-drop-zone:first-child{margin-top:0}
+
+  /* The persistent mobile bar is navigation, not part of the page. */
+  .landing-mobile-context{
+    z-index:96!important;
+    min-height:3.8rem!important;
+  }
+}
+
+/* =========================================================
+   ORVESEN Builder — Context Toolbar V3
+   One interaction model for desktop + mobile.
+   ========================================================= */
+.landing-editor{position:relative}
+.landing-mobile-context{
+  position:absolute!important;z-index:120!important;top:4.85rem!important;right:50%!important;bottom:auto!important;left:auto!important;
+  transform:translateX(50%);display:flex!important;width:max-content;max-width:calc(100% - 1.25rem);gap:.4rem;
+  border:1px solid var(--le-line)!important;border-radius:.85rem!important;background:color-mix(in srgb,var(--le-panel) 96%,transparent)!important;
+  padding:.4rem!important;box-shadow:0 12px 32px #0003!important;backdrop-filter:blur(16px)
+}
+.landing-mobile-context button{min-height:2.45rem!important;min-width:0!important;max-width:none!important;border:1px solid var(--le-line)!important;border-radius:.6rem!important;background:transparent!important;color:var(--le-text)!important;padding:.45rem .7rem!important;font-size:.65rem!important;font-weight:800!important;white-space:nowrap}
+.landing-mobile-context button:first-child{background:var(--le-text)!important;color:var(--le-panel)!important}
+.landing-quick-toolbar{
+  position:absolute!important;z-index:125!important;right:50%!important;left:auto!important;bottom:auto!important;transform:translateX(50%)!important;
+  display:flex!important;width:max-content;max-width:calc(100% - 1.25rem);overflow-x:auto;overflow-y:visible;gap:.3rem;
+  opacity:1!important;pointer-events:auto!important;border:1px solid var(--le-line)!important;border-radius:.85rem!important;
+  background:color-mix(in srgb,var(--le-panel) 98%,transparent)!important;padding:.4rem!important;box-shadow:0 14px 36px #0004!important;backdrop-filter:blur(18px)
+}
+.landing-quick-toolbar.is-top{top:8rem!important}.landing-quick-toolbar.is-bottom{position:fixed!important;top:auto!important;bottom:1rem!important}
+.landing-quick-toolbar>button,.landing-quick-trigger{pointer-events:auto!important;touch-action:manipulation;white-space:nowrap}
+.landing-quick-popover{position:relative;flex:none}.landing-quick-popover-panel{z-index:140!important;pointer-events:auto!important}
+.landing-quick-move{font-size:1rem!important;min-width:2.25rem!important}
+.landing-palette,.landing-palette *,.landing-inspector,.landing-inspector *{pointer-events:auto}
+.landing-mobile-sheet-backdrop{z-index:110!important}.landing-palette.is-mobile-open{z-index:130!important}.landing-inspector{z-index:135!important}
+
+@media(max-width:900px){
+  .landing-editor{padding-bottom:0!important}
+  .landing-mobile-context{position:absolute!important;top:3.8rem!important;right:.45rem!important;left:.45rem!important;transform:none!important;width:auto!important;max-width:none!important;overflow-x:auto;justify-content:flex-start!important}
+  .landing-mobile-context button{flex:0 0 auto!important;min-height:2.55rem!important;font-size:.68rem!important}
+  .landing-quick-toolbar{position:absolute!important;top:7.2rem!important;right:.45rem!important;left:.45rem!important;transform:none!important;width:auto!important;max-width:none!important;overflow-x:auto!important;overflow-y:visible!important;justify-content:flex-start!important}
+  .landing-quick-toolbar.is-bottom{position:fixed!important;top:auto!important;right:.45rem!important;bottom:calc(.6rem + env(safe-area-inset-bottom))!important;left:.45rem!important}
+  .landing-canvas-shell{padding-top:3.65rem!important}
+  .landing-editor:has(.landing-quick-toolbar.is-top) .landing-canvas-shell{padding-top:7.15rem!important}
+  .landing-palette.is-mobile-open{bottom:0!important;max-height:64dvh!important;padding-bottom:calc(1rem + env(safe-area-inset-bottom))!important}
+  .landing-inspector{bottom:0!important;padding-bottom:calc(.9rem + env(safe-area-inset-bottom))!important}
+  .landing-mobile-sheet-backdrop{inset:0!important}
+  .landing-page-frame,.landing-page-frame.landing-preview-desktop,.landing-page-frame.landing-preview-tablet,.landing-page-frame.landing-preview-mobile{min-height:0!important;height:auto!important}
+}
+
+
+/* =========================================================
+   ORVESEN Builder V4 — interaction hierarchy
+   Desktop: canvas + contextual editing, no persistent Add bar.
+   Phone: persistent Add/Page/Preview bar at the bottom.
+   Element tools stay at the top unless the user moves them.
+   ========================================================= */
+@media (min-width:901px){
+  .landing-mobile-context{display:none!important}
+  .landing-canvas-shell{padding-top:clamp(1rem,3vw,2.5rem)!important}
+  .landing-quick-toolbar.is-top{top:5.25rem!important}
+}
+
+@media (max-width:900px){
+  .landing-editor{padding-bottom:calc(4.35rem + env(safe-area-inset-bottom))!important}
+  .landing-mobile-context{
+    display:flex!important;
+    position:fixed!important;
+    z-index:150!important;
+    top:auto!important;
+    right:.55rem!important;
+    bottom:calc(.5rem + env(safe-area-inset-bottom))!important;
+    left:.55rem!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:none!important;
+    justify-content:stretch!important;
+    overflow:visible!important;
+    gap:.4rem!important;
+    border:1px solid var(--le-line)!important;
+    border-radius:1rem!important;
+    background:color-mix(in srgb,var(--le-panel) 98%,transparent)!important;
+    padding:.42rem!important;
+    box-shadow:0 12px 36px #0006!important;
+    backdrop-filter:blur(18px)!important;
+  }
+  .landing-mobile-context button{
+    flex:1 1 0!important;
+    min-height:3rem!important;
+    max-width:none!important;
+    font-size:.7rem!important;
+    touch-action:manipulation!important;
+    pointer-events:auto!important;
+  }
+  .landing-mobile-context button:first-child{background:#f5f2e9!important;color:#171717!important}
+
+  /* Canvas never reserves fake document height. */
+  .landing-editor-body{padding-bottom:0!important}
+  .landing-canvas-shell{padding-top:0!important;padding-bottom:.75rem!important}
+  .landing-editor:has(.landing-quick-toolbar.is-top) .landing-canvas-shell{padding-top:4.35rem!important}
+
+  /* Contextual element editing belongs above the canvas. */
+  .landing-quick-toolbar{
+    position:fixed!important;
+    z-index:160!important;
+    top:calc(var(--app-header-height,0px) + 4.9rem)!important;
+    right:.55rem!important;
+    bottom:auto!important;
+    left:.55rem!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:none!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    overscroll-behavior-x:contain!important;
+    touch-action:pan-x!important;
+  }
+  .landing-quick-toolbar.is-bottom{
+    top:auto!important;
+    bottom:calc(4.55rem + env(safe-area-inset-bottom))!important;
+  }
+  .landing-quick-toolbar button,.landing-quick-trigger{touch-action:manipulation!important;pointer-events:auto!important}
+
+  /* Popovers escape the horizontally scrolling toolbar and become usable sheets. */
+  .landing-quick-popover{position:static!important}
+  .landing-quick-popover-panel{
+    position:fixed!important;
+    z-index:190!important;
+    top:auto!important;
+    right:.65rem!important;
+    bottom:calc(4.75rem + env(safe-area-inset-bottom))!important;
+    left:.65rem!important;
+    transform:none!important;
+    min-width:0!important;
+    width:auto!important;
+    max-height:46dvh!important;
+    overflow:auto!important;
+    pointer-events:auto!important;
+    touch-action:pan-y!important;
+  }
+  .landing-quick-toolbar.is-bottom .landing-quick-popover-panel{bottom:calc(8.55rem + env(safe-area-inset-bottom))!important}
+
+  /* Add / page styles are true bottom sheets and never fight the persistent bar. */
+  .landing-mobile-sheet-backdrop{z-index:170!important;inset:0!important}
+  .landing-palette.is-mobile-open,
+  .landing-palette.is-mobile-open.is-global-styles{
+    z-index:180!important;
+    top:auto!important;
+    right:0!important;
+    bottom:calc(4.35rem + env(safe-area-inset-bottom))!important;
+    left:0!important;
+    max-height:58dvh!important;
+    pointer-events:auto!important;
+    overscroll-behavior:contain!important;
+  }
+  .landing-palette.is-mobile-open>button:not(.landing-mobile-sheet-handle),
+  .landing-palette.is-mobile-open .landing-palette-tabs button{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+  .landing-editor-body.mobile-add-open .landing-quick-toolbar{display:none!important}
+}
+
+/* =========================================================
+   ORVESEN Builder V5 — reliable touch menus + clean wording
+   Popovers are portaled to body so toolbar overflow can never clip them.
+   ========================================================= */
+.landing-quick-portal-backdrop{
+  position:fixed!important;z-index:9996!important;inset:0!important;
+  width:100vw!important;height:100dvh!important;border:0!important;
+  background:transparent!important;padding:0!important;margin:0!important;
+  touch-action:manipulation!important;
+}
+.landing-quick-popover-panel.landing-quick-portal-panel{
+  position:fixed!important;z-index:9997!important;
+  top:auto!important;right:clamp(.65rem,3vw,1.25rem)!important;
+  bottom:clamp(.75rem,3vw,1.25rem)!important;left:auto!important;
+  transform:none!important;width:min(22rem,calc(100vw - 1.3rem))!important;
+  max-height:min(70dvh,34rem)!important;overflow:auto!important;
+  overscroll-behavior:contain!important;pointer-events:auto!important;
+  touch-action:pan-y!important;
+  border:1px solid var(--le-line)!important;border-radius:1rem!important;
+  background:var(--le-panel)!important;color:var(--le-text)!important;
+  padding:.65rem!important;box-shadow:0 24px 70px #0008!important;
+}
+.landing-quick-portal-panel button,.landing-quick-portal-panel input,.landing-quick-portal-panel select,.landing-quick-portal-panel textarea{
+  pointer-events:auto!important;touch-action:manipulation!important;
+}
+@media(max-width:900px){
+  .landing-quick-popover-panel.landing-quick-portal-panel{
+    right:.6rem!important;bottom:calc(4.9rem + env(safe-area-inset-bottom))!important;left:.6rem!important;
+    width:auto!important;max-height:52dvh!important;border-radius:1rem!important;
+  }
+  /* Add sheet stays above the persistent mobile navigation. */
+  .landing-palette.is-mobile-open,.landing-palette.is-mobile-open.is-global-styles{
+    z-index:9994!important;bottom:calc(4.45rem + env(safe-area-inset-bottom))!important;
+  }
+  .landing-mobile-sheet-backdrop{z-index:9993!important}
+  .landing-mobile-context{z-index:9995!important}
+}
+
+
+/* ORVESEN Builder V6 — touch-first interaction repair */
+@media(max-width:900px){
+  .landing-mobile-context,.landing-mobile-context *,.landing-palette.is-mobile-open,.landing-palette.is-mobile-open *,.landing-quick-toolbar,.landing-quick-toolbar *{pointer-events:auto!important}
+  .landing-mobile-context button,.landing-palette.is-mobile-open button,.landing-quick-trigger{touch-action:manipulation!important;-webkit-tap-highlight-color:transparent;user-select:none}
+  .landing-palette.is-mobile-open{isolation:isolate!important}
+  .landing-palette.is-mobile-open>button,.landing-palette.is-mobile-open .landing-pattern-card{position:relative!important;z-index:2!important}
+  .landing-quick-toolbar{z-index:9992!important}
+  .landing-quick-portal-backdrop{z-index:10000!important}
+  .landing-quick-popover-panel.landing-quick-portal-panel{z-index:10001!important}
+}
+
+
+/* ORVESEN Builder V7 — desktop DnD + portal surface isolation */
+@media (min-width:901px){
+  .landing-palette > button[data-palette-kind],
+  .landing-pattern-card[data-palette-kind]{cursor:grab!important;user-select:none!important}
+  .landing-palette > button[data-palette-kind]:active,
+  .landing-pattern-card[data-palette-kind]:active{cursor:grabbing!important}
+}
+/* Portals mount under document.body, outside .landing-editor CSS variables.
+   Give them an explicit ORVESEN surface so page colors can never bleed through. */
+.landing-quick-popover-panel.landing-quick-portal-panel{
+  background:#15161a!important;
+  color:#f5f5f4!important;
+  border-color:#34363d!important;
+  color-scheme:dark!important;
+}
+.landing-quick-popover-panel.landing-quick-portal-panel > strong{color:#a7a7aa!important}
+.landing-quick-popover-panel.landing-quick-portal-panel button,
+.landing-quick-popover-panel.landing-quick-portal-panel input,
+.landing-quick-popover-panel.landing-quick-portal-panel select,
+.landing-quick-popover-panel.landing-quick-portal-panel textarea{
+  color:#f5f5f4!important;
+}
+
+
+/* ORVESEN Builder V8 — mobile click-path repair
+   Mobile actions use normal click activation; native HTML drag is desktop-only behavior. */
+@media (hover:none) and (pointer:coarse){
+  .landing-palette [draggable="true"]{-webkit-user-drag:none!important;}
+  .landing-mobile-context button,.landing-palette.is-mobile-open button,.landing-quick-toolbar button,.landing-quick-trigger{
+    touch-action:manipulation!important;
+  }
+}
+
+
+/* ORVESEN Builder V9 — action alignment */
+.landing-button-align{display:flex;align-items:center;gap:.2rem;border-left:1px solid var(--le-line);border-right:1px solid var(--le-line);padding:0 .2rem}
+.landing-button-align button{display:grid;place-items:center;min-width:2rem;min-height:2rem;border-radius:.4rem;color:var(--le-text)}
+.landing-button-align button.is-active{background:var(--le-bg);box-shadow:inset 0 0 0 1px var(--le-line)}
+
+
+/* =========================================================
+   ORVESEN Builder V10 — isolated mobile Add sheet
+   This UI intentionally does NOT reuse .landing-palette.
+   It has one fixed layer, one scroll container and tap-only items.
+   ========================================================= */
+.orvesen-mobile-add-layer{display:none}
+@media (max-width:900px){
+  .orvesen-mobile-add-layer{
+    --oma-bg:#111216;--oma-panel:#17181d;--oma-line:#34363d;--oma-text:#f5f3ee;--oma-muted:#9d9da3;--oma-gold:#d6b43c;
+    display:block;position:fixed;z-index:2147483000;inset:0;pointer-events:none;color:var(--oma-text);font-family:Inter,system-ui,sans-serif;color-scheme:dark;
+  }
+  .orvesen-mobile-add-backdrop{
+    display:block;position:absolute;z-index:0;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;background:rgba(0,0,0,.48);pointer-events:auto;touch-action:manipulation;
+  }
+  .orvesen-mobile-add-sheet{
+    position:absolute;z-index:1;left:.55rem;right:.55rem;top:max(8.25rem,16dvh);bottom:calc(5.15rem + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;min-height:0;overflow:hidden;border:1px solid var(--oma-line);border-radius:1.15rem;background:var(--oma-panel);
+    box-shadow:0 24px 80px rgba(0,0,0,.72);pointer-events:auto;touch-action:pan-y;isolation:isolate;
+  }
+  .orvesen-mobile-add-grab{flex:0 0 auto;height:1.15rem;display:grid;place-items:center;background:var(--oma-panel)}
+  .orvesen-mobile-add-grab span{display:block;width:2.7rem;height:.24rem;border-radius:99px;background:#45474f}
+  .orvesen-mobile-add-tabs{flex:0 0 auto;display:grid;grid-template-columns:1fr 1.35fr 2.6rem;gap:.4rem;padding:.35rem .65rem .65rem;border-bottom:1px solid var(--oma-line);background:var(--oma-panel)}
+  .orvesen-mobile-add-tabs button{min-height:2.8rem;border:1px solid var(--oma-line);border-radius:.7rem;background:#131419;color:var(--oma-text);font-size:.75rem;font-weight:800;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .orvesen-mobile-add-tabs button.is-active{border-color:var(--oma-gold);background:rgba(214,180,60,.1)}
+  .orvesen-mobile-add-tabs .orvesen-mobile-add-close{font-size:1.35rem;font-weight:500}
+  .orvesen-mobile-add-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:.9rem .75rem 1.4rem;background:var(--oma-panel);touch-action:pan-y}
+  .orvesen-mobile-add-heading{display:grid;gap:.18rem;margin:.05rem 0 .75rem}
+  .orvesen-mobile-add-heading>span{color:var(--oma-gold);font-size:.64rem;font-weight:900;letter-spacing:.16em}
+  .orvesen-mobile-add-heading h2{margin:0;color:var(--oma-text);font-size:.9rem}
+  .orvesen-mobile-add-heading small{color:var(--oma-muted);font-size:.68rem}
+  .orvesen-mobile-add-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+  .orvesen-mobile-add-item,.orvesen-mobile-pattern-item{
+    appearance:none;-webkit-appearance:none;position:relative;display:flex;align-items:center;gap:.65rem;width:100%;margin:0;border:1px solid var(--oma-line);border-radius:.8rem;background:#14151a;color:var(--oma-text);text-align:left;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:rgba(214,180,60,.18);user-select:none;
+  }
+  .orvesen-mobile-add-item{min-height:4.7rem;padding:.75rem}
+  .orvesen-mobile-add-item:active,.orvesen-mobile-pattern-item:active{border-color:var(--oma-gold);background:#1b1b1d;transform:scale(.985)}
+  .orvesen-mobile-add-item>svg{flex:0 0 auto;width:1.2rem;height:1.2rem}
+  .orvesen-mobile-add-item>span,.orvesen-mobile-pattern-item>span{display:grid;gap:.12rem;min-width:0}
+  .orvesen-mobile-add-item strong,.orvesen-mobile-pattern-item strong{color:var(--oma-text);font-size:.78rem}
+  .orvesen-mobile-add-item small,.orvesen-mobile-pattern-item small{color:var(--oma-muted);font-size:.62rem;white-space:normal}
+  .orvesen-mobile-pattern-heading{margin-top:1.25rem}
+  .orvesen-mobile-pattern-list{display:grid;grid-template-columns:1fr;gap:.6rem}
+  .orvesen-mobile-pattern-item{min-height:5.4rem;padding:.6rem .7rem}
+  .orvesen-mobile-pattern-item .landing-pattern-preview{flex:0 0 5.2rem;width:5.2rem;min-width:5.2rem;pointer-events:none}
+  .orvesen-mobile-add-item *,.orvesen-mobile-pattern-item *{pointer-events:none}
+  .orvesen-mobile-add-scroll .landing-global-styles{display:grid!important;width:100%!important;min-width:0!important;max-width:none!important;overflow:visible!important;color:var(--oma-text)!important}
+}
+@media (max-width:420px){
+  .orvesen-mobile-add-sheet{left:.35rem;right:.35rem;top:7.7rem}
+  .orvesen-mobile-add-grid{gap:.45rem}
+  .orvesen-mobile-add-item{min-height:4.45rem;padding:.65rem}
+}
+
+
+/* =========================================================
+   ORVESEN Builder V12 — mobile precise placement + pattern previews
+   ========================================================= */
+@media (max-width:900px){
+  .orvesen-mobile-pattern-item{display:grid!important;grid-template-columns:7.4rem minmax(0,1fr)!important;gap:.8rem!important;align-items:center!important;min-height:7rem!important}
+  .orvesen-pattern-visual{display:grid!important;grid-template-rows:.55rem 1fr .45rem;gap:.35rem;width:7.4rem;height:5rem;padding:.55rem;border:1px solid #3b3d45;border-radius:.65rem;background:#0c0d10;overflow:hidden;pointer-events:none}
+  .orvesen-pattern-visual-head{display:block!important;width:58%;height:.42rem;border-radius:99px;background:#f0eee8!important;opacity:.9}
+  .orvesen-pattern-visual>b{display:grid!important;grid-auto-flow:column;grid-auto-columns:1fr;gap:.28rem;min-height:0}
+  .orvesen-pattern-visual>b>em{display:block!important;min-width:0;border:1px solid #555862;border-radius:.25rem;background:#202127!important}
+  .orvesen-pattern-visual-action{display:block!important;width:35%;height:.34rem;border-radius:99px;background:#d6b43c!important}
+  .orvesen-pattern-visual[data-type="split"]>b{grid-template-columns:1.2fr .8fr;grid-auto-flow:initial}
+  .orvesen-pattern-visual[data-type="hero"]>b{grid-template-columns:1fr;grid-auto-flow:initial}
+  .orvesen-pattern-visual[data-type="faq"]>b{grid-auto-flow:row;grid-auto-rows:1fr;gap:.16rem}
+  .orvesen-pattern-visual[data-type="faq"]>b>em{border-radius:.12rem}
+  .orvesen-pattern-visual[data-type="media"]>b>em:last-child{background:linear-gradient(135deg,#252731,#111218)!important}
+  .orvesen-pattern-visual[data-type="pricing"]>b>em:nth-child(2){border-color:#d6b43c;background:#29261a!important}
+  .orvesen-pattern-visual[data-type="logos"]>b>em{border-radius:99px;align-self:center;height:.7rem}
+  .orvesen-pattern-visual[data-type="stats"]>b>em{border-width:0 0 2px;border-radius:0}
+  .orvesen-pattern-visual[data-type="quotes"]>b>em{border-radius:.5rem}
+
+  .landing-mobile-placement-bar{position:fixed;z-index:2147482500;left:.65rem;right:.65rem;bottom:calc(5.05rem + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.72rem .8rem;border:1px solid #d6b43c;border-radius:.9rem;background:#111216;color:#f5f3ee;box-shadow:0 16px 45px rgba(0,0,0,.55)}
+  .landing-mobile-placement-bar>div{display:grid;gap:.12rem}.landing-mobile-placement-bar strong{font-size:.78rem}.landing-mobile-placement-bar span{font-size:.65rem;color:#aaaab0}
+  .landing-mobile-placement-bar button{flex:0 0 auto;min-height:2.35rem;padding:0 .75rem;border:1px solid #3a3c43;border-radius:.6rem;background:#191a1f;color:#f5f3ee;font-weight:800}
+
+  .landing-renderer .landing-drop-zone.is-mobile-placement{display:flex!important;position:relative!important;z-index:20!important;width:calc(100% - 1rem)!important;min-height:2.65rem!important;height:2.65rem!important;margin:.35rem .5rem!important;padding:.2rem!important;align-items:center!important;justify-content:center!important;border:1.5px dashed #d6b43c!important;border-radius:.65rem!important;background:rgba(214,180,60,.10)!important;color:#fff!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important}
+  .landing-renderer .landing-drop-zone.is-mobile-placement span{display:block!important;font-size:.7rem!important;font-weight:900!important;letter-spacing:.02em!important;color:#f3d86d!important;pointer-events:none!important}
+}
+
+
+/* ORVESEN Builder — final mobile placement UX */
+.landing-mobile-placement-bar{display:none}
+@media(max-width:900px){
+  .landing-mobile-placement-bar{
+    position:fixed;z-index:10020;left:.75rem;right:.75rem;
+    bottom:calc(5.15rem + env(safe-area-inset-bottom));
+    display:flex;align-items:center;justify-content:space-between;gap:.8rem;
+    padding:.75rem .8rem;border:1px solid color-mix(in srgb,var(--le-gold) 72%,var(--le-line));
+    border-radius:1rem;background:rgba(20,21,24,.97);color:var(--le-text);
+    box-shadow:0 18px 45px rgba(0,0,0,.38);backdrop-filter:blur(16px);
+  }
+  .landing-mobile-placement-bar>div{display:grid;gap:.08rem;min-width:0}
+  .landing-mobile-placement-bar small{font-size:.58rem;font-weight:900;letter-spacing:.16em;color:var(--le-gold)}
+  .landing-mobile-placement-bar strong{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .landing-mobile-placement-bar span{font-size:.68rem;color:var(--le-muted)}
+  .landing-mobile-placement-bar>button{flex:none;min-height:2.6rem;padding:0 .9rem;border:1px solid var(--le-line);border-radius:.75rem;background:var(--le-panel);color:var(--le-text);font-weight:800}
+  .landing-drop-zone.is-mobile-placement{min-height:3.5rem!important;margin:.35rem 0!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important}
+}
