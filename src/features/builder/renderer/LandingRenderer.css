@@ -26,3 +26,58 @@
 .landing-renderer [role=group] a[data-shadow=subtle]{box-shadow:0 3px 9px #0002}.landing-renderer [role=group] a[data-shadow=soft]{box-shadow:0 8px 18px #00000026,inset 0 1px #ffffff40}.landing-renderer [role=group] a[data-shadow=medium]{box-shadow:0 14px 28px #00000035,inset 0 1px #ffffff5c}.landing-renderer [role=group] a[data-shadow=medium]:hover{transform:translateY(-2px);box-shadow:0 18px 34px #0000003d,inset 0 1px #ffffff70}.landing-renderer [role=group] a[data-shadow=medium]:active{transform:translateY(0);box-shadow:0 6px 14px #0003,inset 0 1px #ffffff35}.landing-renderer [role=group] a[data-variant=secondary][data-shadow=soft]{background:linear-gradient(180deg,color-mix(in srgb,var(--lp-surface) 88%,#fff),var(--lp-surface))}.landing-renderer [role=group] a[data-variant=outline][data-shadow=soft]{background:color-mix(in srgb,var(--lp-surface) 72%,transparent);backdrop-filter:blur(8px)}
 
 .landing-renderer [role=group] a[data-background=gradient_soft_light]{background:var(--lp-gradient-soft_light)}.landing-renderer [role=group] a[data-background=gradient_aurora]{background:var(--lp-gradient-aurora)}.landing-renderer [role=group] a[data-background=gradient_gold_dusk]{background:var(--lp-gradient-gold_dusk)}.landing-renderer [role=group] a[data-background=gradient_graphite]{background:var(--lp-gradient-graphite)}
+
+/* ORVESEN Builder — editor grid fix
+   In editor mode the section's direct children are wrappers, not regions.
+   Make each wrapper transparent to CSS Grid so data-region-span participates
+   in the section grid exactly as it does in the published renderer. */
+@media (min-width: 901px) {
+  .landing-renderer > .landing-editor-section-wrap > [data-section-id] > .landing-editor-region-wrap {
+    display: contents;
+  }
+
+  /* A single region should use the full 12-column section grid.
+     Its own block-level max-width/alignment rules still control readable content. */
+  .landing-renderer > .landing-editor-section-wrap > [data-section-id] > .landing-editor-region-wrap:only-of-type > [data-region-id] {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: none;
+  }
+
+  /* Center readable blocks when their own alignment is center. */
+  .landing-renderer > .landing-editor-section-wrap > [data-section-id] > .landing-editor-region-wrap:only-of-type > [data-region-id] > .landing-editor-block-wrap > [data-block-id][data-align="center"] {
+    margin-inline: auto;
+  }
+}
+
+/* Preview/mobile keep their existing responsive behavior. */
+@media (max-width: 900px) {
+  .landing-renderer > .landing-editor-section-wrap > [data-section-id] > .landing-editor-region-wrap {
+    display: block;
+  }
+}
+
+
+
+/* ORVESEN Builder V6 — typography tokens */
+.landing-renderer [data-font-family=inherit]{font-family:inherit}
+.landing-renderer [data-font-family=sans]{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.landing-renderer [data-font-family=serif]{font-family:Georgia,"Times New Roman",serif}
+.landing-renderer [data-font-family=mono]{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.landing-renderer [data-font-family=display]{font-family:"Arial Black",Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:-.045em}
+
+/* A centered paragraph's actual block area is centered too, not only its text. */
+.landing-renderer [data-block-id][data-align=center]>p{margin-inline:auto}
+.landing-renderer [data-block-id][data-align=end]>p{margin-left:auto;margin-right:0}
+
+
+/* ORVESEN Global Styles V1 — headings inherit the page heading family. */
+.landing-renderer h1,.landing-renderer h2,.landing-renderer h3,.landing-renderer h4,.landing-renderer h5,.landing-renderer h6{font-family:var(--lp-heading-font,var(--lp-font))}
+
+
+/* ORVESEN Global Button Effects V2 */
+.landing-renderer [role=group] a[data-shadow=subtle]{box-shadow:0 4px 12px #0002}
+.landing-renderer [role=group] a[data-shadow=soft]{box-shadow:0 8px 22px #0003}
+.landing-renderer [role=group] a[data-shadow=medium]{box-shadow:0 12px 30px #0005}
+.landing-renderer [role=group] a[data-glow=soft]{box-shadow:0 0 24px color-mix(in srgb,var(--lp-accent) 34%,transparent)}
+.landing-renderer [role=group] a[data-glow=strong]{box-shadow:0 0 38px color-mix(in srgb,var(--lp-accent) 52%,transparent)}

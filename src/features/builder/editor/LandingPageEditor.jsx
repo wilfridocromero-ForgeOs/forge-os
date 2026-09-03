@@ -42,7 +42,12 @@ export default function LandingPageEditor({ asset }) {
   const [forms, setForms] = useState([]);
   const [localConflictDocument, setLocalConflictDocument] = useState(null);
   const [dragState, setDragState] = useState({ payload: null, target: null });
+  const [editing, setEditing] = useState(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [mobileAddOpen, setMobileAddOpen] = useState(false);
+  const [globalStylesOpen, setGlobalStylesOpen] = useState(false);
   const autosaveRef = useRef(null); const saveDelayRef = useRef(600); const stateRef = useRef(null); const dragRef = useRef(null);
+  const libraryDragRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -72,10 +77,35 @@ export default function LandingPageEditor({ asset }) {
   const selected = useMemo(() => state ? findEditorSelection(state.document, state.selection) : null, [state]);
   const selectedRegion = selected?.region || (state?.selection?.kind === "section" ? selected?.regions?.[0] : null) || state?.document.sections.at(-1)?.regions?.[0];
 
+  const updateInlineField = useCallback(({ blockId, field, index, value }) => {
+    const current = stateRef.current?.document;
+    const block = current?.sections.flatMap((section) => section.regions).flatMap((region) => region.blocks).find((item) => item.id === blockId);
+    if (!block) return;
+    let changes;
+    if (field === "features") { const features = [...block.content.features]; features[index] = value; changes = { features }; }
+    else if (field === "actions.label") { const actions = structuredClone(block.content.actions); actions[index] = { ...actions[index], label: value }; changes = { actions }; }
+    else if (field === "links.label") { const links = structuredClone(block.content.links); links[index] = { ...links[index], label: value }; changes = { links }; }
+    else changes = { [field]: value };
+    apply({ type: "update_block_content", block_id: blockId, changes }, `inline-${blockId}-${field}-${index ?? "field"}`, 600);
+  }, [apply]);
+
+  const beginInlineEdit = useCallback((descriptor) => {
+    dispatch({ type: "select", selection: { kind: "block", id: descriptor.blockId } });
+    setPanelOpen(false);
+    setEditing(descriptor);
+  }, []);
+
+  const openPanel = useCallback((selection) => {
+    if (selection) dispatch({ type: "select", selection });
+    setEditing(null);
+    setPanelOpen(true);
+  }, []);
+
   const removeSelection = useCallback((selection) => {
     if (!selection) return;
     apply({ type: selection.kind === "section" ? "remove_section" : "remove_block", [`${selection.kind}_id`]: selection.id }, "remove");
     dispatch({ type: "select", selection: null });
+    setEditing(null); setPanelOpen(false);
   }, [apply]);
 
   useEffect(() => {
@@ -83,11 +113,11 @@ export default function LandingPageEditor({ asset }) {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(event.target?.tagName) || event.target?.isContentEditable;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); dispatch({ type: event.shiftKey ? "redo" : "undo" }); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); dispatch({ type: "redo" }); }
-      else if (event.key === "Escape") dispatch({ type: "select", selection: null });
+      else if (event.key === "Escape") { if (editing) setEditing(null); else { dispatch({ type: "select", selection: null }); setPanelOpen(false); } }
       else if (!typing && (event.key === "Delete" || event.key === "Backspace") && stateRef.current?.selection) { event.preventDefault(); removeSelection(stateRef.current.selection); }
     };
     window.addEventListener("keydown", keys); return () => window.removeEventListener("keydown", keys);
-  }, [removeSelection]);
+  }, [removeSelection, editing]);
 
   function createPattern(id) {
     return createLandingPattern(id, { formAssetId: forms[0]?.id || null });
@@ -99,14 +129,56 @@ export default function LandingPageEditor({ asset }) {
     dispatch({ type: "select", selection: { kind: "block", id: blockId } });
   }
   function addPattern(id) { const section = createPattern(id); if (!section) return; apply({ type: "add_section", section }, "pattern"); dispatch({ type: "select", selection: { kind: "section", id: section.id } }); }
+  function insertSavedButton(saved, regionId = selectedRegion?.id) {
+    if (!saved?.style) return;
+    const blockId = crypto.randomUUID();
+    const targetRegionId = regionId;
+    const actions = [{
+      label: saved.style.label || saved.name || "Comenzar",
+      href: saved.style.href || "#",
+      variant: saved.style.variant || "primary",
+      size: saved.style.size || "md",
+      width: saved.style.width || "auto",
+      radius: saved.style.radius || "md",
+      shadow: saved.style.shadow || "none",
+      border: saved.style.border || "none",
+      ...(saved.style.background ? { background:saved.style.background } : {}),
+      ...(saved.style.text_color ? { text_color:saved.style.text_color } : {}),
+      ...(saved.style.border_color ? { border_color:saved.style.border_color } : {})
+    }];
+    if (!targetRegionId) {
+      const section = newSection();
+      let next = applyLandingOperations(state.document, [
+        { type:"add_section", section },
+        { type:"add_block", region_id:section.regions[0].id, block_type:"action_group", block_id:blockId },
+        { type:"update_block_content", block_id:blockId, changes:{ actions } }
+      ]);
+      replace(next, "library-insert");
+    } else {
+      const next = applyLandingOperations(state.document, [
+        { type:"add_block", region_id:targetRegionId, block_type:"action_group", block_id:blockId },
+        { type:"update_block_content", block_id:blockId, changes:{ actions } }
+      ]);
+      replace(next, "library-insert");
+    }
+    dispatch({ type:"select", selection:{ kind:"block", id:blockId } });
+  }
+  function startLibraryDrag(event, item) {
+    libraryDragRef.current = item;
+    dragRef.current = { kind:"palette-block", id:"action_group" };
+    setDragState({ payload:dragRef.current, target:null });
+    event.dataTransfer.effectAllowed="copy";
+    event.dataTransfer.setData(LANDING_DRAG_TYPE, encodeLandingDrag(dragRef.current));
+  }
   function moveSelection(selection, delta) { replace(moveEditorSelection(state.document, selection, delta), "move"); }
   function duplicateSelection(selection) { replace(duplicateEditorSelection(state.document, selection), "duplicate"); }
   async function leave() { await autosaveRef.current?.flush(); navigate("/construir"); }
   async function reloadRemote() { const draft = await loadBuilderAssetDraft(asset.id); autosaveRef.current.reset(draft.revision); dispatch({ type: "remote", draft }); setLocalConflictDocument(null); setError(""); }
 
   function canvasClick(event) {
-    if (event.target.closest("button")) return;
-    event.preventDefault(); const block = event.target.closest("[data-block-id]"); const section = event.target.closest("[data-section-id]");
+    if (event.target.closest("button") || event.target.closest("[data-edit-field]")) return;
+    const block = event.target.closest("[data-block-id]"); const section = event.target.closest("[data-section-id]");
+    setEditing(null); setPanelOpen(false);
     dispatch({ type: "select", selection: block ? { kind: "block", id: block.dataset.blockId } : section ? { kind: "section", id: section.dataset.sectionId } : null });
   }
   function dragStart(event) {
@@ -124,26 +196,215 @@ export default function LandingPageEditor({ asset }) {
   function drop(event) {
     const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE)); const target = readTarget(event);
     if (!isValidLandingDrop(payload, target)) return;
-    event.preventDefault(); replace(applyLandingDrop(state.document, payload, target, { createPattern }), "drag");
+    event.preventDefault();
+    if (libraryDragRef.current) {
+      const saved = libraryDragRef.current;
+      const beforeIds = new Set(state.document.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks.map((block) => block.id))));
+      let next = applyLandingDrop(state.document, payload, target, { createPattern });
+      const inserted = next.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks)).find((block) => !beforeIds.has(block.id) && block.type === "action_group");
+      if (inserted) {
+        const savedStyle = saved.style || {};
+        const actions = [{
+          label: savedStyle.label || saved.name || "Comenzar",
+          href: savedStyle.href || "#",
+          variant: savedStyle.variant || "primary",
+          size: savedStyle.size || "md",
+          width: savedStyle.width || "auto",
+          radius: savedStyle.radius || "md",
+          shadow: savedStyle.shadow || "none",
+          border: savedStyle.border || "none",
+          ...(savedStyle.background ? { background:savedStyle.background } : {}),
+          ...(savedStyle.text_color ? { text_color:savedStyle.text_color } : {}),
+          ...(savedStyle.border_color ? { border_color:savedStyle.border_color } : {})
+        }];
+        next = applyLandingOperations(next, [{ type:"update_block_content", block_id:inserted.id, changes:{ actions } }]);
+        replace(next, "library-drop");
+        dispatch({ type:"select", selection:{ kind:"block", id:inserted.id } });
+      }
+      libraryDragRef.current = null;
+      dragEnd();
+      return;
+    }
+    replace(applyLandingDrop(state.document, payload, target, { createPattern }), "drag");
     if (["block", "section"].includes(payload.kind)) dispatch({ type: "select", selection: { kind: payload.kind, id: payload.id } });
     dragEnd();
   }
-  function dragEnd() { dragRef.current = null; setDragState({ payload: null, target: null }); }
+  function dragEnd() { libraryDragRef.current = null; dragRef.current = null; setDragState({ payload: null, target: null }); }
 
   if (error && !state) return <div className="landing-editor-state"><strong>No se pudo abrir la Landing</strong><p>{error}</p><button onClick={() => navigate("/construir")}>Volver a Builder</button></div>;
   if (!state) return <div className="landing-editor-state">Cargando borrador…</div>;
   if (asset.lifecycle === "archived") return <div className="landing-editor-state"><strong>Landing archivada</strong><p>Este asset no puede editarse.</p><button onClick={() => navigate("/construir")}>Volver</button></div>;
   const validation = validateLandingDocument(state.document);
-  const editorActions = { dropTarget: dragState.target, move: moveSelection, duplicate: duplicateSelection, remove: removeSelection };
+  const editorActions = { dropTarget: dragState.target, move: moveSelection, duplicate: duplicateSelection, remove: removeSelection, openPanel, editing };
 
   return <div className="landing-editor">
     <header className="landing-editor-bar"><button onClick={leave} aria-label="Volver a Builder"><ArrowLeft/></button><div className="landing-editor-identity"><span>BUILDER · LANDING</span><strong>{asset.name}</strong><small>Borrador</small></div><div className="landing-editor-history"><button onClick={() => dispatch({ type: "undo" })} disabled={!state.past.length} aria-label="Deshacer"><Undo2/></button><button onClick={() => dispatch({ type: "redo" })} disabled={!state.future.length} aria-label="Rehacer"><Redo2/></button></div><div className="landing-preview-switch" aria-label="Vista responsive">{PREVIEWS.map(({ id, label, Icon }) => <button key={id} title={label} className={state.preview === id ? "is-active" : ""} onClick={() => dispatch({ type: "preview", preview: id })} aria-pressed={state.preview === id}><Icon/><span>{label}</span></button>)}</div><span className={`landing-save ${status}`}>{saveLabel(status)}</span></header>
     {(error || status === "conflict") && <div className="landing-editor-alert" role="alert"><span>{status === "conflict" ? "Esta página cambió en otra sesión." : error}</span>{status === "conflict" ? <><button onClick={reloadRemote}>Recargar versión remota</button><button onClick={() => navigator.clipboard?.writeText(JSON.stringify(localConflictDocument, null, 2))}>Copiar cambios locales</button></> : status === "error" && <button onClick={() => autosaveRef.current?.retry()}>Reintentar guardado</button>}</div>}
-    <div className={`landing-editor-body ${state.selection ? "has-inspector" : ""}`}>
-      <aside className="landing-palette"><span>AÑADIR</span><h2>Blocks</h2>{BLOCKS.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addBlock(type)}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}<h2>Patterns</h2>{PATTERNS.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addPattern(item.id)}><PatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}<DesignControls document={state.document} replace={replace}/></aside>
-      <main className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p><div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div></div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} resolveForm={(id, label) => <div className="landing-form-preview"><strong>Form</strong><span>{forms.find((form) => form.id === id)?.name || "Sin formulario asignado"}</span><small>{label}</small></div>}/>}</div></div><output className="landing-editor-announcement" aria-live="polite">{dragState.target ? "Destino de inserción seleccionado" : validation.valid ? "Documento válido" : `${validation.errors.length} errores de documento`}</output></main>
-      {state.selection && <Inspector selection={state.selection} selected={selected} forms={forms} apply={apply} preview={state.preview} onDelete={() => removeSelection(state.selection)} onDuplicate={() => duplicateSelection(state.selection)} onMove={(delta) => moveSelection(state.selection, delta)} onClose={() => dispatch({ type: "select", selection: null })}/>}
+    <div className={`landing-editor-body ${panelOpen && state.selection ? "has-inspector" : ""} ${mobileAddOpen ? "mobile-add-open" : ""} ${globalStylesOpen ? "has-global-styles" : ""}`}>
+      <aside className={`landing-palette ${mobileAddOpen ? "is-mobile-open" : ""} ${globalStylesOpen ? "is-global-styles" : ""}`}>
+        <div className="landing-palette-tabs">
+          <button type="button" className={!globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(false)}>＋ Añadir</button>
+          <button type="button" className={globalStylesOpen ? "is-active" : ""} onClick={() => setGlobalStylesOpen(true)}>✦ Estilos globales</button>
+        </div>
+        {globalStylesOpen ? <DesignControls document={state.document} replace={replace} onInsertSavedButton={insertSavedButton} onStartLibraryDrag={startLibraryDrag}/> : <>
+          <span>AÑADIR</span>
+          <h2>Blocks</h2>
+          {BLOCKS.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addBlock(type)}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}
+          <h2>Patterns</h2>
+          {PATTERNS.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={() => addPattern(item.id)}><PatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}
+        </>}
+      </aside>
+      <main className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p><div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div></div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolveForm={(id, label) => <div className="landing-form-preview"><strong>Form</strong><span>{forms.find((form) => form.id === id)?.name || "Sin formulario asignado"}</span><small>{label}</small></div>}/>}</div></div><output className="landing-editor-announcement" aria-live="polite">{dragState.target ? "Destino de inserción seleccionado" : validation.valid ? "Documento válido" : `${validation.errors.length} errores de documento`}</output></main>
+      {state.selection?.kind === "block" && selected && !panelOpen && <ContextualStyleToolbar
+        selection={state.selection}
+        selected={selected}
+        apply={apply}
+        buttonDefaults={state.document.settings.design_system.buttons || {}}
+        onMore={() => openPanel(state.selection)}
+        onDuplicate={() => duplicateSelection(state.selection)}
+        onDelete={() => removeSelection(state.selection)}
+        onClose={() => { setEditing(null); setPanelOpen(false); dispatch({ type: "select", selection: null }); }}
+      />}
+      {panelOpen && state.selection && <Inspector selection={state.selection} selected={selected} forms={forms} apply={apply} preview={state.preview} onDelete={() => removeSelection(state.selection)} onDuplicate={() => duplicateSelection(state.selection)} onMove={(delta) => moveSelection(state.selection, delta)} onClose={() => setPanelOpen(false)}/>}
     </div>
+    <nav className="landing-mobile-context" aria-label="Herramientas de edición">
+      {!state.selection ? <><button type="button" onClick={() => setMobileAddOpen((value) => !value)}>＋ Añadir</button><button type="button" onClick={() => dispatch({ type: "preview", preview: state.preview === "mobile" ? "desktop" : "mobile" })}>Preview</button></> : state.selection.kind === "section" ? <><button type="button" onClick={() => openPanel(state.selection)}>Diseño</button><button type="button" onClick={() => duplicateSelection(state.selection)}>Duplicar</button><button type="button" className="is-danger" onClick={() => removeSelection(state.selection)}>Eliminar</button><button type="button" onClick={() => dispatch({ type: "select", selection: null })}>Cerrar</button></> : null}
+    </nav>
+  </div>;
+}
+
+
+function InlineEditableField({ block, field, value, index, singleLine = false, placeholder = "Escribe aquí", editing, onBegin, onChange, onEnd }) {
+  const ref = useRef(null);
+  const active = editing?.blockId === block.id && editing?.field === field && editing?.index === index;
+  const wasActiveRef = useRef(false);
+  useEffect(() => {
+    if (active && !wasActiveRef.current && ref.current) {
+      ref.current.focus();
+      const selection = window.getSelection(); const range = document.createRange();
+      range.selectNodeContents(ref.current); range.collapse(false); selection?.removeAllRanges(); selection?.addRange(range);
+    }
+    wasActiveRef.current = active;
+  }, [active]);
+  useEffect(() => {
+    if (!ref.current) return;
+    if (!active && ref.current.textContent !== value) ref.current.textContent = value;
+  }, [active, value]);
+  const descriptor = { blockId: block.id, field, index };
+  const begin = (event) => {
+    event.stopPropagation();
+    if (!active) onBegin(descriptor);
+  };
+  const input = (event) => onChange({ ...descriptor, value: event.currentTarget.textContent || "" });
+  const keyDown = (event) => { if (singleLine && event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur(); } };
+  const paste = (event) => { event.preventDefault(); const text = event.clipboardData.getData("text/plain"); const selection = window.getSelection(); if (!selection?.rangeCount) return; selection.deleteFromDocument(); const range = selection.getRangeAt(0); const node = document.createTextNode(singleLine ? text.replace(/[\r\n]+/g, " ") : text); range.insertNode(node); range.setStartAfter(node); range.collapse(true); selection.removeAllRanges(); selection.addRange(range); event.currentTarget.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste", data: text })); };
+  return <span ref={ref} className={`landing-inline-field ${active ? "is-editing" : ""}`} data-edit-field={field} data-edit-index={index} contentEditable={active} suppressContentEditableWarning role="textbox" aria-label={`Editar ${field}`} aria-multiline={!singleLine} tabIndex={0} onPointerDown={(event) => event.stopPropagation()} onClick={begin} onFocus={begin} onInput={input} onKeyDown={keyDown} onPaste={paste} onBlur={onEnd} data-placeholder={placeholder}></span>;
+}
+
+
+const QUICK_FONTS = [
+  ["inherit", "Global", "Aa"],
+  ["sans", "Sans", "Aa"],
+  ["serif", "Serif", "Aa"],
+  ["display", "Display", "Aa"],
+  ["mono", "Mono", "Aa"],
+];
+const QUICK_COLORS = [
+  ["text", "Texto principal"],
+  ["muted", "Secundario"],
+  ["primary", "Acento"],
+];
+
+function QuickPopover({ id, openMenu, setOpenMenu, label, trigger, children }) {
+  const open = openMenu === id;
+  return <div className={`landing-quick-popover ${open ? "is-open" : ""}`}>
+    <button type="button" className="landing-quick-trigger" aria-expanded={open} onClick={() => setOpenMenu(open ? null : id)}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
+    {open && <div className="landing-quick-popover-panel" onClick={(event) => event.stopPropagation()}>{label && <strong>{label}</strong>}{children}</div>}
+  </div>;
+}
+
+function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {}, onMore, onDuplicate, onDelete, onClose }) {
+  const [openMenu, setOpenMenu] = useState(null);
+  const [actionIndex, setActionIndex] = useState(0);
+  if (!selection || selection.kind !== "block" || !selected?.block) return null;
+  const block = selected.block;
+  const style = block.style || {};
+  const updateStyle = (changes) => apply({ type:"update_block_style", block_id:block.id, changes }, `quick-style-${block.id}`, 600);
+  const resetGlobal = () => apply({ type:"reset_block_style", block_id:block.id }, `quick-global-${block.id}`, 600);
+
+  if (block.type === "action_group") {
+    const actions = block.content.actions || [];
+    const active = actions[Math.min(actionIndex, Math.max(0, actions.length - 1))];
+    const updateAction = (changes) => {
+      const next = actions.map((item,index) => index === actionIndex ? { ...item, ...changes } : item);
+      apply({ type:"update_block_content", block_id:block.id, changes:{ actions:next } }, `button-${block.id}-${actionIndex}`, 600);
+    };
+    const saveCurrent = () => {
+      if (!active) return;
+      const name = window.prompt("Nombre para guardar este botón:", active.label || "Mi botón");
+      if (!name?.trim()) return;
+      let library=[]; try { library=JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1") || "[]"); } catch {}
+      const item={ id:crypto.randomUUID(), name:name.trim(), style:{...buttonDefaults, ...active} };
+      localStorage.setItem("orvesen.builder.buttonStyles.v1", JSON.stringify([item,...library].slice(0,40)));
+      window.dispatchEvent(new Event("orvesen-button-library-updated"));
+    };
+    return <div className="landing-quick-toolbar landing-button-context" role="toolbar" aria-label="Editar botón" onClick={(e)=>e.stopPropagation()}>
+      {actions.length > 1 && <QuickPopover id="which" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Botón" trigger={<span>{active?.label || "Botón"}</span>}>
+        <div className="landing-option-list">{actions.map((item,index)=><button key={index} type="button" className={actionIndex===index?"is-active":""} onClick={()=>{setActionIndex(index);setOpenMenu(null)}}>{item.label}</button>)}</div>
+      </QuickPopover>}
+      <QuickPopover id="text" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Texto del botón" trigger={<span>Texto</span>}>
+        <label className="landing-context-field">Texto<input value={active?.label || ""} onChange={(e)=>updateAction({label:e.target.value})}/></label>
+      </QuickPopover>
+      <QuickPopover id="action" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Acción" trigger={<span>Acción</span>}>
+        <div className="landing-action-editor">
+          <label>Enlace / destino<input value={active?.href || ""} placeholder="https://... o #seccion" onChange={(e)=>updateAction({href:e.target.value})}/></label>
+          <small>Usa una URL, #seccion para ir a una parte de esta página, mailto: o tel:.</small>
+        </div>
+      </QuickPopover>
+      <QuickPopover id="design" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño" trigger={<span>Diseño</span>}>
+        <div className="landing-button-direct-panel">
+          <span>Estilo</span><div className="landing-button-direct-grid">{[["primary","Sólido"],["secondary","Suave"],["outline","Outline"],["ghost","Minimal"]].map(([id,label])=><button key={id} type="button" className={(active?.variant||"primary")===id?"is-active":""} onClick={()=>updateAction({variant:id})}>{label}</button>)}</div>
+          <span>Forma</span><div className="landing-button-direct-grid">{[["none","Recto"],["sm","Sutil"],["md","Medio"],["lg","Redondo"],["pill","Píldora"]].map(([id,label])=><button key={id} type="button" className={(active?.radius||"md")===id?"is-active":""} onClick={()=>updateAction({radius:id})}>{label}</button>)}</div>
+          <span>Tamaño</span><div className="landing-button-direct-grid">{[["sm","Pequeño"],["md","Mediano"],["lg","Grande"]].map(([id,label])=><button key={id} type="button" className={(active?.size||"md")===id?"is-active":""} onClick={()=>updateAction({size:id})}>{label}</button>)}</div>
+          <span>Sombra</span><div className="landing-button-direct-grid">{[["none","Ninguna"],["subtle","Sutil"],["soft","Suave"],["medium","Intensa"]].map(([id,label])=><button key={id} type="button" className={(active?.shadow||"none")===id?"is-active":""} onClick={()=>updateAction({shadow:id})}>{label}</button>)}</div>
+          <span>Ancho</span><div className="landing-button-direct-grid">{[["auto","Automático"],["full","Completo"]].map(([id,label])=><button key={id} type="button" className={(active?.width||"auto")===id?"is-active":""} onClick={()=>updateAction({width:id})}>{label}</button>)}</div>
+        </div>
+      </QuickPopover>
+      <button type="button" onClick={saveCurrent}>Guardar</button>
+      <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
+        <div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div>
+      </QuickPopover>
+      <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    </div>;
+  }
+
+  const typography = block.type === "heading" || block.type === "text";
+  if (!typography) return <div className="landing-quick-toolbar" role="toolbar" aria-label="Edición del bloque" onClick={(e)=>e.stopPropagation()}>
+    <span className="landing-quick-kind">{block.type === "image" ? "Imagen" : block.type === "testimonial" ? "Testimonio" : "Bloque"}</span>
+    <button type="button" onClick={resetGlobal}>Usar estilo global</button>
+    <button type="button" onClick={onMore}>Editar bloque</button>
+    <button type="button" onClick={onDuplicate}>Duplicar</button>
+    <button type="button" className="is-danger" onClick={onDelete}>Eliminar</button>
+    <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+  </div>;
+
+  const size = block.type === "text" ? (style.text_variant || "body") : (style.text_size || "auto");
+  const sizes = block.type === "text" ? [["lead","Grande"],["body","Normal"],["small","Pequeño"]] : [["auto","Global"],["xs","XS"],["sm","S"],["md","M"],["lg","L"],["xl","XL"],["2xl","2XL"]];
+  return <div className="landing-quick-toolbar" role="toolbar" aria-label="Formato de texto" onClick={(e)=>e.stopPropagation()}>
+    <button type="button" className={!Object.keys(style).length ? "is-active" : ""} onClick={resetGlobal}>Global</button>
+    <QuickPopover id="font" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tipografía" trigger={<><span className="landing-font-preview">Aa</span><span>{QUICK_FONTS.find(([id])=>id===(style.font_family||"inherit"))?.[1]||"Global"}</span></>}>
+      <div className="landing-font-list">{QUICK_FONTS.map(([id,label,sample])=><button key={id} type="button" className={`${style.font_family===id||(!style.font_family&&id==="inherit")?"is-active":""} font-${id}`} onClick={()=>{updateStyle({font_family:id});setOpenMenu(null)}}><span>{sample}</span><strong>{label}</strong></button>)}</div>
+    </QuickPopover>
+    <QuickPopover id="size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tamaño" trigger={<span>{sizes.find(([id])=>id===size)?.[1]||"Global"}</span>}>
+      <div className="landing-option-grid">{sizes.map(([id,label])=><button key={id} type="button" className={size===id?"is-active":""} onClick={()=>{updateStyle(block.type==="text"?{text_variant:id}:{text_size:id==="auto"?undefined:id});setOpenMenu(null)}}>{label}</button>)}</div>
+    </QuickPopover>
+    <button type="button" className={`landing-quick-bold ${style.text_weight==="bold"?"is-active":""}`} onClick={()=>updateStyle({text_weight:style.text_weight==="bold"?undefined:"bold"})}>B</button>
+    <QuickPopover id="color" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Color" trigger={<><span className={`landing-color-dot is-${style.color||"text"}`}/><span>{style.color==="muted"?"Secundario":style.color==="primary"?"Marca":"Texto principal"}</span></>}>
+      <div className="landing-color-list">{QUICK_COLORS.map(([id,label])=><button key={id} type="button" className={style.color===id||(!style.color&&id==="text")?"is-active":""} onClick={()=>{updateStyle({color:id});setOpenMenu(null)}}><span className={`landing-color-swatch is-${id}`}/><strong>{label}</strong></button>)}</div>
+    </QuickPopover>
+    <div className="landing-quick-align">{[["start","Izquierda","≡"],["center","Centro","≣"],["end","Derecha","≡"]].map(([id,label,glyph])=><button key={id} type="button" className={(style.align||"start")===id?"is-active":""} title={label} onClick={()=>updateStyle({align:id})}><span className={`landing-align-glyph is-${id}`}>{glyph}</span></button>)}</div>
+    <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}><div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div></QuickPopover>
+    <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
   </div>;
 }
 
@@ -152,10 +413,62 @@ function PatternPreview({ type }) {
   return <span className="landing-pattern-preview" data-preview={type} aria-hidden="true"><i/><b>{Array.from({ length: count }, (_, index) => <em key={index}/>)}</b></span>;
 }
 
-function DesignControls({ document, replace }) {
-  const design = document.settings.design_system;
-  const update = (category, key, value) => { const next = structuredClone(document); next.settings.design_system[category][key] = value; replace(next, `design-${category}-${key}`, 600); };
-  return <div className="landing-design"><h2>Page style</h2><label>Fondo<input type="color" value={design.colors.page_background || "#ffffff"} onChange={(event) => update("colors", "page_background", event.target.value)}/></label><label>Superficie<input type="color" value={design.colors.surface || "#ffffff"} onChange={(event) => update("colors", "surface", event.target.value)}/></label><label>Texto<input type="color" value={design.colors.text || "#151515"} onChange={(event) => update("colors", "text", event.target.value)}/></label><label>Texto secundario<input type="color" value={design.colors.muted || "#6b6b6b"} onChange={(event) => update("colors", "muted", event.target.value)}/></label><label>Acento<input type="color" value={design.colors.primary || "#9b7618"} onChange={(event) => update("colors", "primary", event.target.value)}/></label><label>Ancho<select value={design.content_widths.standard || "1120px"} onChange={(event) => update("content_widths", "standard", event.target.value)}><option value="960px">Compacto</option><option value="1120px">Estándar</option><option value="1280px">Amplio</option></select></label><label>Radio de tarjetas<select value={design.radii.card || "16px"} onChange={(event) => update("radii", "card", event.target.value)}><option value="8px">Sutil</option><option value="16px">Estándar</option><option value="24px">Amplio</option></select></label><h2>Button defaults</h2><label>Estilo<select value={design.buttons.variant || "primary"} onChange={(event) => update("buttons", "variant", event.target.value)}>{["primary","secondary","outline","ghost"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Tamaño<select value={design.buttons.size || "md"} onChange={(event) => update("buttons", "size", event.target.value)}>{["sm","md","lg"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Radio<select value={design.buttons.radius || "md"} onChange={(event) => update("buttons", "radius", event.target.value)}>{["none","sm","md","lg","pill"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Sombra<select value={design.buttons.shadow || "none"} onChange={(event) => update("buttons", "shadow", event.target.value)}>{["none","subtle","soft","medium"].map((value) => <option key={value}>{value}</option>)}</select></label></div>;
+function DesignControls({ document, replace, onInsertSavedButton, onStartLibraryDrag }) {
+  const design=document.settings.design_system;
+  const [tab,setTab]=useState("typography");
+  const [fontSearch,setFontSearch]=useState("");
+  const [savedButtons,setSavedButtons]=useState([]);
+  useEffect(()=>{
+    const load=()=>{try{setSavedButtons(JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1")||"[]"))}catch{setSavedButtons([])}};
+    load(); window.addEventListener("orvesen-button-library-updated",load); return()=>window.removeEventListener("orvesen-button-library-updated",load);
+  },[]);
+  const update=(category,key,value)=>{const next=structuredClone(document);next.settings.design_system[category][key]=value;replace(next,`design-${category}-${key}`,600)};
+  const fonts=[
+    ["Inter","Inter, system-ui, sans-serif"],["Arial","Arial, Helvetica, sans-serif"],["Helvetica","Helvetica, Arial, sans-serif"],
+    ["Georgia","Georgia, serif"],["Times New Roman",'"Times New Roman", Times, serif'],["Garamond","Garamond, Georgia, serif"],
+    ["Trebuchet","Trebuchet MS, Arial, sans-serif"],["Verdana","Verdana, Geneva, sans-serif"],["Tahoma","Tahoma, Arial, sans-serif"],
+    ["Courier","Courier New, monospace"],["Impact","Impact, Haettenschweiler, sans-serif"],["Palatino","Palatino Linotype, Book Antiqua, serif"]
+  ].filter(([name])=>name.toLowerCase().includes(fontSearch.toLowerCase()));
+  const applySaved=(item)=>{const next=structuredClone(document);next.settings.design_system.buttons={...item.style};replace(next,"design-button-library",600)};
+  const removeSaved=(id)=>{const next=savedButtons.filter(x=>x.id!==id);setSavedButtons(next);localStorage.setItem("orvesen.builder.buttonStyles.v1",JSON.stringify(next))};
+
+  return <div className="landing-global-styles landing-global-v3">
+    <header className="landing-global-header"><span>ESTILOS GLOBALES</span><strong>Diseña toda la página</strong><p>Define la base aquí. Luego toca cualquier elemento para crear una excepción.</p></header>
+    <nav className="landing-global-nav">
+      {[["typography","Tipografía"],["colors","Colores"],["buttons","Botones"],["layout","Diseño"],["library","Biblioteca"]].map(([id,label])=><button key={id} type="button" className={tab===id?"is-active":""} onClick={()=>setTab(id)}>{label}</button>)}
+    </nav>
+
+    {tab==="typography"&&<section className="landing-global-section">
+      <div className="landing-global-section-title"><strong>Tipografía</strong><small>Busca y escoge viendo cada fuente</small></div>
+      <input className="landing-font-search" value={fontSearch} onChange={(e)=>setFontSearch(e.target.value)} placeholder="Buscar tipografía..."/>
+      <span className="landing-global-label">Aplicar a texto general</span>
+      <div className="landing-font-browser">{fonts.map(([name,value])=><button key={`body-${name}`} type="button" style={{fontFamily:value}} className={design.typography.body===value?"is-active":""} onClick={()=>update("typography","body",value)}><strong>{name}</strong><span>La creatividad empieza aquí</span></button>)}</div>
+      <span className="landing-global-label">Aplicar a títulos</span>
+      <div className="landing-font-browser">{fonts.map(([name,value])=><button key={`head-${name}`} type="button" style={{fontFamily:value}} className={(design.typography.headings||design.typography.body)===value?"is-active":""} onClick={()=>update("typography","headings",value)}><strong>{name}</strong><span>Construye algo extraordinario</span></button>)}</div>
+    </section>}
+
+    {tab==="colors"&&<section className="landing-global-section">
+      <div className="landing-global-section-title"><strong>Colores globales</strong><small>Cambia el rol una vez; todos los bloques Global responden</small></div>
+      <div className="landing-global-color-rows">{[["page_background","Fondo de página","#ffffff"],["surface","Superficie / tarjetas","#ffffff"],["text","Texto principal","#151515"],["muted","Texto secundario","#6b6b6b"],["primary","Marca / acción","#9b7618"]].map(([key,label,fallback])=><label key={key}><input type="color" value={design.colors[key]||fallback} onChange={(e)=>update("colors",key,e.target.value)}/><span><strong>{label}</strong><small>{design.colors[key]||fallback}</small></span></label>)}</div>
+    </section>}
+
+    {tab==="buttons"&&<section className="landing-global-section">
+      <div className="landing-global-section-title"><strong>Botón global</strong><small>Los botones sin personalización heredan este estilo</small></div>
+      <div className="landing-button-hero"><span className="landing-button-live-preview" data-variant={design.buttons.variant||"primary"} data-size={design.buttons.size||"md"} data-radius={design.buttons.radius||"md"} data-shadow={design.buttons.shadow||"none"}>Comenzar</span><small>Vista previa</small></div>
+      <span className="landing-global-label">Estilo</span><div className="landing-option-chips">{[["primary","Sólido"],["secondary","Suave"],["outline","Outline"],["ghost","Minimal"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.variant||"primary")===id?"is-active":""} onClick={()=>update("buttons","variant",id)}>{label}</button>)}</div>
+      <span className="landing-global-label">Forma</span><div className="landing-option-chips">{[["none","Recto"],["sm","Sutil"],["md","Medio"],["lg","Redondo"],["pill","Píldora"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.radius||"md")===id?"is-active":""} onClick={()=>update("buttons","radius",id)}>{label}</button>)}</div>
+      <span className="landing-global-label">Sombra / profundidad</span><div className="landing-option-chips">{[["none","Ninguna"],["subtle","Sutil"],["soft","Suave"],["medium","Intensa"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.shadow||"none")===id?"is-active":""} onClick={()=>update("buttons","shadow",id)}>{label}</button>)}</div>
+      <span className="landing-global-label">Tamaño</span><div className="landing-option-chips">{[["sm","Pequeño"],["md","Mediano"],["lg","Grande"]].map(([id,label])=><button key={id} type="button" className={(design.buttons.size||"md")===id?"is-active":""} onClick={()=>update("buttons","size",id)}>{label}</button>)}</div>
+    </section>}
+
+    {tab==="layout"&&<section className="landing-global-section"><div className="landing-global-section-title"><strong>Diseño general</strong><small>Base espacial de la landing</small></div><label className="landing-global-select">Ancho<select value={design.content_widths.standard||"1120px"} onChange={(e)=>update("content_widths","standard",e.target.value)}><option value="960px">Compacto</option><option value="1120px">Estándar</option><option value="1280px">Amplio</option></select></label><label className="landing-global-select">Tarjetas<select value={design.radii.card||"16px"} onChange={(e)=>update("radii","card",e.target.value)}><option value="8px">Sutil</option><option value="16px">Estándar</option><option value="24px">Redondeado</option></select></label></section>}
+
+    {tab==="library"&&<section className="landing-global-section"><div className="landing-global-section-title"><strong>Mi biblioteca</strong><small>Diseños guardados desde elementos del canvas</small></div>{savedButtons.length===0?<div className="landing-library-empty"><strong>No hay diseños todavía</strong><span>Toca un botón del canvas y pulsa Guardar.</span></div>:<div className="landing-style-library">{savedButtons.map(item=><div className="landing-library-card" key={item.id}><button type="button" draggable className="landing-library-apply" onDragStart={(e)=>onStartLibraryDrag?.(e,item)} onClick={()=>onInsertSavedButton?.(item)}><span className="landing-library-button" data-variant={item.style.variant||"primary"} data-size={item.style.size||"md"} data-width={item.style.width||"auto"} data-radius={item.style.radius||"md"} data-shadow={item.style.shadow||"none"} data-border={item.style.border||"none"} style={{
+              background:item.style.background || ((item.style.variant||"primary")==="primary" ? (design.colors.primary||"#9b7618") : "transparent"),
+              color:item.style.text_color || ((item.style.variant||"primary")==="primary" ? "#ffffff" : (design.colors.primary||"#9b7618")),
+              borderColor:item.style.border_color || (design.colors.primary||"#9b7618")
+            }}>{item.style.label||"Comenzar"}</span><strong>{item.name}</strong><small>Arrastra o toca para añadir</small></button><button type="button" className="landing-library-delete" onClick={()=>removeSaved(item.id)}>×</button></div>)}</div>}</section>}
+  </div>;
 }
 
 function Inspector({ selection, selected, forms, apply, preview, onDelete, onDuplicate, onMove, onClose }) {
