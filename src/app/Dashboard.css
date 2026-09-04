@@ -1287,3 +1287,664 @@ html[data-theme="light"] .dashboard-priority-reason strong {
     gap: 0.18rem;
   }
 }
+/* =========================================================
+   DASHBOARD — LIGHT MODE HIGH CONTRAST
+   Hace Priority Engine más sólido sin cambiar dark mode
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-attention-item {
+  background: #ffffff;
+}
+
+/* ---------- CRITICAL / RED ---------- */
+
+html[data-theme="light"] .dashboard-attention-item.is-critical {
+  border-color: #dc2626;
+  background: #ffffff;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-rank {
+  background: #fee2e2;
+  border-right-color: #dc2626;
+  color: #b91c1c;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-title {
+  color: #b91c1c;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-title h3 {
+  color: #18181b;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-description {
+  color: #52525b;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-reason span {
+  color: #7f1d1d;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-reason strong {
+  color: #b91c1c;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-critical
+  .dashboard-priority-action {
+  color: #b91c1c;
+}
+
+
+/* ---------- WARNING / GOLD ---------- */
+
+html[data-theme="light"] .dashboard-attention-item.is-warning {
+  border-color: #d97706;
+  background: #ffffff;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-rank {
+  background: #fef3c7;
+  border-right-color: #d97706;
+  color: #b45309;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-title {
+  color: #b45309;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-title h3 {
+  color: #18181b;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-description {
+  color: #52525b;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-reason span {
+  color: #92400e;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-reason strong {
+  color: #a16207;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-warning
+  .dashboard-priority-action {
+  color: #a16207;
+}
+
+
+/* ---------- NEUTRAL ---------- */
+
+html[data-theme="light"] .dashboard-attention-item.is-neutral {
+  border-color: #a1a1aa;
+  background: #ffffff;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-neutral
+  .dashboard-priority-rank {
+  background: #f4f4f5;
+  border-right-color: #a1a1aa;
+  color: #3f3f46;
+}
+
+
+/* ---------- POSITIVE / GREEN ---------- */
+
+html[data-theme="light"] .dashboard-attention-item.is-positive {
+  border-color: #16a34a;
+  background: #ffffff;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-positive
+  .dashboard-priority-rank {
+  background: #dcfce7;
+  border-right-color: #16a34a;
+  color: #15803d;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-positive
+  .dashboard-priority-title h3 {
+  color: #18181b;
+}
+
+html[data-theme="light"]
+  .dashboard-attention-item.is-positive
+  .dashboard-priority-reason strong {
+  color: #15803d;
+}
+
+
+/* ---------- TYPOGRAPHY ---------- */
+
+html[data-theme="light"] .dashboard-priority-rank span {
+  font-weight: 800;
+  opacity: 1;
+}
+
+html[data-theme="light"] .dashboard-priority-rank strong {
+  font-weight: 750;
+  opacity: 1;
+}
+
+html[data-theme="light"] .dashboard-priority-title h3 {
+  font-weight: 700;
+}
+
+html[data-theme="light"] .dashboard-priority-description {
+  color: #52525b;
+}
+
+html[data-theme="light"] .dashboard-priority-reason span {
+  font-weight: 800;
+}
+
+html[data-theme="light"] .dashboard-priority-reason strong {
+  font-weight: 650;
+}
+
+html[data-theme="light"] .dashboard-priority-action {
+  font-weight: 750;
+}
+
+
+/* ---------- SECTION TEXT ---------- */
+
+html[data-theme="light"] .dashboard-section-card h2,
+html[data-theme="light"] .dashboard-section-card h3 {
+  color: #18181b;
+}
+
+html[data-theme="light"] .dashboard-section-card p {
+  color: #52525b;
+}
+/* =========================================================
+   DASHBOARD LIGHT — TEXT & COLOR CONTRAST
+   ========================================================= */
+
+/* Texto general del Dashboard */
+html[data-theme="light"] .dashboard-page {
+  color: #18181b;
+}
+
+/* Saludo */
+html[data-theme="light"] .dashboard-page h1 {
+  color: #111113;
+  font-weight: 750;
+}
+
+/* Texto introductorio debajo del saludo */
+html[data-theme="light"] .dashboard-page > header p,
+html[data-theme="light"] .dashboard-hero p {
+  color: #52525b;
+}
+
+/* Títulos principales de cards */
+html[data-theme="light"] .dashboard-page h2,
+html[data-theme="light"] .dashboard-page h3 {
+  color: #18181b;
+}
+
+/* Texto secundario general */
+html[data-theme="light"] .dashboard-page p {
+  color: #52525b;
+}
+
+/* =========================================================
+   ORB
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-orb-card {
+  border-color: #d6d3d1;
+  background: #ffffff;
+}
+
+html[data-theme="light"] .dashboard-orb-card h2,
+html[data-theme="light"] .dashboard-orb-card h3 {
+  color: #111113;
+}
+
+html[data-theme="light"] .dashboard-orb-card p {
+  color: #3f3f46;
+}
+
+/* Etiquetas doradas */
+html[data-theme="light"] .dashboard-orb-card [class*="eyebrow"],
+html[data-theme="light"] .dashboard-orb-card [class*="label"] {
+  color: #a16207;
+  font-weight: 800;
+}
+
+/* Recomendación */
+html[data-theme="light"] .dashboard-orb-card strong {
+  color: #18181b;
+  font-weight: 700;
+}
+
+/* =========================================================
+   SCORE
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-score-card {
+  border-color: #d4d4d8;
+}
+
+html[data-theme="light"] .dashboard-score-card p {
+  color: #52525b;
+}
+
+html[data-theme="light"] .dashboard-score-card strong {
+  color: #18181b;
+}
+
+/* =========================================================
+   PRIORITY ENGINE
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-attention-item {
+  background: #ffffff;
+}
+
+/* Descripción */
+html[data-theme="light"] .dashboard-priority-description {
+  color: #52525b !important;
+  font-weight: 500;
+}
+
+/* POR QUÉ ESTÁ AQUÍ */
+html[data-theme="light"] .dashboard-priority-reason span {
+  color: #3f3f46;
+  font-weight: 800;
+}
+
+/* Critical */
+html[data-theme="light"]
+.dashboard-attention-item.is-critical {
+  border-color: #dc2626;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-rank {
+  background: #fee2e2;
+  border-right-color: #dc2626;
+  color: #b91c1c;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-reason strong {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-action {
+  color: #b91c1c;
+  font-weight: 750;
+}
+
+/* Warning */
+html[data-theme="light"]
+.dashboard-attention-item.is-warning {
+  border-color: #d97706;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-rank {
+  background: #fef3c7;
+  border-right-color: #d97706;
+  color: #a16207;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-reason strong {
+  color: #92400e;
+  font-weight: 700;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-action {
+  color: #92400e;
+  font-weight: 750;
+}
+
+/* =========================================================
+   TU DÍA
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-day-card {
+  border-color: #d4d4d8;
+}
+
+html[data-theme="light"] .dashboard-day-card h2,
+html[data-theme="light"] .dashboard-day-card h3 {
+  color: #18181b;
+}
+
+html[data-theme="light"] .dashboard-day-card p {
+  color: #52525b;
+}
+
+/* =========================================================
+   LINKS / ACTIONS DORADAS
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-page a {
+  font-weight: 700;
+}
+
+html[data-theme="light"] .dashboard-orb-card a {
+  color: #a16207;
+}
+/* =========================================================
+   ORVESEN DASHBOARD — STRONG LIGHT MODE
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-page {
+  color: #111111;
+}
+
+/* ---------- CARDS ---------- */
+
+html[data-theme="light"] .dashboard-page section,
+html[data-theme="light"] .dashboard-section-card,
+html[data-theme="light"] .dashboard-score-card,
+html[data-theme="light"] .dashboard-orb-card,
+html[data-theme="light"] .dashboard-day-card {
+  border-color: #c4c4c7;
+}
+
+/* ---------- HEADINGS ---------- */
+
+html[data-theme="light"] .dashboard-page h1 {
+  color: #09090b !important;
+  font-weight: 800;
+}
+
+html[data-theme="light"] .dashboard-page h2 {
+  color: #09090b !important;
+  font-weight: 750;
+}
+
+html[data-theme="light"] .dashboard-page h3 {
+  color: #111113 !important;
+  font-weight: 700;
+}
+
+/* ---------- NORMAL TEXT ---------- */
+
+html[data-theme="light"] .dashboard-page p {
+  color: #3f3f46;
+}
+
+/* Small / secondary text */
+html[data-theme="light"] .dashboard-page small {
+  color: #52525b;
+}
+
+/* ---------- SCORE ---------- */
+
+html[data-theme="light"] .dashboard-score-card {
+  background: #ffffff;
+  border-color: #bfc0c4;
+}
+
+html[data-theme="light"] .dashboard-score-card p {
+  color: #3f3f46 !important;
+}
+
+html[data-theme="light"] .dashboard-score-card strong {
+  color: #09090b !important;
+  font-weight: 750;
+}
+
+/* Score metric boxes */
+html[data-theme="light"] .dashboard-score-card [class*="metric"] {
+  border-color: #c9c9ce;
+  background: #fafafa;
+}
+
+html[data-theme="light"] .dashboard-score-card [class*="metric"] p,
+html[data-theme="light"] .dashboard-score-card [class*="metric"] span {
+  color: #52525b;
+}
+
+html[data-theme="light"] .dashboard-score-card [class*="metric"] strong {
+  color: #09090b;
+}
+
+/* ---------- ORVESEN GOLD ---------- */
+
+html[data-theme="light"] .dashboard-page [class*="eyebrow"] {
+  color: #9a6700 !important;
+  font-weight: 800;
+}
+
+html[data-theme="light"] .dashboard-orb-card {
+  background: #fffdf8;
+  border-color: #c9b98e;
+}
+
+html[data-theme="light"] .dashboard-orb-card p {
+  color: #27272a !important;
+}
+
+html[data-theme="light"] .dashboard-orb-card strong {
+  color: #09090b !important;
+}
+
+html[data-theme="light"] .dashboard-orb-card a {
+  color: #8a5a00 !important;
+  font-weight: 750;
+}
+
+/* ---------- PRIORITY CARDS ---------- */
+
+html[data-theme="light"] .dashboard-attention-item {
+  background: #ffffff;
+}
+
+/* CRITICAL */
+html[data-theme="light"] .dashboard-attention-item.is-critical {
+  border: 1.5px solid #dc2626;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-rank {
+  background: #dc2626;
+  border-right-color: #dc2626;
+  color: #ffffff;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-rank span,
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-rank strong {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-title svg {
+  color: #dc2626;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-reason span {
+  color: #7f1d1d;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-critical
+.dashboard-priority-reason strong {
+  color: #b91c1c;
+}
+
+/* WARNING */
+html[data-theme="light"] .dashboard-attention-item.is-warning {
+  border: 1.5px solid #c98200;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-rank {
+  background: #c98200;
+  border-right-color: #c98200;
+  color: #ffffff;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-rank span,
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-rank strong {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"]
+.dashboard-attention-item.is-warning
+.dashboard-priority-title svg {
+  color: #b26a00;
+}
+
+/* ---------- PRIORITY TEXT ---------- */
+
+html[data-theme="light"] .dashboard-priority-title h3 {
+  color: #09090b !important;
+}
+
+html[data-theme="light"] .dashboard-priority-description {
+  color: #3f3f46 !important;
+  font-weight: 500;
+}
+
+html[data-theme="light"] .dashboard-priority-reason span {
+  font-weight: 800;
+}
+
+html[data-theme="light"] .dashboard-priority-reason strong {
+  font-weight: 700;
+}
+
+/* ---------- DAY ---------- */
+
+html[data-theme="light"] .dashboard-day-card {
+  background: #ffffff;
+  border-color: #bfc0c4;
+}
+
+html[data-theme="light"] .dashboard-day-card p {
+  color: #3f3f46 !important;
+}
+
+/* ---------- BUTTONS / LINKS ---------- */
+
+html[data-theme="light"] .dashboard-page a {
+  font-weight: 750;
+}
+
+/* ---------- PROGRESS ---------- */
+
+html[data-theme="light"] .dashboard-score-card [class*="progress"] {
+  background: #d4d4d8;
+}
+
+/* ---------- GENERAL MUTED TEXT ---------- */
+
+html[data-theme="light"] .dashboard-page .text-zinc-400,
+html[data-theme="light"] .dashboard-page .text-zinc-500 {
+  color: #52525b !important;
+}
+
+html[data-theme="light"] .dashboard-page .text-zinc-600 {
+  color: #3f3f46 !important;
+}
+/* =========================================================
+   ORVESEN SCORE — LIGHT MODE STRONG CONTRAST
+   ========================================================= */
+
+html[data-theme="light"] .dashboard-score-card {
+  color: #111111;
+}
+
+/* Todo texto secundario dentro del Score */
+html[data-theme="light"] .dashboard-score-card p,
+html[data-theme="light"] .dashboard-score-card span {
+  color: #3f3f46 !important;
+  opacity: 1 !important;
+}
+
+/* Títulos de métricas */
+html[data-theme="light"] .dashboard-score-card [class*="metric"] p,
+html[data-theme="light"] .dashboard-score-card [class*="metric"] span {
+  color: #3f3f46 !important;
+  font-weight: 600;
+  opacity: 1 !important;
+}
+
+/* Valores: 84,3% / 57,2% / 3 de 5 */
+html[data-theme="light"] .dashboard-score-card [class*="metric"] strong {
+  color: #09090b !important;
+  font-weight: 800;
+  opacity: 1 !important;
+}
+
+/* Datos / INSUFICIENTES */
+html[data-theme="light"] .dashboard-score-card strong {
+  color: #09090b !important;
+  opacity: 1 !important;
+}
+
+/* Texto informativo bajo la barra */
+html[data-theme="light"] .dashboard-score-card [class*="coverage"],
+html[data-theme="light"] .dashboard-score-card [class*="updated"] {
+  color: #3f3f46 !important;
+  opacity: 1 !important;
+}
+
+/* Dorado ORVESEN más sólido */
+html[data-theme="light"] .dashboard-score-card [class*="eyebrow"],
+html[data-theme="light"] .dashboard-score-card [class*="label"] {
+  color: #8a5a00 !important;
+  opacity: 1 !important;
+  font-weight: 800;
+}
