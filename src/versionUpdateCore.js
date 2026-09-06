@@ -58,6 +58,7 @@ export function buildUpdateUrl(origin, build) {
   const target = new URL("/", origin);
   target.searchParams.set("_appv", build.version);
   target.searchParams.set("_appbt", String(build.builtAt));
+  target.searchParams.set("_refresh", String(Date.now()));
   return target.toString();
 }
 

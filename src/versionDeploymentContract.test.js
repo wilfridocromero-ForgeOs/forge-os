@@ -89,6 +89,16 @@ test("version diagnostics extend the debug API without changing the update latch
   assert.match(core, /decision\.status === "stale" && state\.status !== "update_available"/);
 });
 
+test("version activation cache-bust is independent from asset recovery", () => {
+  const core = fs.readFileSync("src/versionUpdateCore.js", "utf8");
+  const guard = fs.readFileSync("src/versionGuard.js", "utf8");
+  const bootstrap = fs.readFileSync("public/update-bootstrap.js", "utf8");
+  assert.match(core, /searchParams\.set\("_refresh", String\(Date\.now\(\)\)\)/);
+  assert.match(guard, /searchParams\.delete\("_refresh"\)/);
+  assert.match(bootstrap, /searchParams\.set\("_asset_recovery", String\(Date\.now\(\)\)\)/);
+  assert.doesNotMatch(bootstrap, /_refresh/);
+});
+
 test("temporary banner diagnostics are user-triggered and copy sanitized history", () => {
   const guard = fs.readFileSync("src/versionGuard.js", "utf8");
   assert.match(guard, /diagnosticAction\.textContent = "Diagnóstico"/);

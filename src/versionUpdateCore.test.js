@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildUpdateUrl,
   classifyBuild,
   createLatestRequestObserver,
   createVersionUpdateController,
@@ -39,6 +40,33 @@ test("canonical comparison prioritizes version identity before timestamps", () =
   assert.equal(classifyBuild(CURRENT, { version: "next-sha", built_at: "bad" }).status, "invalid");
 });
 
+test("each update navigation has a unique nonce while preserving the target identity", () => {
+  const originalNow = Date.now;
+  const values = [4000, 4001];
+  Date.now = () => values.shift();
+
+  try {
+    const first = new URL(buildUpdateUrl("https://app.orvesen.com", {
+      version: NEXT.version,
+      builtAt: NEXT.built_at,
+    }));
+    const second = new URL(buildUpdateUrl("https://app.orvesen.com", {
+      version: NEXT.version,
+      builtAt: NEXT.built_at,
+    }));
+
+    assert.equal(first.searchParams.get("_appv"), NEXT.version);
+    assert.equal(second.searchParams.get("_appv"), NEXT.version);
+    assert.equal(first.searchParams.get("_appbt"), String(NEXT.built_at));
+    assert.equal(second.searchParams.get("_appbt"), String(NEXT.built_at));
+    assert.equal(first.searchParams.get("_refresh"), "4000");
+    assert.equal(second.searchParams.get("_refresh"), "4001");
+    assert.notEqual(first.href, second.href);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test("a newer build becomes available and acceptance navigates exactly once", () => {
   const navigations = [];
   const value = fixture({ navigate: (url) => navigations.push(url) });
@@ -48,8 +76,49 @@ test("a newer build becomes available and acceptance navigates exactly once", ()
   assert.equal(value.controller.acceptUpdate(), false);
   assert.equal(navigations.length, 1);
   assert.match(navigations[0], /_appv=next-sha/);
+  assert.match(navigations[0], /_appbt=2000/);
+  assert.match(navigations[0], /_refresh=\d+/);
   assert.equal(value.controller.getState().status, "activating");
   assert.equal(value.getStored().returnTo, "/proyectos/123?tab=work#task");
+});
+
+test("a second permitted attempt gets a new nonce and the attempt limit still stops loops", () => {
+  const originalNow = Date.now;
+  const refreshValues = [5000, 6000];
+  Date.now = () => refreshValues.shift();
+
+  try {
+    const firstNavigations = [];
+    const first = fixture({ navigate: (url) => firstNavigations.push(url), now: 3000 });
+    first.controller.observeRemote(NEXT);
+    assert.equal(first.controller.acceptUpdate(), true);
+
+    const secondNavigations = [];
+    const second = fixture({
+      attempt: first.getStored(),
+      navigate: (url) => secondNavigations.push(url),
+      now: 4000,
+    });
+    second.controller.observeRemote(NEXT);
+    assert.equal(second.controller.acceptUpdate(), true);
+
+    const firstRefresh = new URL(firstNavigations[0]).searchParams.get("_refresh");
+    const secondRefresh = new URL(secondNavigations[0]).searchParams.get("_refresh");
+    assert.equal(firstRefresh, "5000");
+    assert.equal(secondRefresh, "6000");
+    assert.notEqual(firstRefresh, secondRefresh);
+
+    const blocked = fixture({
+      attempt: second.getStored(),
+      navigate: () => assert.fail("attempt limit must prevent navigation"),
+      now: 4500,
+    });
+    blocked.controller.observeRemote(NEXT);
+    assert.equal(blocked.controller.acceptUpdate(), false);
+    assert.equal(blocked.controller.getState().status, "error");
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test("completed bootstrap restores the route without touching auth storage", () => {
