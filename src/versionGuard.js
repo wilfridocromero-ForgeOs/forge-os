@@ -8,6 +8,7 @@ import {
   UPDATE_ATTEMPT_KEY,
 } from "./versionUpdateCore";
 import {
+  createVersionDiagnosticReport,
   createVersionDiagnosticHistory,
   VERSION_DIAGNOSTIC_TAB_KEY,
 } from "./versionDiagnostics";
@@ -22,7 +23,6 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const CHANNEL_NAME = "orvesen-version-updates";
 
 let installed = false;
-let checking = false;
 let controller = null;
 let lastDiagnostic = null;
 let diagnosticHistory = null;
@@ -118,6 +118,35 @@ function removeUpdateBanner() {
   document.getElementById(UPDATE_BANNER_ID)?.remove();
 }
 
+function diagnosticText() {
+  return JSON.stringify(
+    createVersionDiagnosticReport({
+      history: diagnosticHistory?.history() || [],
+      currentBuild: CURRENT_BUILD,
+      navigationState: controller?.getState?.() || null,
+    }),
+    null,
+    2,
+  );
+}
+
+async function copyDiagnostic(button, output) {
+  const text = diagnosticText();
+  output.textContent = text;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Diagnóstico copiado";
+  } catch {
+    button.textContent = "Selecciona y copia el texto";
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(output);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+}
+
 function renderUpdateState(state) {
   /*
    * Esta parte es importante para el bug:
@@ -153,7 +182,53 @@ function renderUpdateState(state) {
     action.className = "orvesen-version-update__action";
     action.type = "button";
 
-    banner.append(copy, action);
+    const diagnosticAction = document.createElement("button");
+    diagnosticAction.className = "orvesen-version-update__diagnostic-action";
+    diagnosticAction.type = "button";
+    diagnosticAction.textContent = "Diagnóstico";
+
+    const diagnosticPanel = document.createElement("section");
+    diagnosticPanel.className = "orvesen-version-update__diagnostic";
+    diagnosticPanel.hidden = true;
+    diagnosticPanel.setAttribute("aria-label", "Diagnóstico temporal de versión");
+
+    const diagnosticHeader = document.createElement("div");
+    diagnosticHeader.className = "orvesen-version-update__diagnostic-header";
+
+    const diagnosticTitle = document.createElement("strong");
+    diagnosticTitle.textContent = "Diagnóstico de versión";
+
+    const closeDiagnostic = document.createElement("button");
+    closeDiagnostic.className = "orvesen-version-update__diagnostic-close";
+    closeDiagnostic.type = "button";
+    closeDiagnostic.textContent = "Cerrar";
+
+    const diagnosticOutput = document.createElement("pre");
+    diagnosticOutput.className = "orvesen-version-update__diagnostic-output";
+
+    const copyAction = document.createElement("button");
+    copyAction.className = "orvesen-version-update__diagnostic-copy";
+    copyAction.type = "button";
+    copyAction.textContent = "Copiar diagnóstico";
+
+    diagnosticAction.onclick = () => {
+      diagnosticOutput.textContent = diagnosticText();
+      copyAction.textContent = "Copiar diagnóstico";
+      diagnosticPanel.hidden = false;
+    };
+
+    closeDiagnostic.onclick = () => {
+      diagnosticPanel.hidden = true;
+    };
+
+    copyAction.onclick = () => {
+      void copyDiagnostic(copyAction, diagnosticOutput);
+    };
+
+    diagnosticHeader.append(diagnosticTitle, closeDiagnostic);
+    diagnosticPanel.append(diagnosticHeader, diagnosticOutput, copyAction);
+
+    banner.append(copy, diagnosticAction, action, diagnosticPanel);
     document.body.appendChild(banner);
   }
 
@@ -254,6 +329,8 @@ function recordDecision(
     stateAfter: stateAfter.status,
     reason: decision.reason,
     requestId: context.request,
+    httpStatus: context.httpStatus,
+    httpOk: context.httpOk,
     visibility: document.visibilityState,
     pageshowPersisted: context.pageshowPersisted,
     headers: context.headers,
@@ -295,6 +372,8 @@ async function fetchCurrentBuild() {
       : null,
 
     headers,
+    httpStatus: response.status,
+    httpOk: response.ok,
   };
 }
 
@@ -452,10 +531,6 @@ export function installVersionGuard() {
       source = "poll",
       eventContext = {},
     ) => {
-      if (checking) return;
-
-      checking = true;
-
       const completeRequest =
         requestObserver.begin(
           source,
@@ -470,6 +545,8 @@ export function installVersionGuard() {
           remote.build,
           {
             headers: remote.headers,
+            httpStatus: remote.httpStatus,
+            httpOk: remote.httpOk,
           },
         );
       } catch {
@@ -478,8 +555,6 @@ export function installVersionGuard() {
          * interrumpir ORVESEN ni mostrar
          * una actualización falsa.
          */
-      } finally {
-        checking = false;
       }
     };
 

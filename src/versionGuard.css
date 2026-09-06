@@ -66,6 +66,74 @@
   opacity: 0.72;
 }
 
+.orvesen-version-update__diagnostic-action,
+.orvesen-version-update__diagnostic-close,
+.orvesen-version-update__diagnostic-copy {
+  border: 0;
+  background: transparent;
+  color: #d5d0c5;
+  font: inherit;
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.orvesen-version-update__diagnostic-action {
+  flex: 0 0 auto;
+  padding: 8px 2px;
+}
+
+.orvesen-version-update__diagnostic {
+  position: fixed;
+  z-index: 10001;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 112px);
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(62vh, 520px);
+  padding: 14px;
+  border: 1px solid rgba(196, 154, 59, 0.58);
+  border-radius: 14px;
+  background: #101010;
+  color: #f5f2eb;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+}
+
+.orvesen-version-update__diagnostic[hidden] {
+  display: none;
+}
+
+.orvesen-version-update__diagnostic-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.orvesen-version-update__diagnostic-output {
+  max-height: min(42vh, 360px);
+  margin: 0 0 12px;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #080808;
+  color: #ddd8ce;
+  font: 0.68rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.orvesen-version-update__diagnostic-copy {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(196, 154, 59, 0.72);
+  border-radius: 8px;
+  color: #f5f2eb;
+  text-decoration: none;
+}
+
 @media (max-width: 520px) {
   .orvesen-version-update {
     width: auto;
@@ -75,6 +143,21 @@
 
   .orvesen-version-update__action {
     width: 100%;
+  }
+
+  .orvesen-version-update__diagnostic-action {
+    align-self: flex-start;
+  }
+
+  .orvesen-version-update__diagnostic {
+    top: max(16px, env(safe-area-inset-top));
+    bottom: auto;
+    left: max(16px, env(safe-area-inset-left));
+    max-height: calc(100dvh - 32px);
+  }
+
+  .orvesen-version-update__diagnostic-output {
+    max-height: calc(100dvh - 150px);
   }
 }
 

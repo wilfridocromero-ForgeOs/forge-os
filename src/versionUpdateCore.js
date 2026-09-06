@@ -1,103 +1,64 @@
 export const UPDATE_ATTEMPT_KEY = "orvesen-version-update-attempt";
 export const ASSET_RECOVERY_ATTEMPT_KEY = "orvesen-asset-recovery-attempt";
-
-const ATTEMPT_TTL_MS = 5 * 60 * 1000;
+export const ATTEMPT_MAX_AGE_MS = 15 * 60 * 1000;
+export const MAX_UPDATE_ATTEMPTS = 2;
 
 export function normalizeBuild(value) {
   if (!value || typeof value !== "object") return null;
-
-  const version = String(value.version || "").trim();
-  const builtAt = Number(value.built_at);
-
-  if (!version) return null;
-
-  return {
-    version,
-    built_at: Number.isFinite(builtAt) ? builtAt : 0,
-  };
+  const version = typeof value.version === "string" ? value.version.trim() : "";
+  const builtAt = Number(value.built_at ?? value.builtAt);
+  if (!version || version.length > 160 || !Number.isSafeInteger(builtAt) || builtAt <= 0) return null;
+  return { version, builtAt };
 }
 
-export function classifyBuild(currentBuild, remoteBuild) {
+export function classifyBuild(currentBuild, remoteValue) {
   const current = normalizeBuild(currentBuild);
-  const remote = normalizeBuild(remoteBuild);
+  const remoteBuild = normalizeBuild(remoteValue);
+  if (!current || !remoteBuild) return { status: "invalid", build: remoteBuild, reason: "invalid_build_metadata" };
+  if (remoteBuild.version === current.version) return { status: "current", build: remoteBuild, reason: "same_version" };
+  if (remoteBuild.builtAt <= current.builtAt) return { status: "stale", build: remoteBuild, reason: "remote_not_newer" };
+  return { status: "update_available", build: remoteBuild, reason: "different_newer_version" };
+}
 
-  if (!current || !remote) {
-    return {
-      status: "unknown",
-      build: remote,
-      reason: "invalid_build",
-    };
-  }
-
-  /*
-   * El SHA/version es la identidad principal del build.
-   *
-   * Si ambos tienen exactamente la misma versión, el navegador YA está
-   * ejecutando el build correcto aunque built_at sea distinto.
-   */
-  if (remote.version === current.version) {
-    return {
-      status: "current",
-      build: remote,
-      reason: "same_version",
-    };
-  }
-
-  /*
-   * Si conocemos las fechas de build, evitamos interpretar una respuesta
-   * vieja de CDN/cache como una actualización nueva.
-   */
-  if (
-    current.built_at > 0 &&
-    remote.built_at > 0 &&
-    remote.built_at <= current.built_at
-  ) {
-    return {
-      status: "current",
-      build: remote,
-      reason: "remote_not_newer",
-    };
-  }
-
+export function createLatestRequestObserver(observe, onIgnored = () => {}) {
+  let latestRequest = 0;
   return {
-    status: "update_available",
-    build: remote,
-    reason: "newer_version",
+    begin(source = "poll", requestContext = {}) {
+      const request = ++latestRequest;
+      return (value, responseContext = {}) => {
+        const context = { ...requestContext, ...responseContext, source, request };
+        if (request !== latestRequest) {
+          const decision = { status: "ignored", build: normalizeBuild(value), reason: "out_of_order_response" };
+          onIgnored(decision, context);
+          return decision;
+        }
+        return observe(value, context);
+      };
+    },
   };
 }
 
-function isFreshAttempt(attempt) {
-  return Boolean(
-    attempt &&
-      Number(attempt.attemptedAt) > 0 &&
-      Date.now() - Number(attempt.attemptedAt) < ATTEMPT_TTL_MS,
-  );
+export function safeRelativeUrl(value, origin) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
+  const target = new URL(value, origin);
+  return target.origin === origin ? `${target.pathname}${target.search}${target.hash}` : "/";
 }
 
-function buildUpdateUrl(origin, currentUrl, targetBuild) {
-  const target = normalizeBuild(targetBuild);
-  const url = new URL(currentUrl || "/", origin);
+export function normalizeAttempt(value, now = Date.now()) {
+  if (!value || typeof value !== "object") return null;
+  const attemptedAt = Number(value.attemptedAt);
+  const attempts = Number(value.attempts);
+  if (!Number.isFinite(attemptedAt) || now - attemptedAt > ATTEMPT_MAX_AGE_MS || now < attemptedAt) return null;
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > MAX_UPDATE_ATTEMPTS) return null;
+  const target = normalizeBuild({ version: value.target, built_at: value.targetBuiltAt });
+  return target ? { ...value, target: target.version, targetBuiltAt: target.builtAt, attempts } : null;
+}
 
-  url.searchParams.delete("_appv");
-  url.searchParams.delete("_appbt");
-  url.searchParams.delete("_asset_recovery");
-  url.searchParams.delete("_check");
-  url.searchParams.delete("_refresh");
-
-  if (target?.version) {
-    url.searchParams.set("_appv", target.version);
-  }
-
-  if (target?.built_at) {
-    url.searchParams.set("_appbt", String(target.built_at));
-  }
-
-  /*
-   * Hace única la navegación cuando el usuario realmente pulsa actualizar.
-   */
-  url.searchParams.set("_refresh", String(Date.now()));
-
-  return `${url.pathname}${url.search}${url.hash}`;
+export function buildUpdateUrl(origin, build) {
+  const target = new URL("/", origin);
+  target.searchParams.set("_appv", build.version);
+  target.searchParams.set("_appbt", String(build.builtAt));
+  return target.toString();
 }
 
 export function createVersionUpdateController({
@@ -109,236 +70,104 @@ export function createVersionUpdateController({
   clearAttempt,
   navigate,
   replaceRoute,
-  confirmUpdate,
-  onState,
-  onDecision,
-} = {}) {
+  confirmUpdate = () => true,
+  now = () => Date.now(),
+  onState = () => {},
+  onDecision = () => {},
+}) {
   const current = normalizeBuild(currentBuild);
+  let state = { status: "current", target: null, error: null };
+  let navigationRequested = false;
 
-  let state = {
-    status: "current",
-    target: null,
+  const publish = (next) => {
+    state = next;
+    onState(state);
+    return state;
   };
 
-  function emit() {
-    onState?.({
-      status: state.status,
-      target: state.target ? { ...state.target } : null,
-    });
-  }
-
-  function setState(status, target = null) {
-    state = {
-      status,
-      target: normalizeBuild(target),
-    };
-
-    emit();
-    return getState();
-  }
-
-  function getState() {
-    return {
-      status: state.status,
-      target: state.target ? { ...state.target } : null,
-    };
-  }
-
-  function observeRemote(remoteBuild, context = {}) {
-    const decision = classifyBuild(current, remoteBuild);
-
-    /*
-     * IMPORTANTE:
-     * Una comprobación válida que confirme el build actual SIEMPRE debe
-     * limpiar un aviso anterior de actualización.
-     *
-     * Antes el estado update_available podía quedarse pegado aunque una
-     * consulta posterior confirmara que el navegador estaba actualizado.
-     */
-    if (decision.status === "current") {
-      if (
-        state.status === "update_available" ||
-        state.status === "error" ||
-        state.status === "current"
-      ) {
-        setState("current", null);
-      }
-
-      onDecision?.(decision, context);
-      return decision;
+  function completeBootstrap() {
+    const attempt = normalizeAttempt(readAttempt(), now());
+    if (!attempt) {
+      clearAttempt();
+      return false;
     }
+    if (attempt.target !== current.version) {
+      if (attempt.targetBuiltAt <= current.builtAt) clearAttempt();
+      onDecision({
+        status: attempt.targetBuiltAt <= current.builtAt ? "stale" : "ignored",
+        build: { version: attempt.target, builtAt: attempt.targetBuiltAt },
+        reason: "bootstrap_target_mismatch",
+      }, { source: "bootstrap" }, state);
+      return false;
+    }
+    clearAttempt();
+    replaceRoute(safeRelativeUrl(attempt.returnTo, origin));
+    publish({ status: "current", target: null, error: null });
+    onDecision({
+      status: "current",
+      build: { version: attempt.target, builtAt: attempt.targetBuiltAt },
+      reason: "completed_update_attempt",
+    }, { source: "bootstrap" }, state);
+    return true;
+  }
 
+  function observeRemote(remoteValue, context = {}) {
+    const decision = classifyBuild(current, remoteValue);
+    const previous = state;
     if (decision.status === "update_available") {
-      const target = normalizeBuild(decision.build);
-
-      /*
-       * No degradamos el target si ya habíamos detectado uno más reciente.
-       */
-      if (
-        state.status === "update_available" &&
-        state.target &&
-        target &&
-        state.target.built_at > 0 &&
-        target.built_at > 0 &&
-        target.built_at < state.target.built_at
-      ) {
-        const ignored = {
-          status: "current",
-          build: target,
-          reason: "older_than_pending_target",
-        };
-
-        onDecision?.(ignored, context);
+      if (state.target && (
+        state.target.builtAt > decision.build.builtAt
+        || (state.target.builtAt === decision.build.builtAt && state.target.version !== decision.build.version)
+      )) {
+        const ignored = { ...decision, status: "stale", reason: "older_than_observed_target" };
+        onDecision(ignored, context, previous);
         return ignored;
       }
-
-      setState("update_available", target);
-      onDecision?.(decision, context);
-      return decision;
+      if (state.status !== "update_available" || state.target?.version !== decision.build.version || state.target?.builtAt !== decision.build.builtAt) {
+        publish({ status: "update_available", target: decision.build, error: null });
+      }
+    } else if (decision.status === "current" && context.source !== "broadcast") {
+      clearAttempt();
+      navigationRequested = false;
+      publish({ status: "current", target: null, error: null });
+    } else if (decision.status === "stale" && state.status !== "update_available") {
+      clearAttempt();
+      publish({ status: "current", target: null, error: null });
     }
-
-    onDecision?.(decision, context);
+    onDecision(decision, context, previous);
     return decision;
   }
 
-  function completeBootstrap() {
-    const attempt = readAttempt?.();
-
-    if (!attempt) {
-      emit();
-      return getState();
-    }
-
-    if (!isFreshAttempt(attempt)) {
-      clearAttempt?.();
-      emit();
-      return getState();
-    }
-
-    const target = normalizeBuild(attempt.target);
-
-    /*
-     * Si después de la navegación estamos ejecutando exactamente el build
-     * solicitado, la actualización terminó correctamente.
-     */
-    if (target && current && target.version === current.version) {
-      clearAttempt?.();
-
-      if (attempt.returnTo) {
-        replaceRoute?.(attempt.returnTo);
-      }
-
-      setState("current", null);
-      return getState();
-    }
-
-    /*
-     * También consideramos completada la actualización si el build cargado
-     * terminó siendo todavía más nuevo que el target solicitado.
-     */
-    if (
-      target &&
-      current &&
-      target.built_at > 0 &&
-      current.built_at > target.built_at
-    ) {
-      clearAttempt?.();
-
-      if (attempt.returnTo) {
-        replaceRoute?.(attempt.returnTo);
-      }
-
-      setState("current", null);
-      return getState();
-    }
-
-    clearAttempt?.();
-    setState("current", null);
-    return getState();
-  }
-
   function acceptUpdate({ hasUnsavedWork = false } = {}) {
-    if (state.status !== "update_available" || !state.target) {
+    if (state.status !== "update_available" || !state.target || navigationRequested) return false;
+    if (hasUnsavedWork && !confirmUpdate()) return false;
+    const previous = normalizeAttempt(readAttempt(), now());
+    const attempts = previous?.target === state.target.version ? previous.attempts : 0;
+    if (attempts >= MAX_UPDATE_ATTEMPTS) {
+      publish({ status: "error", target: state.target, error: "ATTEMPTS_EXHAUSTED" });
       return false;
     }
-
-    if (hasUnsavedWork && confirmUpdate && !confirmUpdate()) {
-      return false;
-    }
-
-    const returnTo = getCurrentUrl?.() || "/";
-    const target = normalizeBuild(state.target);
-
-    writeAttempt?.({
-      target,
-      returnTo,
-      attemptedAt: Date.now(),
+    navigationRequested = true;
+    writeAttempt({
+      from: current.version,
+      target: state.target.version,
+      targetBuiltAt: state.target.builtAt,
+      returnTo: previous?.target === state.target.version
+        ? safeRelativeUrl(previous.returnTo, origin)
+        : safeRelativeUrl(getCurrentUrl(), origin),
+      attempts: attempts + 1,
+      attemptedAt: now(),
     });
-
-    setState("activating", target);
-
-    const nextUrl = buildUpdateUrl(origin, returnTo, target);
-
+    publish({ status: "activating", target: state.target, error: null });
     try {
-      navigate?.(nextUrl);
+      navigate(buildUpdateUrl(origin, state.target));
       return true;
     } catch {
-      clearAttempt?.();
-      setState("error", target);
+      navigationRequested = false;
+      publish({ status: "error", target: state.target, error: "NAVIGATION_FAILED" });
       return false;
     }
   }
 
-  emit();
-
-  return {
-    getState,
-    observeRemote,
-    completeBootstrap,
-    acceptUpdate,
-  };
-}
-
-export function createLatestRequestObserver(observe, recordDecision) {
-  let sequence = 0;
-  let latestCompleted = 0;
-
-  return {
-    begin(source = "unknown", eventContext = {}) {
-      const request = ++sequence;
-
-      return (build, context = {}) => {
-        if (request < latestCompleted) {
-          recordDecision?.(
-            {
-              status: "unknown",
-              build: normalizeBuild(build),
-              reason: "stale_request",
-            },
-            {
-              ...eventContext,
-              ...context,
-              source,
-              request,
-            },
-          );
-
-          return {
-            status: "unknown",
-            build: normalizeBuild(build),
-            reason: "stale_request",
-          };
-        }
-
-        latestCompleted = request;
-
-        return observe?.(build, {
-          ...eventContext,
-          ...context,
-          source,
-          request,
-        });
-      };
-    },
-  };
+  return { acceptUpdate, completeBootstrap, getState: () => state, observeRemote };
 }

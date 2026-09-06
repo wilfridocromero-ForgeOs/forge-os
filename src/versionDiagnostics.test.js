@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createVersionDiagnosticReport,
   createVersionDiagnosticHistory,
   VERSION_DIAGNOSTIC_HISTORY_KEY,
 } from "./versionDiagnostics.js";
@@ -63,6 +64,8 @@ test("diagnostic history survives reload and sanitizes unknown or sensitive fiel
   first.push(diagnostic({
     source: "not-a-trigger",
     requestId: 7,
+    httpStatus: 200,
+    httpOk: true,
     pageshowPersisted: true,
     headers: { etag: "etag", age: "12", xVercelCache: "HIT", authorization: "secret" },
     prompt: "business data",
@@ -71,6 +74,8 @@ test("diagnostic history survives reload and sanitizes unknown or sensitive fiel
   const [entry] = reloaded.history();
   assert.equal(entry.source, "unknown");
   assert.equal(entry.requestId, 7);
+  assert.equal(entry.httpStatus, 200);
+  assert.equal(entry.httpOk, true);
   assert.equal(entry.pageshowPersisted, true);
   assert.deepEqual(entry.headers, { etag: "etag", age: "12", xVercelCache: "HIT" });
   assert.equal("authorization" in entry.headers, false);
@@ -87,4 +92,34 @@ test("history returns copies and clear removes persisted diagnostics", () => {
   history.clear();
   assert.deepEqual(history.history(), []);
   assert.equal(storage.values.has(VERSION_DIAGNOSTIC_HISTORY_KEY), false);
+});
+
+test("diagnostic report contains only sanitized version metadata", () => {
+  const report = createVersionDiagnosticReport({
+    capturedAt: 3000,
+    currentBuild: { version: "current-sha", builtAt: 1000, token: "secret" },
+    navigationState: {
+      status: "update_available",
+      target: { version: "next-sha", builtAt: 2000, cookie: "secret" },
+      authorization: "secret",
+    },
+    history: [{
+      ...diagnostic(),
+      timestamp: 2500,
+      tabId: "tab-a",
+      headers: { etag: "etag", authorization: "secret" },
+      pageContent: "private",
+    }],
+  });
+
+  assert.deepEqual(report.current, { version: "current-sha", builtAt: 1000 });
+  assert.deepEqual(report.navigationState, {
+    status: "update_available",
+    target: { version: "next-sha", builtAt: 2000 },
+    error: null,
+  });
+  assert.equal(report.history.length, 1);
+  assert.equal("authorization" in report.navigationState, false);
+  assert.equal("authorization" in report.history[0].headers, false);
+  assert.equal("pageContent" in report.history[0], false);
 });

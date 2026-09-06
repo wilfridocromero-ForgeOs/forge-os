@@ -68,12 +68,12 @@ test("production index keeps asset recovery before the hashed application entry"
 
 test("version guard installation is globally idempotent and cleanup is symmetrical", () => {
   const source = fs.readFileSync("src/versionGuard.js", "utf8");
-  assert.match(source, /if \(!import\.meta\.env\.PROD \|\| installed \|\| !CURRENT_BUILD\)/);
+  assert.match(source, /!import\.meta\.env\.PROD\s*\|\|\s*installed\s*\|\|\s*!CURRENT_BUILD/);
   assert.match(source, /installed = true/);
   assert.match(source, /installed = false/);
   for (const event of ["focus", "online", "pageshow", "visibilitychange"]) {
-    assert.match(source, new RegExp(`addEventListener\\(\\"${event}\\"`));
-    assert.match(source, new RegExp(`removeEventListener\\(\\"${event}\\"`));
+    assert.match(source, new RegExp(`addEventListener\\(\\s*\\"${event}\\"`));
+    assert.match(source, new RegExp(`removeEventListener\\(\\s*\\"${event}\\"`));
   }
   assert.match(source, /channel\?\.close\(\)/);
 });
@@ -81,11 +81,21 @@ test("version guard installation is globally idempotent and cleanup is symmetric
 test("version diagnostics extend the debug API without changing the update latch", () => {
   const guard = fs.readFileSync("src/versionGuard.js", "utf8");
   const core = fs.readFileSync("src/versionUpdateCore.js", "utf8");
-  assert.match(guard, /snapshot: \(\) => lastDiagnostic/);
-  assert.match(guard, /history: \(\) => diagnosticHistory\?\.history\(\)/);
-  assert.match(guard, /clearHistory: \(\) => diagnosticHistory\?\.clear\(\)/);
-  assert.match(core, /decision\.status === "current" && state\.status !== "update_available"/);
+  assert.match(guard, /snapshot:\s*\(\)\s*=>\s*lastDiagnostic/);
+  assert.match(guard, /history:\s*\(\)\s*=>\s*diagnosticHistory\?\.history\(\)\s*\|\|\s*\[\]/);
+  assert.match(guard, /clearHistory:\s*\(\)\s*=>\s*diagnosticHistory\?\.clear\(\)/);
+  assert.match(core, /decision\.status === "current" && context\.source !== "broadcast"/);
+  assert.doesNotMatch(guard, /if \(checking\) return/);
   assert.match(core, /decision\.status === "stale" && state\.status !== "update_available"/);
+});
+
+test("temporary banner diagnostics are user-triggered and copy sanitized history", () => {
+  const guard = fs.readFileSync("src/versionGuard.js", "utf8");
+  assert.match(guard, /diagnosticAction\.textContent = "Diagnóstico"/);
+  assert.match(guard, /copyAction\.textContent = "Copiar diagnóstico"/);
+  assert.match(guard, /navigator\.clipboard\.writeText\(text\)/);
+  assert.match(guard, /history: diagnosticHistory\?\.history\(\) \|\| \[\]/);
+  assert.doesNotMatch(guard, /diagnosticAction\.onclick[\s\S]{0,500}checkForCurrentVersion/);
 });
 
 test("build configuration reuses one canonical timestamp for runtime and manifest", () => {

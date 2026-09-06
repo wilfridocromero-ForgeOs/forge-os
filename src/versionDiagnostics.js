@@ -44,13 +44,42 @@ export function sanitizeVersionDiagnostic(value) {
     remote: sanitizeBuild(value.remote),
     stateBefore: STATES.has(value.stateBefore) ? value.stateBefore : "unknown",
     classification: CLASSIFICATIONS.has(value.classification) ? value.classification : "invalid",
+    ignored: value.classification === "ignored",
     stateAfter: STATES.has(value.stateAfter) ? value.stateAfter : "unknown",
     reason: boundedString(value.reason) || "unspecified",
     requestId: Number.isSafeInteger(value.requestId) && value.requestId > 0 ? value.requestId : null,
+    httpStatus: Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599
+      ? value.httpStatus
+      : null,
+    httpOk: typeof value.httpOk === "boolean" ? value.httpOk : null,
     visibility: value.visibility === "visible" || value.visibility === "hidden" ? value.visibility : "unknown",
     pageshowPersisted: typeof value.pageshowPersisted === "boolean" ? value.pageshowPersisted : null,
     headers,
     bannerEvent: value.bannerEvent === "shown" || value.bannerEvent === "hidden" ? value.bannerEvent : null,
+  };
+}
+
+export function createVersionDiagnosticReport({
+  history = [],
+  currentBuild = null,
+  navigationState = null,
+  capturedAt = Date.now(),
+} = {}) {
+  return {
+    capturedAt: Number.isSafeInteger(capturedAt) && capturedAt > 0
+      ? capturedAt
+      : Date.now(),
+    current: sanitizeBuild(currentBuild),
+    navigationState: STATES.has(navigationState?.status)
+      ? {
+          status: navigationState.status,
+          target: sanitizeBuild(navigationState.target),
+          error: boundedString(navigationState.error, 80),
+        }
+      : null,
+    history: Array.isArray(history)
+      ? history.map(sanitizeVersionDiagnostic).filter(Boolean)
+      : [],
   };
 }
 
