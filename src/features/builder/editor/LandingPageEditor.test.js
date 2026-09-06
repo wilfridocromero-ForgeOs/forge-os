@@ -20,11 +20,24 @@ test("inspector and save UX cover Forms, conflict and structural controls", asyn
 });
 
 test("mobile editor uses horizontal add controls and a properties bottom sheet", async () => {
+  const source = await read("./LandingPageEditor.jsx");
   const styles = await read("./LandingEditor.css");
   assert.match(styles, /@media\(max-width:900px\)/);
   assert.match(styles, /\.landing-palette\{display:flex;overflow-x:auto/);
   assert.match(styles, /\.landing-inspector\{position:fixed/);
   assert.doesNotMatch(styles, /overflow-x:visible/);
+  assert.match(source, /beginMobilePlacement\(\{ kind: "palette-block", id: type, label \}\)/);
+  assert.match(source, /beginMobilePlacement\(\{ kind: "palette-pattern", id: item\.id, label: item\.label \}\)/);
+  assert.match(source, /pendingInsert \? <button type="button" className="landing-empty-place"/);
+  assert.match(source, /\{!pendingInsert && <nav className="landing-mobile-context"/);
+  assert.match(source, /has-context-toolbar/);
+  assert.match(styles, /\.landing-editor\.has-context-toolbar \.landing-canvas-shell/);
+  assert.match(styles, /\.landing-editor\.is-mobile-placing \.landing-mobile-placement-bar\{bottom:/);
+  const toolbarStyles = await read("./BuilderContextToolbarV12.css");
+  assert.match(toolbarStyles, /max-width:calc\(100vw - 1\.1rem\)!important/);
+  assert.match(toolbarStyles, /overflow-x:auto!important/);
+  assert.match(toolbarStyles, /overflow-y:hidden!important/);
+  assert.match(toolbarStyles, /\.landing-element-toolbar-v3>\*\{flex:0 0 auto\}/);
 });
 
 test("properties use accessible native accordion groups and controlled action surfaces", async () => {
@@ -34,4 +47,14 @@ test("properties use accessible native accordion groups and controlled action su
   assert.match(source, /<details className="landing-inspector-accordion"/);
   assert.match(source, /<summary>/);
   assert.match(styles, /summary:focus-visible/);
+});
+
+test("contextual toolbar keeps destructive and quick-edit actions available", async () => {
+  const source = await read("./LandingPageEditor.jsx");
+  const styles = await read("./BuilderContextToolbarV12.css");
+  for (const contract of ["toolbarDeleteNeedsConfirmation", "Eliminar Header", "FormQuickEditor", "saveBuilderFormDraft", "spacer-size", "header-nav", "section-anchor", "line_height", "letter_spacing"]) assert.match(source, new RegExp(contract));
+  assert.match(source, /data-controls=\{declaredControls\.join/);
+  assert.match(styles, /landing-form-quick-editor/);
+  assert.match(styles, /overflow:visible/);
+  assert.match(styles, /@media\(max-width:900px\).*overflow-x:auto/s);
 });

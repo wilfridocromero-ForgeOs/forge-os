@@ -1,24 +1,39 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, GripVertical, Heading, Image, Layers3, Monitor, MousePointerClick, Pilcrow, Redo2, Smartphone, Tablet, Trash2, Undo2, Waypoints } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowUp, Copy, GripVertical, Heading, Image, Layers3, Maximize2, Monitor, MousePointerClick, Palette, Pilcrow, Redo2, Smartphone, Tablet, Trash2, Type, Undo2, Waypoints } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { validateLandingDocument } from "../document/landingDocument.js";
+import { createPrimitiveBlock, validateLandingDocument } from "../document/landingDocument.js";
+import { APPEARANCE_PRESETS, GRADIENT_PRESETS, GLOW_TOKENS, SHADOW_TOKENS } from "../document/visualAppearance.js";
 import { applyLandingOperations } from "../document/landingOperations.js";
 import { createLandingPattern, LANDING_PATTERN_CATALOG } from "../document/landingPatterns.js";
 import LandingRenderer from "../renderer/LandingRenderer.jsx";
 import "../renderer/LandingRenderer.css";
-import { listBuilderAssets, loadBuilderAssetDraft, saveBuilderAssetDraft } from "../services/BuilderAssetService.js";
+import { listBuilderAssets, loadBuilderAssetDraft, saveBuilderAssetDraft, saveBuilderFormDraft } from "../services/BuilderAssetService.js";
+import FormRenderer from "../form/FormRenderer.jsx";
+import { createFormField } from "../form/formDocument.js";
 import { createLandingAutosave } from "./landingAutosave.js";
+import { calculateAutoScrollVelocity, sameLandingDropTarget } from "./landingAutoScroll.js";
 import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop, LANDING_DRAG_TYPE } from "./landingDnD.js";
 import { duplicateEditorSelection, findEditorSelection, landingEditorReducer, moveEditorSelection } from "./landingEditorState.js";
+import { getBlockToolbarControls, toolbarDeleteNeedsConfirmation } from "./landingToolbarControls.js";
 import "./LandingEditor.css";
+import "./ElementControlsV4.css";
+import "./BuilderControlsV5.css";
+import "./BuilderInteractionV6.css";
+import "./BuilderPricingTypographyV7.css";
+import "./BuilderHeaderFormsV8.css";
+import "./BuilderFormConnectionV9.css";
+import "./BuilderFormConnectionV11.css";
+import "./BuilderContextToolbarV12.css";
+import "../renderer/LandingRendererV4.css";
 
 const BLOCKS = [
+  { type: "site_header", label: "Header", hint: "Navegación responsive", Icon: Layers3 },
   { type: "heading", label: "Heading", hint: "Título semántico", Icon: Heading },
   { type: "text", label: "Text", hint: "Párrafo editorial", Icon: Pilcrow },
   { type: "image", label: "Image", hint: "Visual responsive", Icon: Image },
   { type: "action_group", label: "Actions", hint: "Botones de acción", Icon: MousePointerClick },
-  { type: "form_reference", label: "Form", hint: "Formulario conectado", Icon: Waypoints },
+  { type: "form_reference", label: "Formulario", hint: "Conecta un formulario creado", Icon: Waypoints },
   { type: "logo", label: "Logo", hint: "Marca enlazable", Icon: Image },
   { type: "feature_item", label: "Feature", hint: "Beneficio estructurado", Icon: Layers3 },
   { type: "stat", label: "Stat", hint: "Métrica destacada", Icon: Heading },
@@ -31,7 +46,9 @@ const BLOCKS = [
   { type: "social_links", label: "Social", hint: "Enlaces aprobados", Icon: MousePointerClick },
 ];
 const PREVIEWS = [{ id: "desktop", label: "Desktop", Icon: Monitor }, { id: "tablet", label: "Tablet", Icon: Tablet }, { id: "mobile", label: "Mobile", Icon: Smartphone }];
-const PATTERNS = LANDING_PATTERN_CATALOG.map((pattern) => ({ ...pattern, hint: pattern.group }));
+const HEADER_PATTERN = { id: "site_header", group: "Header", label: "Navegación principal", preview: "header", hint: "Header" };
+const PATTERNS = [HEADER_PATTERN, ...LANDING_PATTERN_CATALOG.map((pattern) => ({ ...pattern, hint: pattern.group }))];
+const safeAnchor = (value, fallback = "seccion") => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64) || fallback;
 const createBuilderId = () => {
   if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
   const bytes = new Uint8Array(16);
@@ -51,6 +68,7 @@ export default function LandingPageEditor({ asset }) {
   const [status, setStatus] = useState("saved");
   const [error, setError] = useState("");
   const [forms, setForms] = useState([]);
+  const [pages, setPages] = useState([]);
   const [localConflictDocument, setLocalConflictDocument] = useState(null);
   const [dragState, setDragState] = useState({ payload: null, target: null });
   const [editing, setEditing] = useState(null);
@@ -59,14 +77,22 @@ export default function LandingPageEditor({ asset }) {
   const [globalStylesOpen, setGlobalStylesOpen] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState("top");
   const [pendingInsert, setPendingInsert] = useState(null);
+  const [elementSearch, setElementSearch] = useState("");
   const autosaveRef = useRef(null); const saveDelayRef = useRef(600); const stateRef = useRef(null); const dragRef = useRef(null);
+  const formsRef = useRef([]); const formSaveQueuesRef = useRef(new Map()); const formRevisionsRef = useRef(new Map());
   const libraryDragRef = useRef(null);
+  const canvasShellRef = useRef(null);
+  const autoScrollRef = useRef({ frame: null, pointerY: null });
 
   useEffect(() => {
     let active = true;
-    Promise.all([loadBuilderAssetDraft(asset.id), listBuilderAssets({ assetType: "form", includeArchived: false })]).then(([draft, formAssets]) => {
+    Promise.all([loadBuilderAssetDraft(asset.id), listBuilderAssets({ assetType: "form", includeArchived: false }), listBuilderAssets({ assetType: "landing_page", includeArchived: false })]).then(async ([draft, formAssets, pageAssets]) => {
+      const hydratedForms = await Promise.all(formAssets.map(async (form) => {
+        try { const formDraft = await loadBuilderAssetDraft(form.id); return { ...form, draft: formDraft.document, draft_revision: formDraft.revision }; }
+        catch { return { ...form, draft: null }; }
+      }));
       if (!active) return;
-      dispatch({ type: "remote", draft }); setForms(formAssets);
+      dispatch({ type: "remote", draft }); setForms(hydratedForms); formRevisionsRef.current = new Map(hydratedForms.map((form)=>[form.id,form.draft_revision])); setPages(pageAssets.filter((page) => page.id !== asset.id));
       autosaveRef.current = createLandingAutosave({
         save: ({ expectedRevision, document }) => saveBuilderAssetDraft({ assetId: asset.id, expectedRevision, document }),
         onStatus: setStatus,
@@ -80,6 +106,7 @@ export default function LandingPageEditor({ asset }) {
   }, [asset.id]);
 
   useEffect(() => { stateRef.current = state; if (state?.dirty) autosaveRef.current?.schedule(state.document, saveDelayRef.current); }, [state]);
+  useEffect(() => { formsRef.current = forms; }, [forms]);
   useEffect(() => {
     const beforeUnload = (event) => { if (stateRef.current?.dirty || status === "saving") { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", beforeUnload); return () => window.removeEventListener("beforeunload", beforeUnload);
@@ -89,6 +116,10 @@ export default function LandingPageEditor({ asset }) {
   const replace = useCallback((document, group = null, delay = 220) => { saveDelayRef.current = delay; dispatch({ type: "replace", document, group }); }, []);
   const selected = useMemo(() => state ? findEditorSelection(state.document, state.selection) : null, [state]);
   const selectedRegion = selected?.region || (state?.selection?.kind === "section" ? selected?.regions?.[0] : null) || state?.document.sections.at(-1)?.regions?.[0];
+  const currentPreview = state?.preview;
+  const normalizedElementSearch = elementSearch.trim().toLowerCase();
+  const filteredBlocks = useMemo(() => !normalizedElementSearch ? BLOCKS : BLOCKS.filter((item) => `${item.label} ${item.hint} ${item.type}`.toLowerCase().includes(normalizedElementSearch)), [normalizedElementSearch]);
+  const filteredPatterns = useMemo(() => !normalizedElementSearch ? PATTERNS : PATTERNS.filter((item) => `${item.label} ${item.group} ${item.id}`.toLowerCase().includes(normalizedElementSearch)), [normalizedElementSearch]);
 
   const updateInlineField = useCallback(({ blockId, field, index, value }) => {
     const current = stateRef.current?.document;
@@ -116,6 +147,9 @@ export default function LandingPageEditor({ asset }) {
 
   const removeSelection = useCallback((selection) => {
     if (!selection) return;
+    const current = findEditorSelection(stateRef.current?.document, selection);
+    const block = selection.kind === "block" ? current?.block : null;
+    if (toolbarDeleteNeedsConfirmation(block) && !window.confirm("¿Eliminar este Header? Se perderán su navegación, marca y configuración interna.")) return;
     apply({ type: selection.kind === "section" ? "remove_section" : "remove_block", [`${selection.kind}_id`]: selection.id }, "remove");
     dispatch({ type: "select", selection: null });
     setEditing(null); setPanelOpen(false);
@@ -133,17 +167,32 @@ export default function LandingPageEditor({ asset }) {
   }, [removeSelection, editing, pendingInsert]);
 
   useEffect(() => {
-    if (!state || typeof window === "undefined") return undefined;
+    if (!currentPreview || typeof window === "undefined") return undefined;
     const media = window.matchMedia("(max-width: 900px)");
     const syncMobilePreview = () => {
-      if (media.matches && state.preview !== "mobile") dispatch({ type: "preview", preview: "mobile" });
+      if (media.matches && currentPreview !== "mobile") dispatch({ type: "preview", preview: "mobile" });
     };
     syncMobilePreview();
     media.addEventListener?.("change", syncMobilePreview);
     return () => media.removeEventListener?.("change", syncMobilePreview);
-  }, [state?.preview]);
+  }, [currentPreview]);
 
   function createPattern(id) {
+    if (id === "site_header") {
+      const block = (type, content) => createPrimitiveBlock(type, createBuilderId(), content);
+      return {
+        id: createBuilderId(),
+        layout: "stack",
+        style: {
+          content_width: "wide",
+          align: "center",
+          padding_top: "xs",
+          padding_bottom: "xs",
+          background: { type: "solid", color: "surface" },
+        },
+        regions: [{ id: createBuilderId(), span: 12, blocks: [block("site_header")] }],
+      };
+    }
     return createLandingPattern(id, { formAssetId: forms[0]?.id || null });
   }
   function revealInserted(kind, id) {
@@ -156,6 +205,7 @@ export default function LandingPageEditor({ asset }) {
   function closeMobileTools() {
     setMobileAddOpen(false);
     setGlobalStylesOpen(false);
+    setElementSearch("");
   }
 
   const mobileActivate = (handler) => (event) => {
@@ -164,19 +214,48 @@ export default function LandingPageEditor({ asset }) {
   };
 
   function addBlock(type) {
+    const current = stateRef.current?.document || state.document;
+    if (!current) return;
     const blockId = createBuilderId();
-    if (!selectedRegion) {
+    let targetRegion = selectedRegion;
+    let insertIndex;
+
+    if (state.selection?.kind === "block" && selected?.block && selected?.region) {
+      targetRegion = selected.region;
+      const anchorIndex = targetRegion.blocks.findIndex((item) => item.id === selected.block.id);
+      insertIndex = anchorIndex >= 0 ? anchorIndex + 1 : targetRegion.blocks.length;
+    } else if (state.selection?.kind === "section" && selected?.regions?.[0]) {
+      targetRegion = selected.regions[0];
+      insertIndex = targetRegion.blocks.length;
+    } else if (targetRegion) {
+      insertIndex = targetRegion.blocks.length;
+    }
+
+    let next;
+    if (!targetRegion) {
       const section = newSection();
-      replace(applyLandingOperations(state.document, [
+      next = applyLandingOperations(current, [
         { type: "add_section", section },
         { type: "add_block", region_id: section.regions[0].id, block_type: type, block_id: blockId },
-      ]), "insert");
+      ]);
     } else {
-      apply({ type: "add_block", region_id: selectedRegion.id, block_type: type, block_id: blockId }, "insert");
+      next = applyLandingOperations(current, [{
+        type: "add_block",
+        region_id: targetRegion.id,
+        block_type: type,
+        block_id: blockId,
+        index: insertIndex,
+      }]);
     }
+
+    replace(next, "insert", 120);
     dispatch({ type: "select", selection: { kind: "block", id: blockId } });
     closeMobileTools();
-    revealInserted("block", blockId);
+    if (type === "form_reference") {
+      setEditing(null);
+      setPanelOpen(true);
+    }
+    requestAnimationFrame(() => revealInserted("block", blockId));
   }
 
   function addPattern(id) {
@@ -196,7 +275,6 @@ export default function LandingPageEditor({ asset }) {
     setEditing(null);
     setPanelOpen(false);
     dispatch({ type: "select", selection: null });
-    requestAnimationFrame(() => document.querySelector(".landing-renderer")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
   function placePendingInsert(target) {
     const payload = pendingInsert;
@@ -204,6 +282,18 @@ export default function LandingPageEditor({ asset }) {
     if (!payload || !current || !target) return;
 
     if (payload.kind === "palette-block") {
+      if (target.kind === "canvas-end") {
+        const before = new Set(current.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks.map((block) => block.id))));
+        const next = applyLandingDrop(current, payload, target, { createId: createBuilderId });
+        const inserted = next.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks)).find((block) => !before.has(block.id));
+        replace(next, "block-place", 120);
+        setPendingInsert(null);
+        if (inserted) {
+          dispatch({ type: "select", selection: { kind: "block", id: inserted.id } });
+          requestAnimationFrame(() => revealInserted("block", inserted.id));
+        }
+        return;
+      }
       if (!["block-before", "block-after", "region-end"].includes(target.kind) || !target.regionId) return;
       const region = current.sections.flatMap((section) => section.regions).find((item) => item.id === target.regionId);
       if (!region) return;
@@ -298,14 +388,77 @@ export default function LandingPageEditor({ asset }) {
     if (!payload) return;
     dragRef.current = payload; setDragState({ payload, target: null }); event.dataTransfer.effectAllowed = payload.kind.startsWith("palette") ? "copy" : "move"; event.dataTransfer.setData(LANDING_DRAG_TYPE, encodeLandingDrag(payload));
   }
-  function readTarget(event) { const zone = event.target.closest("[data-drop-kind]"); return zone ? { kind: zone.dataset.dropKind, blockId: zone.dataset.blockIdTarget || undefined, sectionId: zone.dataset.sectionIdTarget || undefined, regionId: zone.dataset.regionIdTarget || undefined } : null; }
+  function targetFromZone(zone) {
+    if (!zone) return null;
+    return {
+      kind: zone.dataset.dropKind,
+      blockId: zone.dataset.blockIdTarget || undefined,
+      sectionId: zone.dataset.sectionIdTarget || undefined,
+      regionId: zone.dataset.regionIdTarget || undefined,
+    };
+  }
+  function readTarget(event, payload) {
+    const direct = event.target.closest?.("[data-drop-kind]");
+    const directTarget = targetFromZone(direct);
+    if (isValidLandingDrop(payload, directTarget)) return directTarget;
+
+    // Large, forgiving drop target: pick the nearest valid insertion line.
+    const frame = event.currentTarget?.closest?.(".landing-page-frame") || event.currentTarget;
+    const zones = Array.from(frame?.querySelectorAll?.("[data-drop-kind]") || []);
+    let best = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const zone of zones) {
+      const candidate = targetFromZone(zone);
+      if (!isValidLandingDrop(payload, candidate)) continue;
+      const rect = zone.getBoundingClientRect();
+      const cx = Math.max(rect.left, Math.min(event.clientX, rect.right));
+      const cy = rect.top + rect.height / 2;
+      const dx = event.clientX - cx;
+      const dy = event.clientY - cy;
+      const distance = Math.hypot(dx * 0.35, dy);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+  function stopAutoScroll() {
+    if (autoScrollRef.current.frame !== null) cancelAnimationFrame(autoScrollRef.current.frame);
+    autoScrollRef.current = { frame: null, pointerY: null };
+  }
+  function autoScrollCanvas(event) {
+    const shell = canvasShellRef.current;
+    if (!shell) return;
+    autoScrollRef.current.pointerY = event.clientY;
+    if (autoScrollRef.current.frame !== null) return;
+    const tick = () => {
+      const currentShell = canvasShellRef.current;
+      const pointerY = autoScrollRef.current.pointerY;
+      if (!currentShell || pointerY === null || !dragRef.current) return stopAutoScroll();
+      const rect = currentShell.getBoundingClientRect();
+      const velocity = calculateAutoScrollVelocity({ pointerY, top: rect.top, bottom: rect.bottom, edgeSize: Math.min(140, Math.max(80, rect.height * 0.16)) });
+      if (!velocity) return stopAutoScroll();
+      currentShell.scrollTop += velocity;
+      autoScrollRef.current.frame = requestAnimationFrame(tick);
+    };
+    autoScrollRef.current.frame = requestAnimationFrame(tick);
+  }
   function dragOver(event) {
-    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE)); const target = readTarget(event);
-    if (!isValidLandingDrop(payload, target)) { setDragState((current) => current.target ? { ...current, target: null } : current); return; }
-    event.preventDefault(); event.dataTransfer.dropEffect = payload.kind.startsWith("palette") ? "copy" : "move"; setDragState({ payload, target });
+    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE));
+    if (!payload) return;
+    autoScrollCanvas(event);
+    const target = readTarget(event, payload);
+    if (!isValidLandingDrop(payload, target)) {
+      setDragState((current) => current.target ? { ...current, target: null } : current);
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = payload.kind.startsWith("palette") ? "copy" : "move";
+    setDragState((current) => sameLandingDropTarget(current.target, target) && current.payload === payload ? current : { payload, target });
   }
   function drop(event) {
-    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE)); const target = readTarget(event);
+    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE)); const target = readTarget(event, payload);
     if (!isValidLandingDrop(payload, target)) return;
     event.preventDefault();
     if (libraryDragRef.current) {
@@ -340,7 +493,7 @@ export default function LandingPageEditor({ asset }) {
     if (["block", "section"].includes(payload.kind)) dispatch({ type: "select", selection: { kind: payload.kind, id: payload.id } });
     dragEnd();
   }
-  function dragEnd() { libraryDragRef.current = null; dragRef.current = null; setDragState({ payload: null, target: null }); }
+  function dragEnd() { stopAutoScroll(); libraryDragRef.current = null; dragRef.current = null; setDragState({ payload: null, target: null }); }
 
   if (error && !state) return <div className="landing-editor-state"><strong>No se pudo abrir la Landing</strong><p>{error}</p><button onClick={() => navigate("/construir")}>Volver a Builder</button></div>;
   if (!state) return <div className="landing-editor-state">Cargando borrador…</div>;
@@ -348,7 +501,7 @@ export default function LandingPageEditor({ asset }) {
   const validation = validateLandingDocument(state.document);
   const editorActions = { dropTarget: dragState.target, move: moveSelection, duplicate: duplicateSelection, remove: removeSelection, openPanel, editing, pendingInsert, onPlace: placePendingInsert };
 
-  return <div className="landing-editor">
+  return <div className={`landing-editor ${state.selection && !panelOpen ? "has-context-toolbar" : ""} ${pendingInsert ? "is-mobile-placing" : ""}`}>
     <header className="landing-editor-bar"><button onClick={leave} aria-label="Volver a Builder"><ArrowLeft/></button><div className="landing-editor-identity"><span>BUILDER · LANDING</span><strong>{asset.name}</strong><small>Borrador</small></div><div className="landing-editor-history"><button onClick={() => dispatch({ type: "undo" })} disabled={!state.past.length} aria-label="Deshacer"><Undo2/></button><button onClick={() => dispatch({ type: "redo" })} disabled={!state.future.length} aria-label="Rehacer"><Redo2/></button></div><div className="landing-preview-switch" aria-label="Vista responsive">{PREVIEWS.map(({ id, label, Icon }) => <button key={id} title={label} className={state.preview === id ? "is-active" : ""} onClick={() => dispatch({ type: "preview", preview: id })} aria-pressed={state.preview === id}><Icon/><span>{label}</span></button>)}</div><span className={`landing-save ${status}`}>{saveLabel(status)}</span></header>
     {(error || status === "conflict") && <div className="landing-editor-alert" role="alert"><span>{status === "conflict" ? "Esta página cambió en otra sesión." : error}</span>{status === "conflict" ? <><button onClick={reloadRemote}>Recargar versión remota</button><button onClick={() => navigator.clipboard?.writeText(JSON.stringify(localConflictDocument, null, 2))}>Copiar cambios locales</button></> : status === "error" && <button onClick={() => autosaveRef.current?.retry()}>Reintentar guardado</button>}</div>}
     <div className={`landing-editor-body ${panelOpen && state.selection ? "has-inspector" : ""} ${mobileAddOpen ? "mobile-add-open" : ""} ${globalStylesOpen ? "has-global-styles" : ""}`}>
@@ -360,10 +513,12 @@ export default function LandingPageEditor({ asset }) {
         </div>
         {globalStylesOpen ? <DesignControls document={state.document} replace={replace} onInsertSavedButton={insertSavedButton} onStartLibraryDrag={startLibraryDrag}/> : <>
           <span>AÑADIR</span>
+          <label className="landing-element-search"><span>Buscar elementos</span><input value={elementSearch} onChange={(event) => setElementSearch(event.target.value)} placeholder="Buscar Heading, Video, FAQ..."/></label>
           <h2>Blocks</h2>
-          {BLOCKS.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-block", id: type, label }))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}
-          <h2>Patterns</h2>
-          {PATTERNS.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><MobilePatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}
+          {filteredBlocks.map(({ type, label, hint, Icon }) => <button key={type} draggable data-palette-kind="palette-block" data-palette-id={type} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => addBlock(type))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span><GripVertical aria-hidden="true"/></button>)}
+          {!filteredBlocks.length && !filteredPatterns.length && <div className="landing-element-search-empty">No encontramos elementos con “{elementSearch}”.</div>}
+          {filteredPatterns.length > 0 && <h2>Patterns</h2>}
+          {filteredPatterns.map((item) => <button className="landing-pattern-card" key={item.id} draggable data-palette-kind="palette-pattern" data-palette-id={item.id} data-pattern-group={item.group} onDragStart={dragStart} onDragEnd={dragEnd} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><PatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span><GripVertical aria-hidden="true"/></button>)}
         </>}
       </aside>
       {mobileAddOpen && typeof document !== "undefined" && createPortal(<div className="orvesen-mobile-add-layer" role="presentation">
@@ -377,43 +532,73 @@ export default function LandingPageEditor({ asset }) {
           </div>
           <div className="orvesen-mobile-add-scroll">
             {globalStylesOpen ? <DesignControls document={state.document} replace={replace} onInsertSavedButton={insertSavedButton} onStartLibraryDrag={startLibraryDrag}/> : <>
-              <div className="orvesen-mobile-add-heading"><span>AÑADIR</span><h2>Elementos</h2><small>Toca un elemento para añadirlo al canvas.</small></div>
+              <div className="orvesen-mobile-add-heading"><span>AÑADIR</span><h2>Elementos</h2><small>Toca un elemento para insertarlo debajo del bloque seleccionado.</small></div>
+              <label className="landing-element-search is-mobile"><span>Buscar elementos</span><input value={elementSearch} onChange={(event) => setElementSearch(event.target.value)} placeholder="Buscar Heading, Video, FAQ..." autoComplete="off"/></label>
               <div className="orvesen-mobile-add-grid">
-                {BLOCKS.map(({ type, label, hint, Icon }) => <button type="button" key={type} className="orvesen-mobile-add-item" onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-block", id: type, label }))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span></button>)}
+                {filteredBlocks.map(({ type, label, hint, Icon }) => <button type="button" key={type} className="orvesen-mobile-add-item" onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-block", id: type, label }))}><Icon/><span><strong>{label}</strong><small>{hint}</small></span></button>)}
               </div>
-              <div className="orvesen-mobile-add-heading orvesen-mobile-pattern-heading"><h2>Patterns</h2><small>Toca una estructura para insertarla completa.</small></div>
+              {!filteredBlocks.length && !filteredPatterns.length && <div className="landing-element-search-empty">No encontramos elementos con “{elementSearch}”.</div>}
+              {filteredPatterns.length > 0 && <div className="orvesen-mobile-add-heading orvesen-mobile-pattern-heading"><h2>Patterns</h2><small>Toca una estructura para insertarla completa.</small></div>}
               <div className="orvesen-mobile-pattern-list">
-                {PATTERNS.map((item) => <button type="button" className="orvesen-mobile-pattern-item" key={item.id} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><MobilePatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span></button>)}
+                {filteredPatterns.map((item) => <button type="button" className="orvesen-mobile-pattern-item" key={item.id} onClick={mobileActivate(() => beginMobilePlacement({ kind: "palette-pattern", id: item.id, label: item.label }))}><MobilePatternPreview type={item.preview}/><span><small>{item.group}</small><strong>{item.label}</strong></span></button>)}
               </div>
             </>}
           </div>
         </section>
       </div>, document.body)}
-      <main className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p><div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div></div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolveForm={(id, label) => <div className="landing-form-preview"><strong>Form</strong><span>{forms.find((form) => form.id === id)?.name || "Sin formulario asignado"}</span><small>{label}</small></div>}/>}</div></div><output className="landing-editor-announcement" aria-live="polite">{dragState.target ? "Destino de inserción seleccionado" : validation.valid ? "Documento válido" : `${validation.errors.length} errores de documento`}</output></main>
-      {state.selection?.kind === "block" && selected && !panelOpen && <ContextualStyleToolbar
+      <main ref={canvasShellRef} className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p>{pendingInsert ? <button type="button" className="landing-empty-place" onClick={(event) => { event.preventDefault(); event.stopPropagation(); placePendingInsert({ kind: "canvas-end" }); }}>+ Colocar aquí</button> : <div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div>}</div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolvePageLink={(pageId)=>pages.find((page)=>page.id===pageId)?.public_slug?`/p/${pages.find((page)=>page.id===pageId)?.public_slug}`:"#"} resolveForm={(id, label) => {
+  const form = forms.find((item) => item.id === id);
+  return form?.draft?.document_type === "form"
+    ? <div className="landing-form-connected"><div className="landing-form-connected-label"><strong>{form.name}</strong><small>{label}</small></div><FormRenderer document={form.draft} editorMode/></div>
+    : <div className="landing-form-preview"><strong>Formulario</strong><span>{form?.name || "Sin formulario asignado"}</span><small>{form ? "Abre este formulario en Builder para diseñarlo." : label}</small></div>;
+}}/>}</div></div><output className="landing-editor-announcement" aria-live="polite">{dragState.target ? "Destino de inserción seleccionado" : validation.valid ? "Documento válido" : `${validation.errors.length} errores de documento`}</output></main>
+      {state.selection && selected && !panelOpen && <ContextualStyleToolbar
         selection={state.selection}
         selected={selected}
         apply={apply}
+        forms={forms}
+        pages={pages}
+        sections={state.document.sections}
+        onSaveForm={(formId, document) => {
+          setForms((items) => items.map((item) => item.id === formId ? { ...item, draft: document } : item));
+          const previous = formSaveQueuesRef.current.get(formId) || Promise.resolve();
+          const queued = previous.then(async () => {
+            const form = formsRef.current.find((item) => item.id === formId);
+            const revision = formRevisionsRef.current.get(formId);
+            if (!form?.draft || !Number.isInteger(revision)) throw new Error("FORM_DRAFT_NOT_AVAILABLE");
+            const saved = await saveBuilderFormDraft({ assetId: formId, expectedRevision: revision, document });
+            formRevisionsRef.current.set(formId,saved.revision);
+            setForms((items) => items.map((item) => item.id === formId ? { ...item, draft: saved.document, draft_revision: saved.revision } : item));
+          }).catch((value) => setError(value.message || "No se pudo guardar el formulario conectado."));
+          formSaveQueuesRef.current.set(formId, queued);
+          return queued;
+        }}
         buttonDefaults={state.document.settings.design_system.buttons || {}}
         onMore={() => openPanel(state.selection)}
         onDuplicate={() => duplicateSelection(state.selection)}
         onDelete={() => removeSelection(state.selection)}
+        onMoveUp={() => moveSelection(state.selection, -1)}
+        onMoveDown={() => moveSelection(state.selection, 1)}
+        onSelectSection={() => {
+          const sectionId = state.selection?.kind === "block" ? selected?.section?.id : selected?.id;
+          if (sectionId) dispatch({ type: "select", selection: { kind: "section", id: sectionId } });
+        }}
         onClose={() => { setEditing(null); setPanelOpen(false); dispatch({ type: "select", selection: null }); }}
         position={toolbarPosition}
         onTogglePosition={() => setToolbarPosition((value) => value === "top" ? "bottom" : "top")}
       />}
-      {panelOpen && state.selection && <Inspector selection={state.selection} selected={selected} forms={forms} apply={apply} preview={state.preview} onDelete={() => removeSelection(state.selection)} onDuplicate={() => duplicateSelection(state.selection)} onMove={(delta) => moveSelection(state.selection, delta)} onClose={() => setPanelOpen(false)}/>}
+      {panelOpen && state.selection && <Inspector selection={state.selection} selected={selected} forms={forms} apply={apply} preview={state.preview} onDelete={() => removeSelection(state.selection)} onDuplicate={() => duplicateSelection(state.selection)} onMove={(delta) => moveSelection(state.selection, delta)} onClose={() => setPanelOpen(false)} onEditForm={(formId) => navigate(`/construir/assets/form/${formId}`)}/>}
     </div>
     {pendingInsert && <div className="landing-mobile-placement-bar" role="status" aria-live="polite">
       <div><small>COLOCANDO</small><strong>{pendingInsert.label || (pendingInsert.kind === "palette-pattern" ? "Pattern" : "Elemento")}</strong><span>Toca una zona “+ Colocar aquí”.</span></div>
       <button type="button" onClick={cancelMobilePlacement}>Cancelar</button>
     </div>}
-    <nav className="landing-mobile-context" aria-label="Herramientas principales" onClick={(event) => event.stopPropagation()}>
+    {!pendingInsert && <nav className="landing-mobile-context" aria-label="Herramientas principales" onClick={(event) => event.stopPropagation()}>
       <button type="button" onClick={mobileActivate(() => { setPanelOpen(false); setEditing(null); setGlobalStylesOpen(false); setMobileAddOpen(true); })}>＋ Añadir</button>
       <button type="button" onClick={mobileActivate(() => { setPanelOpen(false); setEditing(null); setGlobalStylesOpen(true); setMobileAddOpen(true); })}>Estilos de página</button>
       <button type="button" onClick={() => dispatch({ type: "preview", preview: state.preview === "mobile" ? "desktop" : "mobile" })}>Preview</button>
       {state.selection?.kind === "section" && <button type="button" onClick={() => openPanel(state.selection)}>Editar sección</button>}
-    </nav>
+    </nav>}
   </div>;
 }
 
@@ -461,99 +646,315 @@ const QUICK_COLORS = [
 
 function QuickPopover({ id, openMenu, setOpenMenu, label, trigger, children }) {
   const open = openMenu === id;
+  const storageKey = `orvesen.builder.panel.${id}`;
+  const [panelPosition, setPanelPosition] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(storageKey)) || { x: Math.max(24, window.innerWidth - 390), y: 96 }; }
+    catch { return { x: 24, y: 96 }; }
+  });
   const close = () => setOpenMenu(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const escape = (event) => { if (event.key === "Escape") setOpenMenu(null); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [open, setOpenMenu]);
+  useEffect(() => {
+    try { sessionStorage.setItem(storageKey, JSON.stringify(panelPosition)); } catch { /* Session preferences are optional. */ }
+  }, [panelPosition, storageKey]);
+  const beginDrag = (event) => {
+    if (window.matchMedia("(max-width: 720px)").matches) return;
+    event.preventDefault();
+    const origin = { pointerX: event.clientX, pointerY: event.clientY, x: panelPosition.x, y: panelPosition.y };
+    const move = (nextEvent) => setPanelPosition({
+      x: Math.max(12, Math.min(window.innerWidth - 372, origin.x + nextEvent.clientX - origin.pointerX)),
+      y: Math.max(12, Math.min(window.innerHeight - 160, origin.y + nextEvent.clientY - origin.pointerY)),
+    });
+    const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", end, { once: true });
+  };
   return <div className={`landing-quick-popover ${open ? "is-open" : ""}`}>
     <button type="button" className="landing-quick-trigger" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setOpenMenu(open ? null : id); }}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
     {open && typeof document !== "undefined" && createPortal(
-      <><button type="button" className="landing-quick-portal-backdrop" aria-label="Cerrar opciones" onClick={close}/><div className="landing-quick-popover-panel landing-quick-portal-panel" onClick={(event) => event.stopPropagation()}>{label && <strong>{label}</strong>}{children}</div></>,
+      <div className="landing-quick-popover-panel landing-quick-portal-panel landing-floating-panel" style={{ left: panelPosition.x, top: panelPosition.y }} onClick={(event) => event.stopPropagation()}>
+        <header className="landing-floating-panel-header" onPointerDown={beginDrag}><span><GripVertical size={15}/>{label || "Opciones"}</span><button type="button" aria-label="Cerrar panel" onPointerDown={(event)=>event.stopPropagation()} onClick={close}>×</button></header>
+        <div className="landing-floating-panel-content">{children}</div>
+      </div>,
       document.body
     )}
   </div>;
 }
 
-function ContextualStyleToolbar({ selection, selected, apply, buttonDefaults = {}, onMore, onDuplicate, onDelete, onClose, position = "top", onTogglePosition }) {
+function FormQuickEditor({ form, onSave }) {
+  if (!form?.draft) return <p className="landing-toolbar-note">Selecciona un formulario para editarlo.</p>;
+  const commit = (mutate) => { const next = structuredClone(form.draft); mutate(next); onSave?.(form.id, next); };
+  const updateField = (fieldId, changes) => commit((next) => { next.fields = next.fields.map((field) => field.id === fieldId ? { ...field, ...changes } : field); });
+  return <div className="landing-form-quick-editor">
+    <label>Texto del botón<input defaultValue={form.draft.settings.submit_label} onBlur={(event)=>commit((next)=>{next.settings.submit_label=event.target.value})}/></label>
+    <label>Mensaje de éxito<input defaultValue={form.draft.settings.success_message} onBlur={(event)=>commit((next)=>{next.settings.success_message=event.target.value})}/></label>
+    <div className="landing-form-quick-fields">{form.draft.fields.map((field,index)=><details key={field.id}><summary>{field.label || field.type}</summary><label>Tipo<select value={field.type} onChange={(event)=>updateField(field.id,{type:event.target.value,...(["select","radio"].includes(event.target.value)&&!field.options?{options:["Opción 1"]}:{})})}>{["text","email","tel","textarea","select","checkbox","radio","number","url"].map((type)=><option key={type}>{type}</option>)}</select></label><label>Label<input defaultValue={field.label} onBlur={(event)=>updateField(field.id,{label:event.target.value})}/></label><label>Placeholder<input defaultValue={field.placeholder} onBlur={(event)=>updateField(field.id,{placeholder:event.target.value})}/></label>{["select","radio"].includes(field.type)&&<label>Opciones<textarea defaultValue={(field.options||[]).join("\n")} onBlur={(event)=>updateField(field.id,{options:event.target.value.split("\n").map((value)=>value.trim()).filter(Boolean).slice(0,30)})}/></label>}<label><input type="checkbox" checked={field.required} onChange={(event)=>updateField(field.id,{required:event.target.checked})}/> Requerido</label><label>Ancho<select value={field.width} onChange={(event)=>updateField(field.id,{width:event.target.value})}><option value="full">Completo</option><option value="half">Mitad</option></select></label><div><button type="button" disabled={index===0} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index-1,0,item)})}><ArrowUp size={14}/></button><button type="button" disabled={index===form.draft.fields.length-1} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index+1,0,item)})}><ArrowDown size={14}/></button><button type="button" onClick={()=>commit((next)=>next.fields.splice(index+1,0,{...structuredClone(field),id:createBuilderId()}))}><Copy size={14}/></button><button type="button" onClick={()=>commit((next)=>{next.fields=next.fields.filter((item)=>item.id!==field.id)})}><Trash2 size={14}/></button></div></details>)}</div>
+    <button type="button" onClick={()=>commit((next)=>next.fields.push(createFormField("text")))}>＋ Añadir campo</button>
+  </div>;
+}
+
+function AppearancePanel({ value = {}, onChange }) {
+  const applyPreset = (id) => onChange(structuredClone(APPEARANCE_PRESETS[id]));
+  const patch = (changes) => onChange({ ...value, ...changes });
+  return <div className="landing-appearance-panel">
+    <details open><summary>Presets</summary><div className="landing-appearance-presets">{Object.keys(APPEARANCE_PRESETS).map((id)=><button key={id} type="button" className={value.preset===id?"is-active":""} onClick={()=>applyPreset(id)}><i data-preview={id}/><span>{id.replace("_"," ")}</span></button>)}</div></details>
+    <details><summary>Superficie</summary><div className="landing-option-grid">{["inherit","solid","gradient","glass","transparent"].map((id)=><button key={id} type="button" className={value.surface===id?"is-active":""} onClick={()=>patch({surface:id})}>{id}</button>)}</div></details>
+    <details><summary>Gradiente</summary><div className="landing-option-grid">{GRADIENT_PRESETS.map((id)=><button key={id} type="button" className={value.gradient?.preset===id?"is-active":""} onClick={()=>patch({surface:"gradient",gradient:{type:"linear",preset:id,angle:135,intensity:60}})}>{id.replace("_"," ")}</button>)}</div></details>
+    <details><summary>Sombra</summary><div className="landing-option-grid">{SHADOW_TOKENS.map((id)=><button key={id} type="button" className={value.shadow?.token===id?"is-active":""} onClick={()=>patch({shadow:{token:id,intensity:id==="none"?0:40}})}>{id}</button>)}</div></details>
+    <details><summary>Luz</summary><div className="landing-option-grid">{GLOW_TOKENS.map((id)=><button key={id} type="button" className={value.glow?.token===id?"is-active":""} onClick={()=>patch({glow:{token:id,intensity:id==="none"?0:40,position:"center",blur:"md"}})}>{id}</button>)}</div></details>
+    <details><summary>Borde</summary><div className="landing-option-grid">{["none","subtle","standard","highlight"].map((id)=><button key={id} type="button" className={value.border===id?"is-active":""} onClick={()=>patch({border:id})}>{id}</button>)}</div></details>
+    <details><summary>Avanzado</summary><label>Opacidad<select value={value.opacity??100} onChange={(event)=>patch({opacity:Number(event.target.value)})}>{[20,40,60,80,100].map((id)=><option key={id} value={id}>{id}%</option>)}</select></label><label>Blur<select value={value.blur||"none"} onChange={(event)=>patch({blur:event.target.value})}>{["none","sm","md"].map((id)=><option key={id}>{id}</option>)}</select></label><label>Textura<select value={value.texture||"none"} onChange={(event)=>patch({texture:event.target.value})}><option value="none">Sin textura</option><option value="grain">Grano sutil</option></select></label></details>
+  </div>;
+}
+
+function ContextualStyleToolbar({ selection, selected, apply, forms = [], pages = [], sections = [], onSaveForm, buttonDefaults = {}, onMore, onDuplicate, onDelete, onMoveUp, onMoveDown, onSelectSection, onClose, position = "top", onTogglePosition }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [actionIndex, setActionIndex] = useState(0);
-  if (!selection || selection.kind !== "block" || !selected?.block) return null;
+  if (!selection || !selected) return null;
+
+  const spacingOptions = [["none","0"],["xs","8"],["sm","16"],["md","24"],["lg","40"],["xl","64"]];
+  const spacingIndex = (value) => {
+    const found = spacingOptions.findIndex(([id]) => id === value);
+    return found < 0 ? 0 : found;
+  };
+
+  if (selection.kind === "section") {
+    const section = selected;
+    const style = section.style || {};
+    const allBlocks = section.regions?.flatMap((region) => region.blocks || []) || [];
+    const allPricing = allBlocks.length > 1 && allBlocks.every((block) => block.type === "pricing_card");
+    const allFeatures = allBlocks.length > 1 && allBlocks.every((block) => block.type === "feature_item");
+    const allStats = allBlocks.length > 1 && allBlocks.every((block) => block.type === "stat");
+    const groupLabel = allPricing ? "Pricing · Grupo" : allFeatures ? "Features · Grupo" : allStats ? "Stats · Grupo" : "Sección · Grupo";
+    const updateSection = (changes) => apply({ type:"update_section_style", section_id:section.id, changes }, `quick-section-${section.id}`, 600);
+    const updateSectionData = (changes) => apply({ type:"update_section", section_id:section.id, changes }, `quick-section-data-${section.id}`, 600);
+    const top = style.padding_top || "none";
+    const bottom = style.padding_bottom || "none";
+    const width = style.content_width || "standard";
+
+    return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} role="toolbar" aria-label="Editar grupo o sección" onClick={(event)=>event.stopPropagation()}>
+      <span className="landing-quick-kind">{groupLabel}</span>
+      <QuickPopover id="section-appearance" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño visual" trigger={<Palette size={15}/>}><AppearancePanel value={style.appearance} onChange={(appearance)=>updateSection({appearance})}/></QuickPopover>
+      <QuickPopover id="section-anchor" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Navegación de sección" trigger={<span>#</span>}><div className="landing-option-list"><label>Nombre interno<input value={section.label || ""} onChange={(event)=>updateSectionData({label:event.target.value})}/></label><label>Anchor<input value={section.anchor || ""} placeholder="servicios" onChange={(event)=>updateSectionData({anchor:safeAnchor(event.target.value,`seccion-${section.id.slice(0,8)}`)})}/></label></div></QuickPopover>
+      <QuickPopover id="section-width" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Ancho del grupo" trigger={<span>Ancho · {width === "narrow" ? "Estrecho" : width === "wide" ? "Amplio" : "Normal"}</span>}>
+        <div className="landing-option-grid">{[["narrow","Estrecho"],["standard","Normal"],["wide","Amplio"]].map(([id,label])=><button key={id} type="button" className={width===id?"is-active":""} onClick={()=>{updateSection({content_width:id});setOpenMenu(null)}}>{label}</button>)}</div>
+      </QuickPopover>
+      <QuickPopover id="section-spacing" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Espacio exterior del grupo" trigger={<span>Espaciado</span>}>
+        <div className="landing-spacing-editor">
+          <label><span>Arriba <strong>{spacingOptions[spacingIndex(top)][1]}px</strong></span><input type="range" min="0" max={spacingOptions.length-1} step="1" value={spacingIndex(top)} onChange={(event)=>updateSection({padding_top:spacingOptions[Number(event.target.value)][0]})}/></label>
+          <label><span>Abajo <strong>{spacingOptions[spacingIndex(bottom)][1]}px</strong></span><input type="range" min="0" max={spacingOptions.length-1} step="1" value={spacingIndex(bottom)} onChange={(event)=>updateSection({padding_bottom:spacingOptions[Number(event.target.value)][0]})}/></label>
+        </div>
+      </QuickPopover>
+      <div className="landing-compact-align" aria-label="Alineación del grupo">
+        {[["start","Alinear izquierda",AlignLeft],["center","Centrar",AlignCenter],["end","Alinear derecha",AlignRight]].map(([id,label,Icon])=><button key={id} type="button" title={label} aria-label={label} className={(style.align||"start")===id?"is-active":""} onClick={()=>updateSection({align:id})}><Icon size={15}/></button>)}
+      </div>
+      <button type="button" className="landing-toolbar-primary" onClick={onMore}>Editar grupo</button>
+      <QuickPopover id="section-more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
+        <div className="landing-option-list">
+          <button type="button" onClick={onDuplicate}>Duplicar grupo</button>
+          <button type="button" className="is-danger" onClick={onDelete}>Eliminar grupo</button>
+        </div>
+      </QuickPopover>
+      <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button>
+      <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    </div>;
+  }
+
+  if (selection.kind !== "block" || !selected?.block) return null;
   const block = selected.block;
+  const declaredControls = getBlockToolbarControls(block);
   const style = block.style || {};
   const updateStyle = (changes) => apply({ type:"update_block_style", block_id:block.id, changes }, `quick-style-${block.id}`, 600);
+  const appearanceControls = <QuickPopover id="appearance" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño visual" trigger={<Palette size={15}/>}><AppearancePanel value={style.appearance} onChange={(appearance)=>updateStyle({appearance})}/></QuickPopover>;
   const resetGlobal = () => apply({ type:"reset_block_style", block_id:block.id }, `quick-global-${block.id}`, 600);
+  const width = style.max_width || "none";
+  const spacingTop = style.padding_top || "none";
+  const spacingBottom = style.padding_bottom || "none";
+  const groupBlockCount = selected?.section?.regions?.reduce((total, region) => total + (region.blocks?.length || 0), 0) || 0;
+  const hasGroup = groupBlockCount > 1;
+  const textBearing = ["heading","text","feature_item","stat","testimonial","pricing_card","faq_item"].includes(block.type);
+
+  const alignmentControls = <div className="landing-compact-align" aria-label="Posición del bloque">
+    {[["start","Alinear izquierda",AlignLeft],["center","Centrar",AlignCenter],["end","Alinear derecha",AlignRight]].map(([id,label,Icon]) => <button key={id} type="button" title={label} aria-label={label} className={(style.align||"start")===id?"is-active":""} onClick={()=>{
+      const needsReadableWidth = id !== "start" && (!style.max_width || style.max_width === "none");
+      updateStyle({ align:id, ...(needsReadableWidth ? { max_width:"standard" } : {}) });
+    }}><Icon size={15}/></button>)}
+  </div>;
+
+  const layoutControls = <>
+    {alignmentControls}
+    <QuickPopover id="width" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Ancho del bloque" trigger={<span>{width === "narrow" ? "50%" : width === "standard" ? "75%" : width === "wide" ? "90%" : "100%"}</span>}>
+      <div className="landing-option-grid">{[["narrow","50%"],["standard","75%"],["wide","90%"],["none","100%"]].map(([id,label])=><button key={id} type="button" className={width===id?"is-active":""} onClick={()=>{updateStyle({max_width:id});setOpenMenu(null)}}>{label}</button>)}</div>
+    </QuickPopover>
+    <QuickPopover id="spacing" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Distancia con otros bloques" trigger={<span>Espacio</span>}>
+      <div className="landing-spacing-editor">
+        <label><span>Arriba <strong>{spacingOptions[spacingIndex(spacingTop)][1]}px</strong></span><input type="range" min="0" max={spacingOptions.length-1} step="1" value={spacingIndex(spacingTop)} onChange={(event)=>updateStyle({padding_top:spacingOptions[Number(event.target.value)][0]})}/></label>
+        <label><span>Abajo <strong>{spacingOptions[spacingIndex(spacingBottom)][1]}px</strong></span><input type="range" min="0" max={spacingOptions.length-1} step="1" value={spacingIndex(spacingBottom)} onChange={(event)=>updateStyle({padding_bottom:spacingOptions[Number(event.target.value)][0]})}/></label>
+        <div className="landing-spacing-presets">{spacingOptions.map(([id,label])=><button key={id} type="button" className={spacingTop===id&&spacingBottom===id?"is-active":""} onClick={()=>updateStyle({padding_top:id,padding_bottom:id})}>{label}</button>)}</div>
+      </div>
+    </QuickPopover>
+    <button type="button" className="landing-quick-icon" onClick={onMoveUp} title="Mover arriba" aria-label="Mover bloque arriba"><ArrowUp size={15}/></button>
+    <button type="button" className="landing-quick-icon" onClick={onMoveDown} title="Mover abajo" aria-label="Mover bloque abajo"><ArrowDown size={15}/></button>
+  </>;
+
+  const typographyControls = textBearing ? <>
+    <QuickPopover id="font" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tipografía" trigger={<><Type size={15}/><span className="landing-font-preview">Aa</span></>}>
+      <div className="landing-font-list">{QUICK_FONTS.map(([id,label,sample])=><button key={id} type="button" className={`${style.font_family===id||(!style.font_family&&id==="inherit")?"is-active":""} font-${id}`} onClick={()=>{updateStyle({font_family:id});setOpenMenu(null)}}><span>{sample}</span><strong>{label}</strong></button>)}</div>
+    </QuickPopover>
+    <QuickPopover id="weight" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Peso" trigger={<span>{style.text_weight === "bold" ? "Bold" : style.text_weight === "semibold" ? "Semi" : style.text_weight === "medium" ? "Medium" : style.text_weight === "regular" ? "Regular" : "Peso"}</span>}>
+      <div className="landing-option-grid">{[["regular","Regular"],["medium","Medium"],["semibold","Semibold"],["bold","Bold"]].map(([id,label])=><button key={id} type="button" className={style.text_weight===id?"is-active":""} onClick={()=>{updateStyle({text_weight:id});setOpenMenu(null)}}>{label}</button>)}</div>
+    </QuickPopover>
+    <QuickPopover id="color" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Color" trigger={<span className={`landing-color-dot is-${style.color||"text"}`}/>}>
+      <div className="landing-color-list">{QUICK_COLORS.map(([id,label])=><button key={id} type="button" className={style.color===id||(!style.color&&id==="text")?"is-active":""} onClick={()=>{updateStyle({color:id});setOpenMenu(null)}}><span className={`landing-color-swatch is-${id}`}/><strong>{label}</strong></button>)}</div>
+    </QuickPopover>
+    <QuickPopover id="text-flow" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Ritmo tipográfico" trigger={<span>↕</span>}><div className="landing-option-list"><label>Interlineado<select value={style.line_height||"normal"} onChange={(event)=>updateStyle({line_height:event.target.value})}><option value="tight">Compacto</option><option value="normal">Normal</option><option value="relaxed">Amplio</option></select></label><label>Espaciado de letras<select value={style.letter_spacing||"normal"} onChange={(event)=>updateStyle({letter_spacing:event.target.value})}><option value="tight">Compacto</option><option value="normal">Normal</option><option value="wide">Amplio</option></select></label></div></QuickPopover>
+  </> : null;
+
+  const sizeControls = (block.type === "heading" || block.type === "text") ? (() => {
+    const sizes = block.type === "text"
+      ? [["small","Pequeño"],["body","Normal"],["lead","Grande"]]
+      : [["auto","Página"],["xs","XS"],["sm","S"],["md","M"],["lg","L"],["xl","XL"],["2xl","2XL"]];
+    const current = block.type === "text" ? (style.text_variant || "body") : (style.text_size || "auto");
+    const index = Math.max(0, sizes.findIndex(([id]) => id === current));
+    const setSize = (id) => updateStyle(block.type === "text" ? { text_variant:id } : { text_size:id === "auto" ? undefined : id });
+    const smaller = () => setSize(sizes[Math.max(0,index-1)][0]);
+    const larger = () => setSize(sizes[Math.min(sizes.length-1,index+1)][0]);
+    return <div className="landing-direct-size" aria-label="Tamaño del texto">
+      <button type="button" onClick={smaller} disabled={index===0} title="Hacer texto más pequeño">A−</button>
+      <QuickPopover id="size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tamaño" trigger={<span>{sizes[index]?.[1] || "Página"}</span>}>
+        <div className="landing-option-grid">{sizes.map(([id,label])=><button key={id} type="button" className={current===id?"is-active":""} onClick={()=>{setSize(id);setOpenMenu(null)}}>{label}</button>)}</div>
+      </QuickPopover>
+      <button type="button" onClick={larger} disabled={index===sizes.length-1} title="Hacer texto más grande">A+</button>
+    </div>;
+  })() : null;
+
+  const pageTypographyControl = (block.type === "heading" || block.type === "text") ? (() => {
+    const inherited = (!style.font_family || style.font_family === "inherit")
+      && !style.text_weight
+      && !style.color
+      && (block.type === "heading" ? !style.text_size : !style.text_variant);
+    const resetTypography = () => updateStyle(
+      block.type === "heading"
+        ? { font_family:"inherit", text_size:undefined, text_weight:undefined, line_height:undefined, letter_spacing:undefined, color:undefined }
+        : { font_family:"inherit", text_variant:undefined, text_weight:undefined, line_height:undefined, letter_spacing:undefined, color:undefined }
+    );
+    return <button
+      type="button"
+      className={`landing-use-page-style ${inherited ? "is-active" : ""}`}
+      onClick={resetTypography}
+      title={block.type === "heading" ? "Usar la configuración global de Título" : "Usar la configuración global de Texto general"}
+    >{block.type === "heading" ? "↩ Título global" : "↩ Texto global"}</button>;
+  })() : null;
+
+  const updateContent = (changes, group = "quick-content") => apply({ type:"update_block_content", block_id:block.id, changes }, `${group}-${block.id}`, 600);
+
+  if (block.type === "site_header") {
+    const presets = [["logo_nav_cta","Logo + nav + CTA"],["centered_nav","Nav centrada"],["centered_logo","Logo centrado"],["split","Split"],["minimal","Minimal"],["transparent","Transparent"],["solid","Solid"],["dark","Dark"],["light","Light"],["sticky","Sticky"],["cta_heavy","CTA-heavy"]];
+    const updateNav = (index, changes) => updateContent({ nav_items:block.content.nav_items.map((item,itemIndex)=>itemIndex===index?{...item,...changes}:item) },"header-nav");
+    const chooseSection = (index, sectionId) => {
+      const targetSection = sections.find((item)=>item.id===sectionId);
+      if (!targetSection) return;
+      const anchor = targetSection.anchor || safeAnchor(targetSection.label || `seccion-${targetSection.id.slice(0,8)}`);
+      if (!targetSection.anchor) apply({type:"update_section",section_id:targetSection.id,changes:{anchor}},`section-anchor-${targetSection.id}`,600);
+      updateNav(index,{target:{type:"section",section_id:targetSection.id,anchor},href:undefined});
+    };
+    return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} data-controls={declaredControls.join(" ")} role="toolbar" aria-label="Editar Header" onClick={(event)=>event.stopPropagation()}>
+      <span className="landing-quick-kind">Header</span>
+      {appearanceControls}
+      <QuickPopover id="header-preset" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Preset del Header" trigger={<><Palette size={15}/><span>Diseño</span></>}><div className="landing-header-preset-grid">{presets.map(([id,label])=><button key={id} type="button" className={block.content.preset===id?"is-active":""} data-preset={id} onClick={()=>updateContent({preset:id,sticky:id==="sticky"?true:block.content.sticky,surface:["transparent","dark","light","solid"].includes(id)?id:block.content.surface},"header-preset")}><i/><span>{label}</span></button>)}</div></QuickPopover>
+      <QuickPopover id="header-brand" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Marca" trigger={<span>Marca</span>}><div className="landing-option-list"><label>Nombre<input value={block.content.brand_name} onChange={(event)=>updateContent({brand_name:event.target.value},"header-brand")}/></label><label>Logo HTTPS<input value={block.content.logo_url} onChange={(event)=>updateContent({logo_url:event.target.value},"header-logo")}/></label></div></QuickPopover>
+      <QuickPopover id="header-nav" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Navegación" trigger={<span>Nav</span>}><div className="landing-header-nav-editor">{block.content.nav_items.map((item,index)=><fieldset key={item.id||index}><label><input type="checkbox" checked={item.enabled} onChange={(event)=>updateNav(index,{enabled:event.target.checked})}/> Visible</label><input aria-label="Texto" value={item.label} onChange={(event)=>updateNav(index,{label:event.target.value})}/><select aria-label="Tipo de destino" value={item.target?.type || (item.href?.startsWith("#")?"section":"url")} onChange={(event)=>{const type=event.target.value;updateNav(index,{target:type==="section"?{type:"section",anchor:"seccion"}:type==="page"?{type:"page",asset_id:pages[0].id}:type==="email"?{type:"email",email:"contacto@example.com"}:type==="phone"?{type:"phone",phone:"+10000000000"}:{type:"url",url:"https://example.com"},href:undefined})}}><option value="section">Sección de esta página</option><option value="page" disabled={!pages.length}>Otra página ORVESEN</option><option value="url">URL externa</option><option value="email">Email</option><option value="phone">Teléfono</option></select>{(item.target?.type||"section")==="section"?<select value={item.target?.section_id||""} onChange={(event)=>chooseSection(index,event.target.value)}><option value="">Elegir sección</option>{sections.filter((section)=>section.id!==selected.section?.id).map((section)=><option key={section.id} value={section.id}>{section.label||section.anchor||`Sección ${section.id.slice(0,6)}`}</option>)}</select>:(item.target?.type==="page")?<select value={item.target.asset_id||""} onChange={(event)=>updateNav(index,{target:{type:"page",asset_id:event.target.value}})}><option value="">Elegir página</option>{pages.map((page)=><option key={page.id} value={page.id}>{page.name}</option>)}</select>:<input key={`${item.id}-${item.target?.type}`} aria-label="Destino" defaultValue={item.target?.url||item.target?.email||item.target?.phone||item.href||""} onBlur={(event)=>{const type=item.target?.type||"url";updateNav(index,{target:{type,[type]:event.target.value},href:undefined})}}/>}<button type="button" onClick={()=>updateContent({nav_items:block.content.nav_items.filter((_,itemIndex)=>itemIndex!==index)},"header-nav-remove")}><Trash2 size={14}/> Quitar</button></fieldset>)}<button type="button" onClick={()=>updateContent({nav_items:[...block.content.nav_items,{id:`nav-${Date.now().toString(36)}`,label:"Enlace",target:{type:"section",anchor:"seccion"},enabled:true}]},"header-nav-add")}>＋ Añadir enlace</button></div></QuickPopover>
+      <QuickPopover id="header-surface" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Superficie" trigger={<span>Superficie</span>}><div className="landing-option-grid">{["transparent","solid","dark","light"].map((id)=><button key={id} type="button" className={block.content.surface===id?"is-active":""} onClick={()=>updateContent({surface:id},"header-surface")}>{id}</button>)}</div><label><input type="checkbox" checked={block.content.sticky} onChange={(event)=>updateContent({sticky:event.target.checked},"header-sticky")}/> Sticky</label></QuickPopover>
+      <button type="button" className="landing-quick-icon" onClick={onMoveUp} title="Mover arriba" aria-label="Mover Header arriba"><ArrowUp size={15}/></button><button type="button" className="landing-quick-icon" onClick={onMoveDown} title="Mover abajo" aria-label="Mover Header abajo"><ArrowDown size={15}/></button><button type="button" className="landing-quick-icon is-danger" onClick={onDelete} title="Eliminar Header" aria-label="Eliminar Header"><Trash2 size={15}/></button><QuickPopover id="header-more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}><div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar Header</button></div></QuickPopover><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    </div>;
+  }
+
+  if (block.type === "spacer") return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} data-controls={declaredControls.join(" ")} role="toolbar" aria-label="Editar Spacer" onClick={(event)=>event.stopPropagation()}><span className="landing-quick-kind">Spacer</span><QuickPopover id="spacer-size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Altura" trigger={<><Maximize2 size={15}/><span>{block.content.size.toUpperCase()}</span></>}><div className="landing-spacing-presets">{["xs","sm","md","lg","xl"].map((size)=><button key={size} type="button" className={block.content.size===size?"is-active":""} onClick={()=>updateContent({size},"spacer-size")}>{size.toUpperCase()}</button>)}</div></QuickPopover><button type="button" className="landing-quick-icon" onClick={onMoveUp} title="Mover arriba"><ArrowUp size={15}/></button><button type="button" className="landing-quick-icon" onClick={onMoveDown} title="Mover abajo"><ArrowDown size={15}/></button><button type="button" className="landing-quick-icon is-danger" onClick={onDelete} title="Eliminar"><Trash2 size={15}/></button><button type="button" className="landing-quick-close" onClick={onClose}>×</button></div>;
+
+  if (block.type === "form_reference") {
+    const connected = Boolean(block.content?.asset_id);
+    const form = forms.find((item)=>item.id===block.content.asset_id);
+    const saveStyle = (changes) => { if (!form?.draft) return; const next=structuredClone(form.draft); Object.assign(next.settings,changes); onSaveForm?.(form.id,next); };
+    return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} data-controls={declaredControls.join(" ")} role="toolbar" aria-label="Editar formulario" onClick={(event)=>event.stopPropagation()}>
+      <span className="landing-quick-kind">Formulario</span>
+      {appearanceControls}
+      <QuickPopover id="form-connect" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Formulario" trigger={<span>{connected?"Formulario":"Conectar"}</span>}><div className="landing-option-list"><label>Conectado<select value={block.content.asset_id||""} onChange={(event)=>updateContent({asset_id:event.target.value||null},"form-connect")}><option value="">Sin asignar</option>{forms.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button type="button" onClick={onMore}>Abrir Form Builder</button></div></QuickPopover>
+      <QuickPopover id="form-fields" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Campos" trigger={<span>Campos</span>}><FormQuickEditor form={form} onSave={onSaveForm}/></QuickPopover>
+      <QuickPopover id="form-design" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño" trigger={<><Palette size={15}/><span>Diseño</span></>}><div className="landing-option-grid">{[["clean_light","Clean Light"],["dark","Dark"],["soft_card","Soft Card"],["minimal","Minimal"],["glass","Glass"]].map(([id,label])=><button key={id} type="button" className={form?.draft?.settings?.style_preset===id?"is-active":""} onClick={()=>saveStyle({style_preset:id,inherit_page_theme:false})}>{label}</button>)}</div>{form&&<><label>Radio<select value={form.draft.settings.radius} onChange={(event)=>saveStyle({radius:event.target.value})}>{["none","sm","md","lg"].map((id)=><option key={id}>{id}</option>)}</select></label><label>Sombra<select value={form.draft.settings.shadow} onChange={(event)=>saveStyle({shadow:event.target.value})}>{["none","soft","elevated"].map((id)=><option key={id}>{id}</option>)}</select></label><label>Padding<select value={form.draft.settings.padding} onChange={(event)=>saveStyle({padding:event.target.value})}>{["sm","md","lg"].map((id)=><option key={id}>{id}</option>)}</select></label><label>Columnas<select value={form.draft.settings.layout||"stack"} onChange={(event)=>saveStyle({layout:event.target.value})}><option value="stack">1 columna</option><option value="two_column">2 columnas</option></select></label><label>Alineación botón<select value={form.draft.settings.button_alignment||"start"} onChange={(event)=>saveStyle({button_alignment:event.target.value})}><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label><label><input type="checkbox" checked={(form.draft.settings.button_width||"auto")==="full"} onChange={(event)=>saveStyle({button_width:event.target.checked?"full":"auto"})}/> Botón ancho completo</label></>}</QuickPopover>
+      {layoutControls}
+      {hasGroup && <button type="button" className="landing-group-switch" onClick={onSelectSection}>Grupo</button>}
+      <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
+        <div className="landing-option-list">
+          <button type="button" onClick={onMore}>Opciones del formulario</button>
+          <button type="button" onClick={resetGlobal}>Restablecer estilo</button>
+          <button type="button" onClick={onDuplicate}>Duplicar</button>
+          <button type="button" className="is-danger" onClick={onDelete}>Eliminar</button>
+        </div>
+      </QuickPopover>
+      <button type="button" className="landing-quick-icon is-danger" onClick={onDelete} title="Eliminar formulario" aria-label="Eliminar formulario"><Trash2 size={15}/></button>
+      <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button>
+      <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    </div>;
+  }
 
   if (block.type === "action_group") {
     const actions = block.content.actions || [];
-    const active = actions[Math.min(actionIndex, Math.max(0, actions.length - 1))];
+    const safeIndex = Math.min(actionIndex, Math.max(0, actions.length - 1));
+    const active = actions[safeIndex];
     const updateAction = (changes) => {
-      const next = actions.map((item,index) => index === actionIndex ? { ...item, ...changes } : item);
-      apply({ type:"update_block_content", block_id:block.id, changes:{ actions:next } }, `button-${block.id}-${actionIndex}`, 600);
+      const next = actions.map((item,index) => index === safeIndex ? { ...item, ...changes } : item);
+      apply({ type:"update_block_content", block_id:block.id, changes:{ actions:next } }, `button-${block.id}-${safeIndex}`, 600);
     };
     const saveCurrent = () => {
       if (!active) return;
       const name = window.prompt("Nombre para guardar este botón:", active.label || "Mi botón");
       if (!name?.trim()) return;
-      let library=[]; try { library=JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1") || "[]"); } catch {}
+      let library=[]; try { library=JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1") || "[]"); } catch { /* Ignore malformed user-local presets. */ }
       const item={ id:createBuilderId(), name:name.trim(), style:{...buttonDefaults, ...active} };
       localStorage.setItem("orvesen.builder.buttonStyles.v1", JSON.stringify([item,...library].slice(0,40)));
       window.dispatchEvent(new Event("orvesen-button-library-updated"));
     };
-    return <div className={`landing-quick-toolbar landing-button-context is-${position}`} role="toolbar" aria-label="Editar botón" onClick={(e)=>e.stopPropagation()}>
-      {actions.length > 1 && <QuickPopover id="which" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Botón" trigger={<span>{active?.label || "Botón"}</span>}>
-        <div className="landing-option-list">{actions.map((item,index)=><button key={index} type="button" className={actionIndex===index?"is-active":""} onClick={()=>{setActionIndex(index);setOpenMenu(null)}}>{item.label}</button>)}</div>
-      </QuickPopover>}
-      <QuickPopover id="text" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Texto del botón" trigger={<span>Texto</span>}>
-        <label className="landing-context-field">Texto<input value={active?.label || ""} onChange={(e)=>updateAction({label:e.target.value})}/></label>
-      </QuickPopover>
-      <QuickPopover id="action" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Acción" trigger={<span>Acción</span>}>
-        <div className="landing-action-editor">
-          <label>Enlace / destino<input value={active?.href || ""} placeholder="https://... o #seccion" onChange={(e)=>updateAction({href:e.target.value})}/></label>
-          <small>Usa una URL, #seccion para ir a una parte de esta página, mailto: o tel:.</small>
-        </div>
-      </QuickPopover>
-      <QuickPopover id="design" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño" trigger={<span>Diseño</span>}>
-        <div className="landing-button-direct-panel">
-          <span>Estilo</span><div className="landing-button-direct-grid">{[["primary","Sólido"],["secondary","Suave"],["outline","Outline"],["ghost","Minimal"]].map(([id,label])=><button key={id} type="button" className={(active?.variant||"primary")===id?"is-active":""} onClick={()=>updateAction({variant:id})}>{label}</button>)}</div>
-          <span>Forma</span><div className="landing-button-direct-grid">{[["none","Recto"],["sm","Sutil"],["md","Medio"],["lg","Redondo"],["pill","Píldora"]].map(([id,label])=><button key={id} type="button" className={(active?.radius||"md")===id?"is-active":""} onClick={()=>updateAction({radius:id})}>{label}</button>)}</div>
-          <span>Tamaño</span><div className="landing-button-direct-grid">{[["sm","Pequeño"],["md","Mediano"],["lg","Grande"]].map(([id,label])=><button key={id} type="button" className={(active?.size||"md")===id?"is-active":""} onClick={()=>updateAction({size:id})}>{label}</button>)}</div>
-          <span>Sombra</span><div className="landing-button-direct-grid">{[["none","Ninguna"],["subtle","Sutil"],["soft","Suave"],["medium","Intensa"]].map(([id,label])=><button key={id} type="button" className={(active?.shadow||"none")===id?"is-active":""} onClick={()=>updateAction({shadow:id})}>{label}</button>)}</div>
-          <span>Ancho</span><div className="landing-button-direct-grid">{[["auto","Automático"],["full","Completo"]].map(([id,label])=><button key={id} type="button" className={(active?.width||"auto")===id?"is-active":""} onClick={()=>updateAction({width:id})}>{label}</button>)}</div>
-        </div>
-      </QuickPopover>
-      <div className="landing-button-align" aria-label="Alineación del botón">{[["start","Izquierda","≡"],["center","Centro","≣"],["end","Derecha","≡"]].map(([id,label,glyph])=><button key={id} type="button" className={(style.align||"start")===id?"is-active":""} title={label} aria-label={label} onClick={()=>updateStyle({align:id})}><span className={`landing-align-glyph is-${id}`}>{glyph}</span></button>)}</div>
+    return <div className={`landing-quick-toolbar landing-button-context landing-element-toolbar-v3 is-${position}`} data-controls={declaredControls.join(" ")} role="toolbar" aria-label="Editar botón" onClick={(event)=>event.stopPropagation()}>
+      <span className="landing-quick-kind">Botones</span>
+      {appearanceControls}
+      {layoutControls}
+      {actions.length > 1 && <QuickPopover id="which" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Botón" trigger={<span>{active?.label || "Botón"}</span>}><div className="landing-option-list">{actions.map((item,index)=><button key={index} type="button" className={safeIndex===index?"is-active":""} onClick={()=>{setActionIndex(index);setOpenMenu(null)}}>{item.label}</button>)}</div></QuickPopover>}
+      <QuickPopover id="button-design" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño" trigger={<span>Diseño</span>}><div className="landing-button-direct-panel"><span>Estilo</span><div className="landing-button-direct-grid">{[["primary","Sólido"],["outline","Outline"],["ghost","Minimal"],["gradient","Gradient"],["glass","Glass"],["soft","Soft"],["elevated","Elevated"]].map(([id,label])=><button key={id} type="button" className={(active?.variant||"primary")===id?"is-active":""} onClick={()=>updateAction({variant:id})}>{label}</button>)}</div></div></QuickPopover>
       <button type="button" onClick={saveCurrent}>Guardar</button>
-      <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
-        <div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div>
-      </QuickPopover>
+      {hasGroup && <button type="button" className="landing-group-switch" onClick={onSelectSection}>Grupo</button>}
+      <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}><div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={resetGlobal}>Restablecer</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div></QuickPopover>
+      <button type="button" className="landing-quick-icon is-danger" onClick={onDelete} title="Eliminar botones" aria-label="Eliminar botones"><Trash2 size={15}/></button>
       <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
     </div>;
   }
 
-  const typography = block.type === "heading" || block.type === "text";
-  if (!typography) return <div className={`landing-quick-toolbar is-${position}`} role="toolbar" aria-label="Edición del bloque" onClick={(e)=>e.stopPropagation()}>
-    <span className="landing-quick-kind">{block.type === "image" ? "Imagen" : block.type === "testimonial" ? "Testimonio" : "Bloque"}</span>
-    <button type="button" onClick={resetGlobal}>Restablecer diseño</button>
-    <button type="button" onClick={onMore}>Editar bloque</button>
-    <button type="button" onClick={onDuplicate}>Duplicar</button>
-    <button type="button" className="is-danger" onClick={onDelete}>Eliminar</button>
-    <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
-  </div>;
+  const blockLabel = block.type === "image" ? "Imagen" : block.type === "testimonial" ? "Testimonio" : block.type === "video" ? "Video" : block.type === "stat" ? "Métrica" : block.type === "pricing_card" ? "Plan" : block.type === "feature_item" ? "Beneficio" : block.type === "heading" ? "Título" : block.type === "text" ? "Texto" : block.type.replace("_"," ");
 
-  const size = block.type === "text" ? (style.text_variant || "body") : (style.text_size || "auto");
-  const sizes = block.type === "text" ? [["lead","Grande"],["body","Normal"],["small","Pequeño"]] : [["auto","Página"],["xs","XS"],["sm","S"],["md","M"],["lg","L"],["xl","XL"],["2xl","2XL"]];
-  return <div className={`landing-quick-toolbar is-${position}`} role="toolbar" aria-label="Formato de texto" onClick={(e)=>e.stopPropagation()}>
-    <button type="button" className={!Object.keys(style).length ? "is-active" : ""} onClick={resetGlobal}>Restablecer</button>
-    <QuickPopover id="font" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tipografía" trigger={<><span className="landing-font-preview">Aa</span><span>{QUICK_FONTS.find(([id])=>id===(style.font_family||"inherit"))?.[1]||"Página"}</span></>}>
-      <div className="landing-font-list">{QUICK_FONTS.map(([id,label,sample])=><button key={id} type="button" className={`${style.font_family===id||(!style.font_family&&id==="inherit")?"is-active":""} font-${id}`} onClick={()=>{updateStyle({font_family:id});setOpenMenu(null)}}><span>{sample}</span><strong>{label}</strong></button>)}</div>
+  const variantControls = block.type === "divider" ? <QuickPopover id="variant" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño del separador" trigger={<><Palette size={15}/><span>Diseño</span></>}><div className="landing-option-grid">{["solid","dashed","subtle"].map((id)=><button key={id} type="button" className={block.content.style===id?"is-active":""} onClick={()=>updateContent({style:id},"divider-variant")}>{id}</button>)}</div></QuickPopover> : block.type === "social_links" ? <QuickPopover id="variant" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño de Socials" trigger={<><Palette size={15}/><span>Diseño</span></>}><div className="landing-option-grid">{["minimal","circle","square","filled","outline"].map((id)=><button key={id} type="button" className={block.content.variant===id?"is-active":""} onClick={()=>updateContent({variant:id},"social-variant")}>{id}</button>)}</div></QuickPopover> : null;
+
+  return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} data-controls={declaredControls.join(" ")} role="toolbar" aria-label="Editar elemento" onClick={(event)=>event.stopPropagation()}>
+    <span className="landing-quick-kind">{blockLabel}</span>
+    {appearanceControls}
+    {layoutControls}
+    {typographyControls}
+    {sizeControls}
+    {pageTypographyControl}
+    {variantControls}
+    {hasGroup && <button type="button" className="landing-group-switch" onClick={onSelectSection}>Grupo</button>}
+    <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}>
+      <div className="landing-option-list">
+        <button type="button" onClick={onMore}>Editar contenido y diseño</button>
+        <button type="button" onClick={resetGlobal}>Restablecer estilo</button>
+        <button type="button" onClick={onDuplicate}>Duplicar</button>
+        <button type="button" className="is-danger" onClick={onDelete}>Eliminar</button>
+      </div>
     </QuickPopover>
-    <QuickPopover id="size" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Tamaño" trigger={<span>{sizes.find(([id])=>id===size)?.[1]||"Página"}</span>}>
-      <div className="landing-option-grid">{sizes.map(([id,label])=><button key={id} type="button" className={size===id?"is-active":""} onClick={()=>{updateStyle(block.type==="text"?{text_variant:id}:{text_size:id==="auto"?undefined:id});setOpenMenu(null)}}>{label}</button>)}</div>
-    </QuickPopover>
-    <button type="button" className={`landing-quick-bold ${style.text_weight==="bold"?"is-active":""}`} onClick={()=>updateStyle({text_weight:style.text_weight==="bold"?undefined:"bold"})}>B</button>
-    <QuickPopover id="color" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Color" trigger={<><span className={`landing-color-dot is-${style.color||"text"}`}/><span>{style.color==="muted"?"Secundario":style.color==="primary"?"Marca":"Texto principal"}</span></>}>
-      <div className="landing-color-list">{QUICK_COLORS.map(([id,label])=><button key={id} type="button" className={style.color===id||(!style.color&&id==="text")?"is-active":""} onClick={()=>{updateStyle({color:id});setOpenMenu(null)}}><span className={`landing-color-swatch is-${id}`}/><strong>{label}</strong></button>)}</div>
-    </QuickPopover>
-    <div className="landing-quick-align">{[["start","Izquierda","≡"],["center","Centro","≣"],["end","Derecha","≡"]].map(([id,label,glyph])=><button key={id} type="button" className={(style.align||"start")===id?"is-active":""} title={label} onClick={()=>updateStyle({align:id})}><span className={`landing-align-glyph is-${id}`}>{glyph}</span></button>)}</div>
-    <QuickPopover id="more" openMenu={openMenu} setOpenMenu={setOpenMenu} trigger={<span>•••</span>}><div className="landing-option-list"><button type="button" onClick={onMore}>Opciones avanzadas</button><button type="button" onClick={onDuplicate}>Duplicar bloque</button><button type="button" className="is-danger" onClick={onDelete}>Eliminar bloque</button></div></QuickPopover>
-    <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button><button type="button" className="landing-quick-close" onClick={onClose}>×</button>
+    <button type="button" className="landing-quick-icon is-danger" onClick={onDelete} title="Eliminar" aria-label="Eliminar bloque"><Trash2 size={15}/></button>
+    <button type="button" className="landing-quick-move" onClick={onTogglePosition} title="Mover barra">{position === "top" ? "↓" : "↑"}</button>
+    <button type="button" className="landing-quick-close" onClick={onClose}>×</button>
   </div>;
 }
 
@@ -575,6 +976,7 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
   const design=document.settings.design_system;
   const [tab,setTab]=useState("typography");
   const [fontSearch,setFontSearch]=useState("");
+  const [typographyPicker,setTypographyPicker]=useState(null);
   const [savedButtons,setSavedButtons]=useState([]);
   useEffect(()=>{
     const load=()=>{try{setSavedButtons(JSON.parse(localStorage.getItem("orvesen.builder.buttonStyles.v1")||"[]"))}catch{setSavedButtons([])}};
@@ -587,7 +989,6 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
     ["Trebuchet","Trebuchet MS, Arial, sans-serif"],["Verdana","Verdana, Geneva, sans-serif"],["Tahoma","Tahoma, Arial, sans-serif"],
     ["Courier","Courier New, monospace"],["Impact","Impact, Haettenschweiler, sans-serif"],["Palatino","Palatino Linotype, Book Antiqua, serif"]
   ].filter(([name])=>name.toLowerCase().includes(fontSearch.toLowerCase()));
-  const applySaved=(item)=>{const next=structuredClone(document);next.settings.design_system.buttons={...item.style};replace(next,"design-button-library",600)};
   const removeSaved=(id)=>{const next=savedButtons.filter(x=>x.id!==id);setSavedButtons(next);localStorage.setItem("orvesen.builder.buttonStyles.v1",JSON.stringify(next))};
 
   return <div className="landing-global-styles landing-global-v3">
@@ -596,13 +997,29 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
       {[["typography","Tipografía"],["colors","Colores"],["buttons","Botones"],["layout","Diseño"],["library","Biblioteca"]].map(([id,label])=><button key={id} type="button" className={tab===id?"is-active":""} onClick={()=>setTab(id)}>{label}</button>)}
     </nav>
 
-    {tab==="typography"&&<section className="landing-global-section">
-      <div className="landing-global-section-title"><strong>Tipografía</strong><small>Busca y escoge viendo cada fuente</small></div>
-      <input className="landing-font-search" value={fontSearch} onChange={(e)=>setFontSearch(e.target.value)} placeholder="Buscar tipografía..."/>
-      <span className="landing-global-label">Aplicar a texto general</span>
-      <div className="landing-font-browser">{fonts.map(([name,value])=><button key={`body-${name}`} type="button" style={{fontFamily:value}} className={design.typography.body===value?"is-active":""} onClick={()=>update("typography","body",value)}><strong>{name}</strong><span>La creatividad empieza aquí</span></button>)}</div>
-      <span className="landing-global-label">Aplicar a títulos</span>
-      <div className="landing-font-browser">{fonts.map(([name,value])=><button key={`head-${name}`} type="button" style={{fontFamily:value}} className={(design.typography.headings||design.typography.body)===value?"is-active":""} onClick={()=>update("typography","headings",value)}><strong>{name}</strong><span>Construye algo extraordinario</span></button>)}</div>
+    {tab==="typography"&&<section className="landing-global-section landing-typography-compact">
+      <div className="landing-global-section-title"><strong>Tipografía</strong><small>Dos estilos base para toda la página</small></div>
+      <div className="landing-typography-pickers">
+        {[
+          ["headings","Título",design.typography.headings || design.typography.body,"Aa","Se aplica a H1, H2, H3 y demás títulos"],
+          ["body","Texto general",design.typography.body,"Tt","Párrafos, descripciones, formularios y contenido general"],
+        ].map(([key,label,value,mark,hint])=>{
+          const currentName=(fonts.find(([,fontValue])=>fontValue===value)?.[0]) || "Personalizada";
+          return <div className="landing-typography-picker-row" key={key}>
+            <div className="landing-typography-picker-copy"><span className="landing-typography-mark" style={{fontFamily:value}}>{mark}</span><span><strong>{label}</strong><small>{hint}</small></span></div>
+            <button type="button" className={`landing-typography-picker-button ${typographyPicker===key?"is-open":""}`} style={{fontFamily:value}} onClick={()=>{setTypographyPicker(typographyPicker===key?null:key);setFontSearch("")}}>
+              <span>{currentName}</span><b>⌄</b>
+            </button>
+            {typographyPicker===key&&<div className="landing-typography-drawer">
+              <div className="landing-typography-drawer-head"><strong>Elegir {label.toLowerCase()}</strong><button type="button" onClick={()=>setTypographyPicker(null)} aria-label="Cerrar">×</button></div>
+              <input autoFocus className="landing-font-search" value={fontSearch} onChange={(e)=>setFontSearch(e.target.value)} placeholder="Buscar tipografía..."/>
+              <div className="landing-font-browser landing-font-browser-compact">
+                {fonts.map(([name,fontValue])=><button key={`${key}-${name}`} type="button" style={{fontFamily:fontValue}} className={value===fontValue?"is-active":""} onClick={()=>{update("typography",key,fontValue);setTypographyPicker(null);setFontSearch("")}}><strong>{name}</strong><span>{key==="headings"?"Construye algo extraordinario":"La creatividad empieza aquí"}</span></button>)}
+              </div>
+            </div>}
+          </div>;
+        })}
+      </div>
     </section>}
 
     {tab==="colors"&&<section className="landing-global-section">
@@ -629,7 +1046,7 @@ function DesignControls({ document, replace, onInsertSavedButton, onStartLibrary
   </div>;
 }
 
-function Inspector({ selection, selected, forms, apply, preview, onDelete, onDuplicate, onMove, onClose }) {
+function Inspector({ selection, selected, forms, apply, preview, onDelete, onDuplicate, onMove, onClose, onEditForm }) {
   if (!selected) return null;
   const block = selection.kind === "block" ? selected.block : null; const section = selection.kind === "section" ? selected : selected.section; const content = block?.content;
   const updateContent = (changes) => apply({ type: "update_block_content", block_id: block.id, changes }, `content-${block.id}`, 600);
@@ -646,7 +1063,14 @@ function Inspector({ selection, selected, forms, apply, preview, onDelete, onDup
   }
   return <aside className="landing-inspector"><header><div><span>PROPIEDADES</span><strong>{block ? block.type.replace("_", " ") : "Section"}</strong></div><button onClick={onClose} aria-label="Cerrar propiedades">×</button></header>
     {block && <details className="landing-inspector-accordion" open><summary><span>Content</span><span aria-hidden="true">⌄</span></summary>
-    {block && <div className="landing-inspector-group"><h3>Content</h3>{block.type === "heading" && <><label>Texto<textarea autoFocus placeholder="Título" value={content.text} onChange={(event) => updateContent({ text: event.target.value })}/></label><label>Nivel<select value={content.level} onChange={(event) => updateContent({ level: Number(event.target.value) })}>{[1,2,3,4,5,6].map((level) => <option key={level} value={level}>H{level}</option>)}</select></label></>}{block.type === "text" && <label>Contenido<textarea autoFocus placeholder="Escribe el contenido" value={content.text} onChange={(event) => updateContent({ text: event.target.value })}/></label>}{block.type === "image" && <><label>Origen<select value={content.source.kind} onChange={(event) => updateContent({ source: event.target.value === "external" ? { kind: "external", url: "https://example.com/image.jpg" } : { kind: "placeholder" } })}><option value="placeholder">Placeholder</option><option value="external">HTTPS externo</option></select></label>{content.source.kind === "external" && <label>URL<input value={content.source.url} onChange={(event) => updateContent({ source: { kind: "external", url: event.target.value } })}/></label>}<label><input type="checkbox" checked={content.decorative} onChange={(event) => updateContent({ decorative: event.target.checked })}/> Decorativa</label>{!content.decorative && <label>Texto alternativo<input value={content.alt} onChange={(event) => updateContent({ alt: event.target.value })}/></label>}</>}{block.type === "action_group" && <><ActionControls content={content} updateContent={updateContent}/><ActionSurfacePresets content={content} updateContent={updateContent}/></> } {block.type === "form_reference" && <><label>Formulario<select value={content.asset_id || ""} onChange={(event) => updateContent({ asset_id: event.target.value || null })}><option value="">Sin asignar</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>{!forms.length && <p className="landing-inspector-empty">No hay formularios disponibles.<br/>Crea uno desde Builder assets.</p>}<label>Etiqueta accesible<input value={content.label} onChange={(event) => updateContent({ label: event.target.value })}/></label></>}<ProfessionalContentControls block={block} updateContent={updateContent}/></div>}
+    {block && <div className="landing-inspector-group"><h3>Content</h3>{block.type === "heading" && <><label>Texto<textarea autoFocus placeholder="Título" value={content.text} onChange={(event) => updateContent({ text: event.target.value })}/></label><label>Nivel<select value={content.level} onChange={(event) => updateContent({ level: Number(event.target.value) })}>{[1,2,3,4,5,6].map((level) => <option key={level} value={level}>H{level}</option>)}</select></label></>}{block.type === "text" && <label>Contenido<textarea autoFocus placeholder="Escribe el contenido" value={content.text} onChange={(event) => updateContent({ text: event.target.value })}/></label>}{block.type === "image" && <><label>Origen<select value={content.source.kind} onChange={(event) => updateContent({ source: event.target.value === "external" ? { kind: "external", url: "https://example.com/image.jpg" } : { kind: "placeholder" } })}><option value="placeholder">Placeholder</option><option value="external">HTTPS externo</option></select></label>{content.source.kind === "external" && <label>URL<input value={content.source.url} onChange={(event) => updateContent({ source: { kind: "external", url: event.target.value } })}/></label>}<label><input type="checkbox" checked={content.decorative} onChange={(event) => updateContent({ decorative: event.target.checked })}/> Decorativa</label>{!content.decorative && <label>Texto alternativo<input value={content.alt} onChange={(event) => updateContent({ alt: event.target.value })}/></label>}</>}{block.type === "action_group" && <><ActionControls content={content} updateContent={updateContent}/><ActionSurfacePresets content={content} updateContent={updateContent}/></> } {block.type === "form_reference" && <div className="landing-form-binding-controls">
+  <div className="landing-form-binding-head"><span>FORMULARIO CONECTADO</span><strong>{forms.find((form) => form.id === content.asset_id)?.name || "Sin formulario"}</strong></div>
+  <label>Escoger formulario<select value={content.asset_id || ""} onChange={(event) => updateContent({ asset_id: event.target.value || null })}><option value="">Sin asignar</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>
+  {content.asset_id && <button type="button" className="landing-edit-connected-form" onClick={() => onEditForm?.(content.asset_id)}>Editar formulario en Form Builder ↗</button>}
+  {!forms.length && <p className="landing-inspector-empty">No hay formularios creados todavía. Crea uno desde Builder y aparecerá aquí.</p>}
+  <p className="landing-form-binding-help">Este bloque no construye los campos. Aquí conectas el formulario reutilizable que diseñaste en Form Builder.</p>
+  <label>Etiqueta accesible<input value={content.label} onChange={(event) => updateContent({ label: event.target.value })}/></label>
+</div>}<ProfessionalContentControls block={block} updateContent={updateContent}/></div>}
     </details>}
     {block && <details className="landing-inspector-accordion" open><summary><span>Appearance</span><span aria-hidden="true">⌄</span></summary><BlockStyleControls block={block} updateStyle={updateStyle} apply={apply}/></details>}
     {!block && <details className="landing-inspector-accordion" open><summary><span>Appearance &amp; Layout</span><span aria-hidden="true">⌄</span></summary><SectionControls section={section} changeLayout={changeLayout} apply={apply}/></details>}
@@ -661,6 +1085,19 @@ function ProfessionalContentControls({ block, updateContent }) {
   const content = block.content;
   const textField = (key, label, multiline = false) => <label key={key}>{label}{multiline ? <textarea value={content[key]} onChange={(event) => updateContent({ [key]: event.target.value })}/> : <input value={content[key]} onChange={(event) => updateContent({ [key]: event.target.value })}/>}</label>;
   switch (block.type) {
+    case "site_header": return <>
+      <label>Preset<select value={content.preset} onChange={(event) => updateContent({ preset: event.target.value })}>{[["logo_nav_cta","Logo + navegación + CTA"],["centered_nav","Navegación centrada"],["centered_logo","Logo centrado"],["split","Split"],["minimal","Minimal"],["transparent","Transparent"],["solid","Solid"],["dark","Dark"],["light","Light"],["sticky","Sticky"],["cta_heavy","CTA-heavy"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {textField("brand_name", "Nombre de marca")}{textField("logo_url", "Logo HTTPS")}
+      <label>Tamaño del logo<select value={content.logo_size} onChange={(event) => updateContent({ logo_size: event.target.value })}><option value="sm">Pequeño</option><option value="md">Medio</option><option value="lg">Grande</option></select></label>
+      <label>Navegación<textarea rows={7} value={content.nav_items.map((item) => `${item.enabled ? "1" : "0"}|${item.label}|${item.href}`).join("\n")} onChange={(event) => updateContent({ nav_items: event.target.value.split("\n").filter(Boolean).slice(0,10).map((line) => { const [enabled="1", label="Enlace", href="#"] = line.split("|"); return { enabled: enabled !== "0", label, href }; }) })}/><small>Una línea: 1|Texto|#destino. Usa 0 para ocultar.</small></label>
+      <label><input type="checkbox" checked={content.cta.enabled} onChange={(event) => updateContent({ cta: { ...content.cta, enabled: event.target.checked } })}/> Mostrar CTA</label>
+      <label>Texto CTA<input value={content.cta.label} onChange={(event) => updateContent({ cta: { ...content.cta, label: event.target.value } })}/></label><label>Destino CTA<input value={content.cta.href} onChange={(event) => updateContent({ cta: { ...content.cta, href: event.target.value } })}/></label>
+      <label><input type="checkbox" checked={content.sticky} onChange={(event) => updateContent({ sticky: event.target.checked })}/> Sticky</label>
+      <label>Superficie<select value={content.surface} onChange={(event) => updateContent({ surface: event.target.value })}>{["transparent","solid","dark","light"].map((value)=><option key={value}>{value}</option>)}</select></label>
+      <label>Alineación<select value={content.alignment} onChange={(event) => updateContent({ alignment: event.target.value })}>{["start","center","spread"].map((value)=><option key={value}>{value}</option>)}</select></label>
+      <label>Sombra<select value={content.shadow} onChange={(event) => updateContent({ shadow: event.target.value })}>{["none","subtle","soft"].map((value)=><option key={value}>{value}</option>)}</select></label>
+      <label>Borde<select value={content.border} onChange={(event) => updateContent({ border: event.target.value })}>{["none","subtle","standard"].map((value)=><option key={value}>{value}</option>)}</select></label>
+    </>;
     case "image": return <><label>Ajuste<select value={content.fit || "cover"} onChange={(event) => updateContent({ fit: event.target.value })}><option value="cover">Cover</option><option value="contain">Contain</option></select></label><label>Proporción<select value={content.aspect_ratio || "auto"} onChange={(event) => updateContent({ aspect_ratio: event.target.value })}><option value="auto">Auto</option><option value="square">1:1</option><option value="4:3">4:3</option><option value="16:9">16:9</option><option value="portrait">Portrait</option></select></label><label>Radio<select value={content.radius || "md"} onChange={(event) => updateContent({ radius: event.target.value })}><option value="none">Ninguno</option><option value="sm">S</option><option value="md">M</option><option value="lg">L</option></select></label><label>Foco<select value={content.focal_position || "center"} onChange={(event) => updateContent({ focal_position: event.target.value })}>{["center","top","bottom","left","right"].map((position) => <option key={position}>{position}</option>)}</select></label></>;
     case "logo": return <>{textField("url", "Image URL")}{textField("alt", "Texto alternativo")}{textField("href", "Enlace opcional")}<label>Ancho<select value={content.width} onChange={(event) => updateContent({ width: event.target.value })}><option value="sm">Pequeño</option><option value="md">Medio</option><option value="lg">Grande</option></select></label></>;
     case "feature_item": return <>{textField("title", "Título")}{textField("description", "Descripción", true)}{textField("href", "Enlace opcional")}</>;
@@ -671,7 +1108,7 @@ function ProfessionalContentControls({ block, updateContent }) {
     case "faq_item": return <>{textField("question", "Pregunta")}{textField("answer", "Respuesta", true)}<label><input type="checkbox" checked={content.default_open} onChange={(event) => updateContent({ default_open: event.target.checked })}/> Abierta inicialmente</label></>;
     case "divider": return <><label>Estilo<select value={content.style} onChange={(event) => updateContent({ style: event.target.value })}><option value="solid">Sólido</option><option value="dashed">Discontinuo</option><option value="subtle">Sutil</option></select></label></>;
     case "spacer": return <label>Tamaño<select value={content.size} onChange={(event) => updateContent({ size: event.target.value })}>{["xs","sm","md","lg","xl"].map((size) => <option key={size}>{size}</option>)}</select></label>;
-    case "social_links": return <label>Enlaces estructurados<textarea value={content.links.map((link) => `${link.provider}|${link.url}|${link.label}`).join("\n")} onChange={(event) => updateContent({ links: event.target.value.split("\n").filter(Boolean).slice(0, 10).map((line) => { const [provider = "website", url = "", label = "Enlace"] = line.split("|"); return { provider, url, label }; }) })}/></label>;
+    case "social_links": return <><label>Estilo<select value={content.variant || "outline"} onChange={(event)=>updateContent({variant:event.target.value})}>{["minimal","circle","square","filled","outline"].map((value)=><option key={value}>{value}</option>)}</select></label><label>Tamaño<select value={content.size || "md"} onChange={(event)=>updateContent({size:event.target.value})}>{["sm","md","lg"].map((value)=><option key={value}>{value}</option>)}</select></label><label>Separación<select value={content.gap || "md"} onChange={(event)=>updateContent({gap:event.target.value})}>{["sm","md","lg"].map((value)=><option key={value}>{value}</option>)}</select></label><label>Alineación<select value={content.align || "start"} onChange={(event)=>updateContent({align:event.target.value})}>{["start","center","end"].map((value)=><option key={value}>{value}</option>)}</select></label><label>Color<select value={content.color || "text"} onChange={(event)=>updateContent({color:event.target.value})}>{["text","muted","primary"].map((value)=><option key={value}>{value}</option>)}</select></label><label>Redes<textarea rows={8} value={content.links.map((link) => `${link.enabled === false ? "0" : "1"}|${link.provider}|${link.url}|${link.label}`).join("\n")} onChange={(event) => updateContent({ links: event.target.value.split("\n").filter(Boolean).slice(0, 10).map((line) => { const [enabled="1", provider="website", url="", label="Enlace"] = line.split("|"); return { enabled:enabled!=="0", provider, url, label }; }) })}/><small>Una línea: 1|instagram|https://…|Instagram. Usa 0 para ocultar.</small></label></>;
     default: return null;
   }
 }
@@ -705,7 +1142,28 @@ function ActionControls({ content, updateContent }) {
 function BlockStyleControls({ block, updateStyle, apply }) {
   const style = block.style || {};
   const typography = block.type === "heading" || block.type === "text";
-  return <div className="landing-inspector-group"><h3>Style · Desktop/Base</h3><label>Alineación<select value={style.align || "start"} onChange={(event) => updateStyle({ align: event.target.value })}><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label>{typography && <><label>{block.type === "text" ? "Variante" : "Escala"}<select value={block.type === "text" ? style.text_variant || "body" : style.text_size || ""} onChange={(event) => updateStyle(block.type === "text" ? { text_variant: event.target.value } : { text_size: event.target.value || undefined })}>{block.type === "heading" && <option value="">Page style</option>}{(block.type === "text" ? ["lead","body","small"] : ["xs","sm","md","lg","xl","2xl"]).map((value) => <option key={value}>{value}</option>)}</select></label><label>Peso<select value={style.text_weight || ""} onChange={(event) => updateStyle({ text_weight: event.target.value || undefined })}><option value="">Page style</option>{["regular","medium","semibold","bold"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Color<select value={style.color || ""} onChange={(event) => updateStyle({ color: event.target.value || undefined })}><option value="">Page style</option><option value="text">Texto</option><option value="muted">Secundario</option><option value="primary">Acento</option></select></label><label>Ancho máximo<select value={style.max_width || "none"} onChange={(event) => updateStyle({ max_width: event.target.value })}>{["none","narrow","standard","wide"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Espaciado<select value={style.spacing || ""} onChange={(event) => updateStyle({ spacing: event.target.value || undefined })}><option value="">Page style</option>{["none","xs","sm","md","lg","xl"].map((value) => <option key={value}>{value}</option>)}</select></label></>}{["image","pricing_card","testimonial","feature_item","video"].includes(block.type) && <><label>Radio<select value={style.radius || ""} onChange={(event) => updateStyle({ radius: event.target.value || undefined })}><option value="">Page style</option>{["none","sm","md","lg"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Sombra<select value={style.shadow || ""} onChange={(event) => updateStyle({ shadow: event.target.value || undefined })}><option value="">Page style</option>{["none","subtle","soft","medium","elevated"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Borde<select value={style.border || ""} onChange={(event) => updateStyle({ border: event.target.value || undefined })}><option value="">Page style</option>{["none","subtle","standard"].map((value) => <option key={value}>{value}</option>)}</select></label></>}{block.style && <button type="button" onClick={() => apply({ type: "reset_block_style", block_id: block.id }, `style-reset-${block.id}`, 600)}>Reset to page style</button>}</div>;
+  const textBearing = ["heading","text","feature_item","stat","testimonial","pricing_card","faq_item"].includes(block.type);
+  return <div className="landing-inspector-group">
+    <h3>Diseño · Desktop/Base</h3>
+    <label>Alineación<select value={style.align || "start"} onChange={(event) => updateStyle({ align: event.target.value })}><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label>
+    <label>Ancho del bloque<select value={style.max_width || "none"} onChange={(event) => updateStyle({ max_width: event.target.value })}><option value="none">100%</option><option value="wide">90%</option><option value="standard">75%</option><option value="narrow">50%</option></select></label>
+    <label>Espacio arriba<select value={style.padding_top || "none"} onChange={(event) => updateStyle({ padding_top: event.target.value })}>{["none","xs","sm","md","lg","xl"].map((value) => <option key={value} value={value}>{({none:"0",xs:"8",sm:"16",md:"24",lg:"40",xl:"64"})[value]}px</option>)}</select></label>
+    <label>Espacio abajo<select value={style.padding_bottom || "none"} onChange={(event) => updateStyle({ padding_bottom: event.target.value })}>{["none","xs","sm","md","lg","xl"].map((value) => <option key={value} value={value}>{({none:"0",xs:"8",sm:"16",md:"24",lg:"40",xl:"64"})[value]}px</option>)}</select></label>
+    {textBearing && <>
+      <h3>Tipografía</h3>
+      <label>Familia<select value={style.font_family || "inherit"} onChange={(event) => updateStyle({ font_family: event.target.value })}><option value="inherit">Heredar de página</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="display">Display</option><option value="mono">Mono</option></select></label>
+      {typography && <label>{block.type === "text" ? "Escala de párrafo" : "Tamaño"}<select value={block.type === "text" ? style.text_variant || "body" : style.text_size || ""} onChange={(event) => updateStyle(block.type === "text" ? { text_variant: event.target.value } : { text_size: event.target.value || undefined })}>{block.type === "heading" && <option value="">Heredar</option>}{(block.type === "text" ? ["lead","body","small"] : ["xs","sm","md","lg","xl","2xl"]).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>}
+      <label>Peso<select value={style.text_weight || ""} onChange={(event) => updateStyle({ text_weight: event.target.value || undefined })}><option value="">Heredar</option>{["regular","medium","semibold","bold"].map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label>Color<select value={style.color || ""} onChange={(event) => updateStyle({ color: event.target.value || undefined })}><option value="">Heredar</option><option value="text">Texto</option><option value="muted">Secundario</option><option value="primary">Acento</option></select></label>
+    </>}
+    {["image","pricing_card","testimonial","feature_item","video"].includes(block.type) && <>
+      <h3>Superficie</h3>
+      <label>Radio<select value={style.radius || ""} onChange={(event) => updateStyle({ radius: event.target.value || undefined })}><option value="">Heredar</option>{["none","sm","md","lg"].map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label>Sombra<select value={style.shadow || ""} onChange={(event) => updateStyle({ shadow: event.target.value || undefined })}><option value="">Heredar</option>{["none","subtle","soft","medium","elevated"].map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label>Borde<select value={style.border || ""} onChange={(event) => updateStyle({ border: event.target.value || undefined })}><option value="">Heredar</option>{["none","subtle","standard"].map((value) => <option key={value}>{value}</option>)}</select></label>
+    </>}
+    {block.style && <button type="button" onClick={() => apply({ type: "reset_block_style", block_id: block.id }, `style-reset-${block.id}`, 600)}>Restablecer estilo del elemento</button>}
+  </div>;
 }
 
 function SectionControls({ section, changeLayout, apply }) {

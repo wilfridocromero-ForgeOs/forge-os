@@ -1,0 +1,89 @@
+.form-builder{height:100%;min-height:calc(100vh - 40px);background:#0c0f12;color:#f5f5f5;display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+.form-builder-topbar{min-height:80px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:0 22px;border-bottom:1px solid #2a2f35;background:#111519;position:relative;z-index:5}
+.form-builder-topbar button{color:inherit}.form-builder-back{width:42px;height:42px;border:1px solid #30363d;border-radius:12px;background:#151a1f;display:grid;place-items:center}.form-builder-back svg{width:18px}
+.form-builder-title{display:grid;gap:3px}.form-builder-topbar span{font-size:11px;letter-spacing:.13em;color:#b69232;font-weight:850}.form-builder-title strong{font-size:18px}
+.form-builder-save{display:flex;gap:10px;align-items:center}.form-builder-save span{letter-spacing:0;color:#aeb5bd}.form-builder-save span[data-status="saved"]{color:#8fd3a7}.form-builder-save span[data-status="error"]{color:#ff8f8f}.form-builder-save button{width:40px;height:40px;border-radius:12px;border:1px solid #30363d;background:#151a1f;display:grid;place-items:center}.form-builder-save svg{width:17px}
+.form-builder-error{position:absolute;top:82px;left:50%;transform:translateX(-50%);z-index:20;background:#381b1d;color:#ffb4b4;border:1px solid #6f3135;border-radius:10px;padding:9px 14px}
+.form-builder-workspace{min-height:0;display:grid;grid-template-columns:300px minmax(440px,1fr) 340px}
+.form-builder-palette,.form-builder-inspector{min-height:0;overflow:auto;background:#111519;padding:24px 22px;border-right:1px solid #272d33}.form-builder-inspector{border-right:0;border-left:1px solid #272d33}
+.form-builder-panel-head{display:grid;gap:5px;margin-bottom:18px}.form-builder-panel-head span{font-size:10px;letter-spacing:.14em;color:#b69232;font-weight:900}.form-builder-panel-head strong{font-size:17px}.form-builder-panel-head p{font-size:12px;line-height:1.45;color:#939ba4;margin:0}
+.form-builder-field-list{display:grid;gap:10px}.form-builder-field-list button{width:100%;display:grid;grid-template-columns:38px 1fr auto;align-items:center;text-align:left;gap:10px;padding:13px;border:1px solid #30363d;border-radius:14px;background:#151a1f;color:#fff;transition:.15s ease}.form-builder-field-list button:hover{border-color:#8f7026;background:#1b1e1e;transform:translateY(-1px)}.form-builder-field-list svg{width:19px;color:#d6b555}.form-builder-field-list button span:nth-child(2){display:grid;gap:2px}.form-builder-field-list small{color:#89919a}
+.form-builder-canvas{min-height:0;overflow:auto;background:#e9ecef;padding:28px 36px 90px}.form-builder-canvas-head{max-width:860px;margin:0 auto 13px;display:flex;justify-content:space-between;align-items:end;color:#5e646b}.form-builder-canvas-head>div{display:grid;gap:2px}.form-builder-canvas-head span{font-size:10px;letter-spacing:.14em;font-weight:850}.form-builder-canvas-head small{font-size:11px;color:#7f858b}.form-builder-canvas-head strong{font-size:12px}
+.form-builder-canvas-card{max-width:860px;min-height:520px;margin:0 auto;background:#fff;border-radius:22px;box-shadow:0 20px 50px rgba(20,25,30,.12);padding:42px}
+.form-builder-inspector label{display:grid;gap:7px;margin-bottom:15px;font-size:12px;font-weight:750;color:#d8dce0}.form-builder-inspector input[type="text"],.form-builder-inspector input:not([type]),.form-builder-inspector textarea,.form-builder-inspector select{width:100%;box-sizing:border-box;border:1px solid #333a42;background:#0e1216;color:#fff;border-radius:10px;padding:10px 11px;font:inherit}.form-builder-inspector textarea{resize:vertical}.form-builder-inspector small{color:#838c95;font-weight:500}
+.form-builder-inline{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:15px}.form-builder-inline label{display:flex;align-items:center;gap:8px;margin:0;padding:11px;border:1px solid #30363d;border-radius:10px;background:#151a1f}
+.form-builder-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}.form-builder-actions button{display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #30363d;border-radius:10px;background:#151a1f;color:#fff;padding:10px}.form-builder-actions svg{width:15px}.form-builder-actions .is-danger{color:#ff8f8f;border-color:#5a2d31}
+.form-builder-style-title{font-size:10px;letter-spacing:.14em;color:#b69232;font-weight:900;margin:20px 0 10px}
+.form-builder-style-grid{display:grid;grid-template-columns:1fr;gap:8px}.form-builder-style-grid button{display:grid;grid-template-columns:54px 1fr;grid-template-rows:auto auto;text-align:left;gap:1px 10px;padding:10px;border:1px solid #30363d;border-radius:12px;background:#151a1f;color:#fff}.form-builder-style-grid button.is-active{border-color:#a47f23;box-shadow:0 0 0 1px #a47f23 inset}.form-builder-style-grid button>span{grid-row:1/3;width:54px;height:36px;border-radius:8px;background:#f3f3f3;border:1px solid #ccc}.form-builder-style-grid button>span[data-style="minimal"]{background:transparent;border-style:dashed}.form-builder-style-grid button>span[data-style="soft"]{background:#eadfbf;border:0;box-shadow:0 8px 16px rgba(0,0,0,.14)}.form-builder-style-grid button small{color:#89919a}
+.form-builder-future{margin-top:22px;border:1px dashed #4a4030;background:#181713;border-radius:14px;padding:15px;display:grid;gap:5px}.form-builder-future span{font-size:9px;letter-spacing:.14em;color:#b69232;font-weight:900}.form-builder-future p{margin:0;color:#959b9f;font-size:12px;line-height:1.45}
+.form-builder-state{padding:40px}
+@media(max-width:1150px){.form-builder-workspace{grid-template-columns:250px 1fr}.form-builder-inspector{position:fixed;right:0;top:80px;bottom:0;width:min(350px,88vw);z-index:10;box-shadow:-20px 0 50px rgba(0,0,0,.35)}}
+@media(max-width:760px){.form-builder{overflow:auto}.form-builder-workspace{display:block;overflow:visible}.form-builder-palette,.form-builder-inspector{position:static;width:auto;border:0}.form-builder-canvas{padding:20px 12px}.form-builder-canvas-card{padding:20px}.form-builder-topbar{padding:0 12px}.form-builder-save span{display:none}}
+
+
+/* ORVESEN Form Builder — workspace visibility fix */
+.form-builder{
+  height:calc(100vh - 100px);
+  min-height:640px;
+  overflow:hidden;
+}
+.form-builder-workspace{
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+  grid-template-columns:minmax(250px,300px) minmax(440px,1fr) minmax(300px,340px);
+}
+.form-builder-palette,
+.form-builder-inspector{
+  height:100%;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.form-builder-canvas{
+  height:100%;
+  min-height:0;
+  overflow:auto;
+}
+.form-builder-inspector{
+  padding-bottom:120px;
+}
+.form-builder-palette{
+  padding-bottom:120px;
+}
+
+@media(max-width:1150px){
+  .form-builder{
+    height:calc(100vh - 100px);
+  }
+  .form-builder-workspace{
+    grid-template-columns:minmax(230px,260px) minmax(0,1fr);
+  }
+  .form-builder-inspector{
+    top:0;
+    height:100vh;
+    bottom:auto;
+    padding-bottom:100px;
+  }
+}
+
+@media(max-width:760px){
+  .form-builder{
+    height:auto;
+    min-height:100vh;
+    overflow:visible;
+  }
+  .form-builder-workspace{
+    height:auto;
+    overflow:visible;
+  }
+  .form-builder-palette,
+  .form-builder-canvas,
+  .form-builder-inspector{
+    height:auto;
+    max-height:none;
+    overflow:visible;
+  }
+}

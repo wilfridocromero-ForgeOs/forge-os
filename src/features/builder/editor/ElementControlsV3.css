@@ -1,0 +1,93 @@
+/* =========================================================
+   ORVESEN BUILDER — UX CLEANUP V3
+   Compact controls, true zero spacing, visual patterns,
+   group editing and typography controls.
+   ========================================================= */
+
+.landing-element-search{display:grid;gap:6px;margin:10px 0 14px}
+.landing-element-search>span{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;opacity:.68}
+.landing-element-search input{width:100%;min-height:40px;border:1px solid color-mix(in srgb,var(--le-line) 82%,transparent);border-radius:11px;background:color-mix(in srgb,var(--le-panel) 88%,var(--le-bg));color:inherit;padding:0 12px;outline:none}
+.landing-element-search input:focus{border-color:var(--le-gold);box-shadow:0 0 0 3px color-mix(in srgb,var(--le-gold) 18%,transparent)}
+.landing-element-search.is-mobile{margin:10px 14px 16px}
+.landing-element-search-empty{margin:12px 0;padding:14px;border:1px dashed var(--le-line);border-radius:12px;font-size:12px;opacity:.7}
+
+/* Restore desktop Pattern cards as visual objects rather than a text list. */
+.landing-pattern-card{display:grid!important;grid-template-columns:1fr auto!important;gap:8px!important;min-height:86px!important;padding:8px!important}
+.landing-pattern-card>.landing-pattern-preview{grid-column:1/-1;height:42px}
+.landing-pattern-card>span:not(.landing-pattern-preview){display:grid;align-content:center}
+.landing-pattern-card>svg{align-self:center}
+
+/* Exact block spacing. The old renderer forced 1rem between wrappers. */
+.landing-renderer .landing-editor-block-wrap+.landing-editor-block-wrap{margin-top:0!important}
+.landing-renderer [data-block-id]{box-sizing:border-box;max-width:100%;transition:width .16s ease,margin .16s ease}
+.landing-renderer [data-block-id][data-max-width=none]{width:100%}
+.landing-renderer [data-block-id][data-max-width=narrow]{width:50%}
+.landing-renderer [data-block-id][data-max-width=standard]{width:75%}
+.landing-renderer [data-block-id][data-max-width=wide]{width:90%}
+.landing-renderer [data-block-id][data-align=start]{margin-left:0;margin-right:auto}
+.landing-renderer [data-block-id][data-align=center]{margin-left:auto;margin-right:auto}
+.landing-renderer [data-block-id][data-align=end]{margin-left:auto;margin-right:0}
+
+.landing-renderer [data-block-id][data-padding-top=none]{margin-top:0!important}
+.landing-renderer [data-block-id][data-padding-top=xs]{margin-top:8px!important}
+.landing-renderer [data-block-id][data-padding-top=sm]{margin-top:16px!important}
+.landing-renderer [data-block-id][data-padding-top=md]{margin-top:24px!important}
+.landing-renderer [data-block-id][data-padding-top=lg]{margin-top:40px!important}
+.landing-renderer [data-block-id][data-padding-top=xl]{margin-top:64px!important}
+.landing-renderer [data-block-id][data-padding-bottom=none]{margin-bottom:0!important}
+.landing-renderer [data-block-id][data-padding-bottom=xs]{margin-bottom:8px!important}
+.landing-renderer [data-block-id][data-padding-bottom=sm]{margin-bottom:16px!important}
+.landing-renderer [data-block-id][data-padding-bottom=md]{margin-bottom:24px!important}
+.landing-renderer [data-block-id][data-padding-bottom=lg]{margin-bottom:40px!important}
+.landing-renderer [data-block-id][data-padding-bottom=xl]{margin-bottom:64px!important}
+
+/* Position cards without forcing their internal text to follow that position. */
+.landing-renderer [data-block-id][data-align=start]{text-align:left}
+.landing-renderer [data-block-id][data-align=center]{text-align:center}
+.landing-renderer [data-block-id][data-align=end]{text-align:right}
+.landing-renderer [data-block-id][data-align=center]>.landing-feature,
+.landing-renderer [data-block-id][data-align=center]>.landing-stat,
+.landing-renderer [data-block-id][data-align=center]>.landing-testimonial,
+.landing-renderer [data-block-id][data-align=center]>.landing-pricing,
+.landing-renderer [data-block-id][data-align=end]>.landing-feature,
+.landing-renderer [data-block-id][data-align=end]>.landing-stat,
+.landing-renderer [data-block-id][data-align=end]>.landing-testimonial,
+.landing-renderer [data-block-id][data-align=end]>.landing-pricing{text-align:left}
+
+/* Compact contextual toolbar. */
+.landing-element-toolbar-v3{max-width:min(calc(100vw - 28px),960px);overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;gap:4px;padding:5px!important;border-radius:14px!important}
+.landing-element-toolbar-v3>*{flex:0 0 auto}
+.landing-element-toolbar-v3 .landing-quick-kind{max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 7px;opacity:.64}
+.landing-element-toolbar-v3 button{min-height:30px}
+.landing-compact-align{display:inline-flex;gap:2px;border:1px solid var(--le-line);border-radius:9px;padding:2px}
+.landing-compact-align button{padding-inline:8px!important}
+.landing-compact-align button.is-active,.landing-group-switch,.landing-toolbar-primary{background:color-mix(in srgb,var(--le-gold) 18%,transparent)!important;color:var(--le-gold)!important}
+.landing-group-switch{border:1px solid color-mix(in srgb,var(--le-gold) 48%,var(--le-line))!important}
+.landing-toolbar-primary{font-weight:800!important}
+.landing-quick-icon{display:grid;place-items:center;min-width:30px;border-radius:8px}
+.landing-spacing-editor{width:min(330px,calc(100vw - 44px));display:grid;gap:14px}
+.landing-spacing-editor label{display:grid;gap:7px}
+.landing-spacing-editor label>span{display:flex;justify-content:space-between;gap:14px;font-size:12px}
+.landing-spacing-editor input[type=range]{width:100%;accent-color:var(--le-gold)}
+.landing-spacing-presets{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
+.landing-spacing-presets button{min-width:0;padding-inline:5px}
+
+/* Selected block has only its drag label. The large toolbar owns actions. */
+.landing-block-chrome.is-selected .landing-editor-menu{display:none}
+.landing-block-chrome.is-selected{opacity:.72!important}
+
+/* Drag/drop insertion is a line, not a giant empty area. */
+.landing-canvas-shell.is-dragging .landing-drop-zone{min-height:10px;opacity:.36;transition:min-height .12s ease,opacity .12s ease,background .12s ease}
+.landing-canvas-shell.is-dragging .landing-drop-zone:hover,.landing-canvas-shell.is-dragging .landing-drop-zone.is-active{min-height:26px;opacity:1;background:color-mix(in srgb,var(--le-gold) 8%,transparent)}
+.landing-canvas-shell.is-dragging .landing-drop-zone.is-active:before{content:"";position:absolute;left:12px;right:12px;top:50%;height:3px;border-radius:999px;transform:translateY(-50%);background:var(--le-gold);box-shadow:0 0 0 4px color-mix(in srgb,var(--le-gold) 13%,transparent)}
+.landing-drop-zone{position:relative}
+.landing-canvas-shell.is-dragging .landing-drop-zone.is-active span{position:relative;z-index:1;background:var(--le-panel);padding:2px 8px;border-radius:999px}
+
+@media(max-width:900px){
+  .landing-renderer [data-block-id][data-max-width=narrow]{width:72%}
+  .landing-renderer [data-block-id][data-max-width=standard]{width:88%}
+  .landing-renderer [data-block-id][data-max-width=wide]{width:96%}
+  .landing-element-toolbar-v3{left:8px!important;right:8px!important;width:auto!important;max-width:none}
+  .landing-element-toolbar-v3 .landing-quick-kind{display:none}
+  .landing-compact-align button{padding-inline:7px!important}
+}

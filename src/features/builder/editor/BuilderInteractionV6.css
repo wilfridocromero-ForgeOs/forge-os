@@ -1,0 +1,134 @@
+/* =========================================================
+   ORVESEN Builder Interaction V6
+   Canvas continuity + block positioning + forgiving drag/drop.
+   ========================================================= */
+
+/* Keep the visible editor canvas continuous. The document may be shorter than
+   the viewport, but the page surface still fills the working area instead of
+   exposing the editor's dark shell underneath it. */
+.landing-canvas-shell{
+  background:#e7e7e7!important;
+}
+.landing-viewport{
+  min-height:100%!important;
+  display:flex!important;
+  flex-direction:column;
+  align-items:stretch;
+}
+.landing-page-frame{
+  flex:1 0 auto;
+  min-height:100%!important;
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+}
+.landing-page-frame>.landing-renderer{
+  flex:1 0 auto;
+  min-height:100%!important;
+}
+
+/* In editor mode the page background owns any unused viewport area. */
+.landing-page-frame>.landing-renderer::after{
+  content:"";
+  display:block;
+  min-height:clamp(7rem,18vh,14rem);
+  background:var(--lp-page);
+  pointer-events:none;
+}
+
+/* Block positioning is visible, not just text alignment. When a block has a
+   readable max width, these rules place the complete block left/center/right. */
+.landing-renderer [data-block-id][data-align=start]{margin-left:0!important;margin-right:auto!important}
+.landing-renderer [data-block-id][data-align=center]{margin-left:auto!important;margin-right:auto!important}
+.landing-renderer [data-block-id][data-align=end]{margin-left:auto!important;margin-right:0!important}
+
+/* Give common visual blocks an actual measurable width when max-width is used,
+   otherwise margin:auto cannot visibly move a shrink-to-content/100% element. */
+.landing-renderer [data-block-id][data-max-width=narrow]{width:min(50%,38rem)!important}
+.landing-renderer [data-block-id][data-max-width=standard]{width:min(75%,52rem)!important}
+.landing-renderer [data-block-id][data-max-width=wide]{width:min(90%,68rem)!important}
+.landing-renderer [data-block-id][data-max-width=none]{width:100%!important}
+
+/* During drag, make insertion affordances easy to hit without opening huge gaps. */
+.landing-canvas-shell.is-dragging .landing-page-frame{cursor:grabbing}
+.landing-canvas-shell.is-dragging .landing-drop-zone{
+  display:block!important;
+  min-height:22px!important;
+  opacity:.6!important;
+  pointer-events:auto!important;
+  border:0!important;
+  background:transparent!important;
+  transition:min-height .08s ease,opacity .08s ease,background .08s ease!important;
+}
+
+/* Drag targets overlay block boundaries instead of changing document height. */
+.landing-editor-block-wrap>.landing-drop-zone,
+.landing-editor-section-wrap>.landing-drop-zone,
+[data-region-id]>.landing-drop-zone[data-drop-kind="region-end"]{
+  position:absolute;
+  z-index:12;
+  right:.75rem;
+  left:.75rem;
+  width:auto;
+  min-height:24px!important;
+  height:24px!important;
+  margin:0!important;
+}
+.landing-editor-block-wrap>.landing-drop-zone[data-drop-kind="block-before"],
+.landing-editor-section-wrap>.landing-drop-zone[data-drop-kind="section-before"]{top:-12px}
+.landing-editor-block-wrap>.landing-drop-zone[data-drop-kind="block-after"],
+.landing-editor-section-wrap>.landing-drop-zone[data-drop-kind="section-after"],
+[data-region-id]>.landing-drop-zone[data-drop-kind="region-end"]{top:auto;bottom:-12px}
+.landing-canvas-shell.is-dragging .landing-drop-zone:hover,
+.landing-canvas-shell.is-dragging .landing-drop-zone.is-active{
+  min-height:34px!important;
+  opacity:1!important;
+  background:color-mix(in srgb,var(--le-gold) 8%,transparent)!important;
+}
+.landing-canvas-shell.is-dragging .landing-drop-zone::before{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  top:50%;
+  height:2px;
+  border-radius:999px;
+  transform:translateY(-50%);
+  background:color-mix(in srgb,var(--le-gold) 45%,transparent);
+}
+.landing-canvas-shell.is-dragging .landing-drop-zone.is-active::before{
+  height:4px;
+  background:var(--le-gold);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--le-gold) 15%,transparent);
+}
+.landing-canvas-shell.is-dragging .landing-drop-zone span{
+  display:none!important;
+}
+.landing-canvas-shell.is-dragging .landing-drop-zone.is-active span{
+  display:block!important;
+  position:absolute;
+  z-index:2;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  padding:3px 9px;
+  border-radius:999px;
+  background:var(--le-panel);
+  color:var(--le-gold);
+  font-size:10px;
+  font-weight:850;
+  white-space:nowrap;
+}
+
+/* Better drag affordance for palette items and existing block handles. */
+.landing-palette [draggable=true],
+.landing-block-chrome [data-drag-handle]{cursor:grab}
+.landing-palette [draggable=true]:active,
+.landing-block-chrome [data-drag-handle]:active{cursor:grabbing}
+
+@media(max-width:900px){
+  .landing-page-frame>.landing-renderer::after{min-height:6rem}
+  .landing-renderer [data-block-id][data-max-width=narrow]{width:72%!important}
+  .landing-renderer [data-block-id][data-max-width=standard]{width:88%!important}
+  .landing-renderer [data-block-id][data-max-width=wide]{width:96%!important}
+}

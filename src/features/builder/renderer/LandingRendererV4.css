@@ -1,0 +1,94 @@
+/* ORVESEN Landing Renderer V3 — spacing + typography normalization */
+
+/* Remove the legacy forced 1rem between editor wrappers. Block spacing is now explicit. */
+.landing-renderer .landing-editor-block-wrap+.landing-editor-block-wrap{margin-top:0!important}
+
+/* Section outer spacing: explicit controls can reach true zero. */
+.landing-renderer>[data-section-id],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id]{padding-block:48px}
+.landing-renderer [data-section-id][data-padding-top=none],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=none]{padding-top:0!important}
+.landing-renderer [data-section-id][data-padding-top=xs],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=xs]{padding-top:8px!important}
+.landing-renderer [data-section-id][data-padding-top=sm],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=sm]{padding-top:16px!important}
+.landing-renderer [data-section-id][data-padding-top=md],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=md]{padding-top:24px!important}
+.landing-renderer [data-section-id][data-padding-top=lg],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=lg]{padding-top:40px!important}
+.landing-renderer [data-section-id][data-padding-top=xl],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=xl]{padding-top:64px!important}
+.landing-renderer [data-section-id][data-padding-bottom=none],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=none]{padding-bottom:0!important}
+.landing-renderer [data-section-id][data-padding-bottom=xs],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=xs]{padding-bottom:8px!important}
+.landing-renderer [data-section-id][data-padding-bottom=sm],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=sm]{padding-bottom:16px!important}
+.landing-renderer [data-section-id][data-padding-bottom=md],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=md]{padding-bottom:24px!important}
+.landing-renderer [data-section-id][data-padding-bottom=lg],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=lg]{padding-bottom:40px!important}
+.landing-renderer [data-section-id][data-padding-bottom=xl],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=xl]{padding-bottom:64px!important}
+
+/* Per-element spacing uses the already validated top/bottom tokens. */
+.landing-renderer [data-block-id][data-padding-top=none]{margin-top:0!important}
+.landing-renderer [data-block-id][data-padding-top=xs]{margin-top:8px!important}
+.landing-renderer [data-block-id][data-padding-top=sm]{margin-top:16px!important}
+.landing-renderer [data-block-id][data-padding-top=md]{margin-top:24px!important}
+.landing-renderer [data-block-id][data-padding-top=lg]{margin-top:40px!important}
+.landing-renderer [data-block-id][data-padding-top=xl]{margin-top:64px!important}
+.landing-renderer [data-block-id][data-padding-bottom=none]{margin-bottom:0!important}
+.landing-renderer [data-block-id][data-padding-bottom=xs]{margin-bottom:8px!important}
+.landing-renderer [data-block-id][data-padding-bottom=sm]{margin-bottom:16px!important}
+.landing-renderer [data-block-id][data-padding-bottom=md]{margin-bottom:24px!important}
+.landing-renderer [data-block-id][data-padding-bottom=lg]{margin-bottom:40px!important}
+.landing-renderer [data-block-id][data-padding-bottom=xl]{margin-bottom:64px!important}
+
+/* Typography: page defaults plus safe per-block overrides.
+   Important: inherit must NOT override heading typography. */
+.landing-renderer h1,.landing-renderer h2,.landing-renderer h3,.landing-renderer h4,.landing-renderer h5,.landing-renderer h6{font-family:var(--lp-heading-font,var(--lp-font))}
+.landing-renderer [data-font-family=inherit]{font-family:inherit}
+.landing-renderer [data-font-family=sans]{font-family:Arial,Helvetica,sans-serif}
+.landing-renderer [data-font-family=serif]{font-family:Georgia,"Times New Roman",serif}
+.landing-renderer [data-font-family=mono]{font-family:"Courier New",Courier,monospace}
+.landing-renderer [data-font-family=display]{font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif}
+.landing-renderer [data-font-family=sans]>* ,
+.landing-renderer [data-font-family=serif]>* ,
+.landing-renderer [data-font-family=mono]>* ,
+.landing-renderer [data-font-family=display]>*{font-family:inherit}
+
+/* V4 — alignment means real content alignment, not only block position. */
+.landing-renderer [data-block-id][data-align=start],
+.landing-renderer [data-block-id][data-align=start] .landing-feature,
+.landing-renderer [data-block-id][data-align=start] .landing-stat,
+.landing-renderer [data-block-id][data-align=start] .landing-testimonial,
+.landing-renderer [data-block-id][data-align=start] .landing-pricing{text-align:left}
+.landing-renderer [data-block-id][data-align=center],
+.landing-renderer [data-block-id][data-align=center] .landing-feature,
+.landing-renderer [data-block-id][data-align=center] .landing-stat,
+.landing-renderer [data-block-id][data-align=center] .landing-testimonial,
+.landing-renderer [data-block-id][data-align=center] .landing-pricing{text-align:center}
+.landing-renderer [data-block-id][data-align=end],
+.landing-renderer [data-block-id][data-align=end] .landing-feature,
+.landing-renderer [data-block-id][data-align=end] .landing-stat,
+.landing-renderer [data-block-id][data-align=end] .landing-testimonial,
+.landing-renderer [data-block-id][data-align=end] .landing-pricing{text-align:right}
+
+.landing-renderer [data-block-id][data-align=start]>[role=group]{justify-content:flex-start}
+.landing-renderer [data-block-id][data-align=center]>[role=group]{justify-content:center}
+.landing-renderer [data-block-id][data-align=end]>[role=group]{justify-content:flex-end}
+.landing-renderer [data-block-id][data-align=start]>[role=group] a{justify-content:flex-start;text-align:left}
+.landing-renderer [data-block-id][data-align=center]>[role=group] a{justify-content:center;text-align:center}
+.landing-renderer [data-block-id][data-align=end]>[role=group] a{justify-content:flex-end;text-align:right}
+
+.landing-renderer [data-block-id][data-align=start] p{margin-left:0;margin-right:auto}
+.landing-renderer [data-block-id][data-align=center] p{margin-left:auto;margin-right:auto}
+.landing-renderer [data-block-id][data-align=end] p{margin-left:auto;margin-right:0}
+
+/* Mobile Header separation: keep transparent presets translucent and distinct from page content. */
+@media (max-width:900px){
+  .landing-renderer [data-block-id][data-block-type=site_header]{margin-bottom:1rem!important}
+  .landing-renderer .landing-site-header{z-index:2;min-height:4rem;padding-top:.8rem;padding-bottom:.8rem}
+  .landing-renderer .landing-site-header[data-surface=transparent]{background:color-mix(in srgb,var(--lp-surface) 88%,transparent);border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+}

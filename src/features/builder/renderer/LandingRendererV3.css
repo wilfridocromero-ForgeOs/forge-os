@@ -1,0 +1,65 @@
+/* ORVESEN Landing Renderer V3 — spacing + typography normalization */
+
+/* Remove the legacy forced 1rem between editor wrappers. Block spacing is now explicit. */
+.landing-renderer .landing-editor-block-wrap+.landing-editor-block-wrap{margin-top:0!important}
+
+/* Section outer spacing: explicit controls can reach true zero. */
+.landing-renderer>[data-section-id],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id]{padding-block:48px}
+.landing-renderer [data-section-id][data-padding-top=none],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=none]{padding-top:0!important}
+.landing-renderer [data-section-id][data-padding-top=xs],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=xs]{padding-top:8px!important}
+.landing-renderer [data-section-id][data-padding-top=sm],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=sm]{padding-top:16px!important}
+.landing-renderer [data-section-id][data-padding-top=md],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=md]{padding-top:24px!important}
+.landing-renderer [data-section-id][data-padding-top=lg],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=lg]{padding-top:40px!important}
+.landing-renderer [data-section-id][data-padding-top=xl],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-top=xl]{padding-top:64px!important}
+.landing-renderer [data-section-id][data-padding-bottom=none],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=none]{padding-bottom:0!important}
+.landing-renderer [data-section-id][data-padding-bottom=xs],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=xs]{padding-bottom:8px!important}
+.landing-renderer [data-section-id][data-padding-bottom=sm],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=sm]{padding-bottom:16px!important}
+.landing-renderer [data-section-id][data-padding-bottom=md],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=md]{padding-bottom:24px!important}
+.landing-renderer [data-section-id][data-padding-bottom=lg],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=lg]{padding-bottom:40px!important}
+.landing-renderer [data-section-id][data-padding-bottom=xl],
+.landing-renderer>.landing-editor-section-wrap>[data-section-id][data-padding-bottom=xl]{padding-bottom:64px!important}
+
+/* Per-element spacing uses the already validated top/bottom tokens. */
+.landing-renderer [data-block-id][data-padding-top=none]{margin-top:0!important}
+.landing-renderer [data-block-id][data-padding-top=xs]{margin-top:8px!important}
+.landing-renderer [data-block-id][data-padding-top=sm]{margin-top:16px!important}
+.landing-renderer [data-block-id][data-padding-top=md]{margin-top:24px!important}
+.landing-renderer [data-block-id][data-padding-top=lg]{margin-top:40px!important}
+.landing-renderer [data-block-id][data-padding-top=xl]{margin-top:64px!important}
+.landing-renderer [data-block-id][data-padding-bottom=none]{margin-bottom:0!important}
+.landing-renderer [data-block-id][data-padding-bottom=xs]{margin-bottom:8px!important}
+.landing-renderer [data-block-id][data-padding-bottom=sm]{margin-bottom:16px!important}
+.landing-renderer [data-block-id][data-padding-bottom=md]{margin-bottom:24px!important}
+.landing-renderer [data-block-id][data-padding-bottom=lg]{margin-bottom:40px!important}
+.landing-renderer [data-block-id][data-padding-bottom=xl]{margin-bottom:64px!important}
+
+/* Typography: page defaults plus safe per-block families supported by the document schema. */
+.landing-renderer h1,.landing-renderer h2,.landing-renderer h3,.landing-renderer h4,.landing-renderer h5,.landing-renderer h6{font-family:var(--lp-heading-font,var(--lp-font))}
+.landing-renderer [data-font-family=inherit]{font-family:inherit}
+.landing-renderer [data-font-family=sans]{font-family:Arial,Helvetica,sans-serif}
+.landing-renderer [data-font-family=serif]{font-family:Georgia,"Times New Roman",serif}
+.landing-renderer [data-font-family=mono]{font-family:"Courier New",Courier,monospace}
+.landing-renderer [data-font-family=display]{font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif}
+.landing-renderer [data-font-family]>*{font-family:inherit}
+
+/* Cards can be positioned as blocks without unintentionally centering all internal copy. */
+.landing-renderer [data-block-id][data-align=center]>.landing-feature,
+.landing-renderer [data-block-id][data-align=center]>.landing-stat,
+.landing-renderer [data-block-id][data-align=center]>.landing-testimonial,
+.landing-renderer [data-block-id][data-align=center]>.landing-pricing,
+.landing-renderer [data-block-id][data-align=end]>.landing-feature,
+.landing-renderer [data-block-id][data-align=end]>.landing-stat,
+.landing-renderer [data-block-id][data-align=end]>.landing-testimonial,
+.landing-renderer [data-block-id][data-align=end]>.landing-pricing{text-align:left}

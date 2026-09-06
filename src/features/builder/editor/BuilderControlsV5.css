@@ -1,0 +1,8 @@
+/* ORVESEN Builder Controls V5 — direct text sizing + explicit page inheritance */
+.landing-direct-size{display:inline-flex;align-items:center;gap:3px;padding:2px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-radius:10px;background:color-mix(in srgb,#fff 4%,transparent)}
+.landing-direct-size>button,.landing-direct-size>.landing-quick-popover>button{min-height:32px;padding:0 9px;border-radius:7px;white-space:nowrap}
+.landing-direct-size>button{font-weight:800;letter-spacing:-.02em}
+.landing-direct-size>button:disabled{opacity:.3;cursor:not-allowed}
+.landing-use-page-style{min-height:34px;padding:0 10px;border-radius:9px;white-space:nowrap;font-weight:750}
+.landing-use-page-style.is-active{border-color:color-mix(in srgb,#d4a72c 65%,transparent);background:color-mix(in srgb,#d4a72c 16%,transparent);color:#e9bd43}
+@media(max-width:900px){.landing-direct-size>button,.landing-direct-size>.landing-quick-popover>button{min-height:38px}.landing-use-page-style{min-height:38px}}

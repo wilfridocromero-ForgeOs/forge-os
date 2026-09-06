@@ -1,0 +1,119 @@
+/* =========================================================
+   ORVESEN Builder V7
+   Pricing consistency + semantic typography clarity.
+   ========================================================= */
+
+/* --- Typography semantics ---------------------------------
+   Headings always use the page heading family unless the block
+   has an explicit per-block family override. Body copy keeps the
+   page body family. This is especially important inside composite
+   cards such as Pricing and Features. */
+
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h1,
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h2,
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h3,
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h4,
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h5,
+.landing-renderer [data-block-id]:not([data-font-family="sans"]):not([data-font-family="serif"]):not([data-font-family="mono"]):not([data-font-family="display"]) h6{
+  font-family:var(--lp-heading-font,var(--lp-font))!important;
+}
+
+/* Pricing plan names are semantic titles. */
+.landing-renderer .landing-pricing>header>h3{
+  font-family:var(--lp-heading-font,var(--lp-font));
+}
+
+/* If the pricing block itself has an explicit font override, that explicit
+   choice still wins for the whole card, including its title. */
+.landing-renderer [data-block-id][data-font-family="sans"] .landing-pricing h3,
+.landing-renderer [data-block-id][data-font-family="serif"] .landing-pricing h3,
+.landing-renderer [data-block-id][data-font-family="mono"] .landing-pricing h3,
+.landing-renderer [data-block-id][data-font-family="display"] .landing-pricing h3{
+  font-family:inherit!important;
+}
+
+/* --- Pricing cards -----------------------------------------
+   A pricing row should read as one system: same height, same
+   vertical rhythm, CTA pinned to the bottom. */
+
+.landing-renderer [data-section-id][data-layout="columns"]{
+  align-items:stretch;
+}
+
+.landing-renderer [data-section-id][data-layout="columns"]>[data-region-id],
+.landing-renderer [data-section-id][data-layout="columns"]>.landing-editor-region-wrap>[data-region-id]{
+  height:100%;
+}
+
+.landing-renderer [data-section-id][data-layout="columns"] [data-block-id]:has(.landing-pricing){
+  height:100%;
+}
+
+.landing-renderer .landing-pricing{
+  box-sizing:border-box;
+  height:100%;
+  min-height:430px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+.landing-renderer .landing-pricing>header{
+  display:grid;
+  gap:10px;
+}
+
+.landing-renderer .landing-pricing>header>h3{
+  margin:0;
+  min-height:1.5em;
+}
+
+.landing-renderer .landing-pricing>header>p{
+  margin:0;
+  min-height:2.25em;
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:4px;
+}
+
+.landing-renderer .landing-pricing>p{
+  margin:0;
+  min-height:3.25em;
+}
+
+.landing-renderer .landing-pricing>ul{
+  margin:0;
+  flex:1 1 auto;
+}
+
+.landing-renderer .landing-pricing>a{
+  margin-top:auto!important;
+}
+
+/* Editor wrappers must stretch too; otherwise only the public renderer
+   would get equal-height cards. */
+.landing-renderer .landing-editor-region-wrap,
+.landing-renderer .landing-editor-block-wrap{
+  min-height:0;
+}
+
+.landing-renderer .landing-editor-region-wrap:has(.landing-pricing),
+.landing-renderer .landing-editor-block-wrap:has(.landing-pricing){
+  height:100%;
+}
+
+/* --- Toolbar clarity -------------------------------------- */
+.landing-use-page-style{
+  white-space:nowrap;
+}
+
+.landing-use-page-style.is-active{
+  font-weight:800;
+}
+
+@media(max-width:900px){
+  .landing-renderer .landing-pricing{
+    min-height:0;
+  }
+}

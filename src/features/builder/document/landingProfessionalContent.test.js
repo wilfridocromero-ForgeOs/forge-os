@@ -6,7 +6,7 @@ import { applyLandingOperation } from "./landingOperations.js";
 
 const id = () => crypto.randomUUID();
 const documentWith = (block) => ({ ...createLandingDocument(), sections: [{ id: id(), layout: "stack", regions: [{ id: id(), span: 12, blocks: [block] }] }] });
-const professionalTypes = ["logo", "feature_item", "stat", "testimonial", "video", "pricing_card", "faq_item", "divider", "spacer", "social_links"];
+const professionalTypes = ["site_header", "logo", "feature_item", "stat", "testimonial", "video", "pricing_card", "faq_item", "divider", "spacer", "social_links"];
 
 test("all professional primitives have canonical defaults and validate", () => {
   for (const type of professionalTypes) assert.equal(validateLandingDocument(documentWith(createPrimitiveBlock(type, id()))).valid, true, type);

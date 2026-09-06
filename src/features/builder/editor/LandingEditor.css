@@ -954,4 +954,14 @@
   .landing-mobile-placement-bar span{font-size:.68rem;color:var(--le-muted)}
   .landing-mobile-placement-bar>button{flex:none;min-height:2.6rem;padding:0 .9rem;border:1px solid var(--le-line);border-radius:.75rem;background:var(--le-panel);color:var(--le-text);font-weight:800}
   .landing-drop-zone.is-mobile-placement{min-height:3.5rem!important;margin:.35rem 0!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important}
+
+  /* Mobile placement owns the bottom controls until the item is placed or cancelled. */
+  .landing-editor.is-mobile-placing{padding-bottom:calc(4.65rem + env(safe-area-inset-bottom))!important}
+  .landing-editor.is-mobile-placing .landing-canvas-shell{padding-bottom:4.65rem!important}
+  .landing-editor.is-mobile-placing .landing-mobile-placement-bar{bottom:calc(.65rem + env(safe-area-inset-bottom))}
+
+  /* Do not rely on :has() support to keep the contextual toolbar off the canvas. */
+  .landing-editor.has-context-toolbar .landing-canvas-shell{padding-top:4.35rem!important}
+
+  .landing-empty-place{min-height:3.5rem!important;width:min(100%,22rem)!important;border:1.5px dashed var(--le-gold)!important;background:color-mix(in srgb,var(--le-gold) 10%,transparent)!important;color:var(--le-gold)!important;touch-action:manipulation!important}
 }

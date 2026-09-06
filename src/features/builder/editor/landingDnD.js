@@ -20,7 +20,7 @@ export function decodeLandingDrag(value) {
 export function isValidLandingDrop(payload, target) {
   if (!payload || !target || !validTargets.has(target.kind)) return false;
   if (payload.kind === "section") return target.kind.startsWith("section-") && payload.id !== target.sectionId;
-  if (payload.kind === "palette-pattern") return target.kind.startsWith("section-") || ["region-end", "canvas-end"].includes(target.kind);
+  if (payload.kind === "palette-pattern") return target.kind.startsWith("section-") || target.kind.startsWith("block-") || ["region-end", "canvas-end"].includes(target.kind);
   if (payload.kind === "palette-block") return ["block-before", "block-after", "region-end", "canvas-end"].includes(target.kind);
   if (payload.kind === "block") return ["block-before", "block-after", "region-end"].includes(target.kind);
   return false;
@@ -50,7 +50,39 @@ export function applyLandingDrop(document, payload, target, { createPattern, cre
   if (payload.kind === "palette-pattern") {
     const section = createPattern?.(payload.id);
     if (!section) return document;
+    if (target.blockId) {
+      const ownerIndex = next.sections.findIndex((item) => item.regions.some((region) => region.blocks.some((block) => block.id === target.blockId)));
+      if (ownerIndex < 0) return document;
+      const owner = next.sections[ownerIndex];
+      const ownerRegion = owner.regions.find((region) => region.blocks.some((block) => block.id === target.blockId));
+      const blockIndex = ownerRegion.blocks.findIndex((block) => block.id === target.blockId);
+      const splitIndex = blockIndex + (target.kind === "block-after" ? 1 : 0);
+
+      if (owner.regions.length !== 1) {
+        next.sections.splice(ownerIndex + (target.kind === "block-after" ? 1 : 0), 0, section);
+        return assertLandingDocument(next);
+      }
+      if (splitIndex === 0) {
+        next.sections.splice(ownerIndex, 0, section);
+        return assertLandingDocument(next);
+      }
+      if (splitIndex === ownerRegion.blocks.length) {
+        next.sections.splice(ownerIndex + 1, 0, section);
+        return assertLandingDocument(next);
+      }
+
+      const trailing = clone(owner);
+      trailing.id = createId();
+      trailing.regions[0].id = createId();
+      trailing.regions[0].blocks = ownerRegion.blocks.splice(splitIndex);
+      next.sections.splice(ownerIndex + 1, 0, section, trailing);
+      return assertLandingDocument(next);
+    }
     let insertion = next.sections.length;
+    if (target.regionId) {
+      const ownerIndex = next.sections.findIndex((item) => item.regions.some((region) => region.id === target.regionId));
+      if (ownerIndex >= 0) insertion = ownerIndex + 1;
+    }
     if (target.sectionId) {
       insertion = next.sections.findIndex((item) => item.id === target.sectionId);
       if (target.kind === "section-after") insertion += 1;

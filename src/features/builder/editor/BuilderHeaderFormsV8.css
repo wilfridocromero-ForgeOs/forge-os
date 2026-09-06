@@ -1,0 +1,68 @@
+/* =========================================================
+   ORVESEN Builder V8
+   Header + Formulario block visibility
+   ========================================================= */
+
+/* Make Formulario easy to spot in the Add palette. */
+.landing-palette [data-palette-id="form_reference"]{
+  border-color:color-mix(in srgb,var(--accent,#9b7618) 55%,transparent);
+  background:color-mix(in srgb,var(--accent,#9b7618) 7%,transparent);
+}
+.landing-palette [data-palette-id="form_reference"] strong::after{
+  content:"  ·  Form";
+  font-size:10px;
+  opacity:.55;
+  font-weight:700;
+}
+
+/* Header pattern preview */
+.landing-pattern-preview[data-preview="header"]{
+  display:grid;
+  grid-template-columns:28% 1fr 22%;
+  align-items:center;
+  gap:5px;
+  min-height:34px;
+}
+.landing-pattern-preview[data-preview="header"]>i{
+  width:52%;
+  height:5px;
+  border-radius:999px;
+  justify-self:start;
+}
+.landing-pattern-preview[data-preview="header"]>b{
+  display:flex;
+  gap:4px;
+  align-items:center;
+  justify-content:center;
+}
+.landing-pattern-preview[data-preview="header"]>b em{
+  width:16px;
+  height:3px;
+  border-radius:999px;
+}
+
+/* Form placeholder should read as an actual Builder element. */
+.landing-form-preview{
+  min-height:150px;
+  border:1px dashed color-mix(in srgb,var(--lp-text) 30%,transparent);
+  border-radius:16px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:6px;
+  padding:24px;
+  text-align:center;
+  background:color-mix(in srgb,var(--lp-surface) 82%,transparent);
+}
+.landing-form-preview strong{
+  font-size:13px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.landing-form-preview span{
+  font-size:15px;
+  font-weight:700;
+}
+.landing-form-preview small{
+  opacity:.68;
+}

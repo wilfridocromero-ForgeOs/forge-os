@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLandingDocument } from "../document/landingDocument.js";
+import { createLandingDocument, createPrimitiveBlock } from "../document/landingDocument.js";
 import { createHeroPattern } from "../document/landingPatterns.js";
 import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop } from "./landingDnD.js";
 import { createLandingEditorState, landingEditorReducer } from "./landingEditorState.js";
@@ -44,6 +44,28 @@ test("sections reorder and patterns insert as one immutable document result", ()
   const inserted = applyLandingDrop(reordered, { kind: "palette-pattern", id: "hero" }, { kind: "section-before", sectionId: first }, { createPattern: () => createHeroPattern() });
   assert.equal(inserted.sections.length, 3);
   assert.equal(input.sections.length, 2);
+});
+
+test("patterns insert before, between and after blocks without falling through to canvas end", () => {
+  let counter = 100;
+  const id = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, "0")}`;
+  const sectionId = id();
+  const regionId = id();
+  const heading = createPrimitiveBlock("heading", id());
+  const socials = createPrimitiveBlock("social_links", id());
+  const form = createPrimitiveBlock("form_reference", id());
+  const input = { ...createLandingDocument(), sections: [{ id: sectionId, layout: "stack", regions: [{ id: regionId, span: 12, blocks: [heading, socials, form] }] }] };
+  const pattern = () => ({ id: id(), layout: "stack", regions: [{ id: id(), span: 12, blocks: [createPrimitiveBlock("feature_item", id())] }] });
+
+  const above = applyLandingDrop(input, { kind: "palette-pattern", id: "features" }, { kind: "block-before", blockId: heading.id, regionId }, { createPattern: pattern, createId: id });
+  assert.equal(above.sections[0].regions[0].blocks[0].type, "feature_item");
+
+  const between = applyLandingDrop(input, { kind: "palette-pattern", id: "features" }, { kind: "block-before", blockId: socials.id, regionId }, { createPattern: pattern, createId: id });
+  assert.deepEqual(between.sections.map((section) => section.regions[0].blocks.map((block) => block.type)), [["heading"], ["feature_item"], ["social_links", "form_reference"]]);
+
+  const below = applyLandingDrop(input, { kind: "palette-pattern", id: "features" }, { kind: "block-after", blockId: form.id, regionId }, { createPattern: pattern, createId: id });
+  assert.equal(below.sections.at(-1).regions[0].blocks[0].type, "feature_item");
+  assert.equal(input.sections.length, 1);
 });
 
 test("a completed drop is one history transaction and undo/redo preserve selection", () => {

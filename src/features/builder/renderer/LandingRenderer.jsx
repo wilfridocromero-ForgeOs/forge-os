@@ -1,5 +1,39 @@
 import { useState } from "react";
 import { assertLandingDocument, safeVideoEmbedUrl } from "../document/landingDocument.js";
+import { appearanceData } from "../document/visualAppearance.js";
+import "./LandingRendererV3.css";
+import "./LandingRendererV4.css";
+import "./LandingVisualSystemV5.css";
+
+function SocialIcon({ provider }) {
+  if (provider === "facebook") return <span aria-hidden="true">f</span>;
+  if (provider === "linkedin") return <span aria-hidden="true">in</span>;
+  if (provider === "x") return <span aria-hidden="true">X</span>;
+  if (provider === "instagram") return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>;
+  if (provider === "youtube") return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3Z" fill="currentColor" stroke="none"/></svg>;
+  if (provider === "tiktok") return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4v11a4 4 0 1 1-3-3.87M14 4c.4 2.5 2 4 5 4"/></svg>;
+  if (provider === "email") return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>;
+}
+
+function resolveNavigationHref(item, resolvePageLink) {
+  if (!item.target) return item.href;
+  if (item.target.type === "section") return `#${item.target.anchor}`;
+  if (item.target.type === "page") return resolvePageLink?.(item.target.asset_id) || "#";
+  if (item.target.type === "email") return `mailto:${item.target.email}`;
+  if (item.target.type === "phone") return `tel:${item.target.phone}`;
+  return item.target.url;
+}
+
+function SiteHeader({ content, appearance, editorMode, resolvePageLink }) {
+  const [open, setOpen] = useState(false);
+  const links = content.nav_items.filter((item) => item.enabled);
+  return <header className="landing-site-header" {...appearanceData(appearance)} data-preset={content.preset} data-surface={content.surface} data-text-color={content.text_color} data-shadow={content.shadow} data-border={content.border} data-spacing={content.spacing} data-alignment={content.alignment} data-sticky={content.sticky || undefined}>
+    <a className="landing-site-brand" href="#top" onClick={editorLink(editorMode)}>{content.logo_url && <img src={content.logo_url} alt="" data-size={content.logo_size}/>}<strong>{content.brand_name}</strong></a>
+    <button type="button" className="landing-header-toggle" aria-expanded={open} aria-label={open ? "Cerrar navegación" : "Abrir navegación"} onClick={() => setOpen((value) => !value)}><span/><span/><span/></button>
+    <div className="landing-header-menu" data-open={open || undefined}><nav aria-label="Navegación principal">{links.map((item, index) => <a key={`${item.id || item.href}-${index}`} href={resolveNavigationHref(item, resolvePageLink)} onClick={(event) => { editorLink(editorMode)?.(event); setOpen(false); }}>{item.label}</a>)}</nav>{content.cta.enabled && <a className="landing-header-cta" href={content.cta.href} onClick={(event) => { editorLink(editorMode)?.(event); setOpen(false); }}>{content.cta.label}</a>}</div>
+  </header>;
+}
 
 function ImageBlock({ block }) {
   const [failedUrl, setFailedUrl] = useState(null);
@@ -16,9 +50,8 @@ const EDITOR_BLOCK_LABELS = {
   form_reference: "Formulario", logo: "Logo", feature_item: "Beneficio",
   stat: "Métrica", testimonial: "Testimonio", video: "Video",
   pricing_card: "Precio", faq_item: "FAQ", divider: "Separador",
-  spacer: "Espacio", social_links: "Social",
+  spacer: "Espacio", social_links: "Social", site_header: "Header",
 };
-
 
 function EditorMenu({ label, children }) {
   return <details className="landing-editor-menu" onClick={(event) => event.stopPropagation()}>
@@ -42,17 +75,18 @@ function BlockChrome({ block, selected, editorActions }) {
   return <div className={`landing-block-chrome ${selected ? "is-selected" : ""}`}>
     <span>{EDITOR_BLOCK_LABELS[block.type] || block.type}</span>
     <button type="button" draggable data-drag-kind="block" data-drag-id={block.id} aria-label={`Arrastrar ${EDITOR_BLOCK_LABELS[block.type] || block.type}`} data-drag-handle title="Arrastrar bloque">⋮⋮</button>
-    <EditorMenu label={`Opciones de ${EDITOR_BLOCK_LABELS[block.type] || "bloque"}`}>
+    {!selected && <EditorMenu label={`Opciones de ${EDITOR_BLOCK_LABELS[block.type] || "bloque"}`}>
       <strong>{EDITOR_BLOCK_LABELS[block.type] || "Bloque"}</strong>
       <button type="button" onClick={() => editorActions?.openPanel?.({ kind: "block", id: block.id })}>Opciones avanzadas</button>
       <button type="button" onClick={() => editorActions?.duplicate?.({ kind: "block", id: block.id })}>Duplicar bloque</button>
       <button type="button" className="is-danger" onClick={() => editorActions?.remove?.({ kind: "block", id: block.id })}>Eliminar bloque</button>
-    </EditorMenu>
+    </EditorMenu>}
   </div>;
 }
 
-function Block({ block, resolveForm, buttonDefaults = {}, renderField = null, editorMode = false }) {
+function BlockContent({ block, resolveForm, resolvePageLink, buttonDefaults = {}, renderField = null, editorMode = false }) {
   switch (block.type) {
+    case "site_header": return <SiteHeader content={block.content} appearance={block.style?.appearance} editorMode={editorMode} resolvePageLink={resolvePageLink}/>;
     case "heading": { const Tag = `h${block.content.level}`; return <Tag>{field(renderField, block, "text", block.content.text, { singleLine: true })}</Tag>; }
     case "text": return <p>{field(renderField, block, "text", block.content.text)}</p>;
     case "image": return <ImageBlock block={block}/>;
@@ -67,9 +101,13 @@ function Block({ block, resolveForm, buttonDefaults = {}, renderField = null, ed
     case "faq_item": return <details className="landing-faq" open={block.content.default_open || undefined}><summary>{field(renderField, block, "question", block.content.question, { singleLine: true })}</summary><p>{field(renderField, block, "answer", block.content.answer)}</p></details>;
     case "divider": return <hr className="landing-divider" data-style={block.content.style} data-width={block.content.width} data-spacing={block.content.spacing}/>;
     case "spacer": return <div className="landing-spacer" data-size={block.content.size} aria-hidden="true"/>;
-    case "social_links": return <nav className="landing-social" aria-label="Redes sociales">{block.content.links.map((link, index) => <a key={`${link.provider}-${link.url}-${index}`} href={link.url} onClick={editorLink(editorMode)} rel="noopener noreferrer" aria-label={link.label} data-provider={link.provider}>{field(renderField, block, "links.label", link.label, { index, singleLine: true })}</a>)}</nav>;
+    case "social_links": return <nav className="landing-social" aria-label="Redes sociales" data-variant={block.content.variant || "outline"} data-size={block.content.size || "md"} data-gap={block.content.gap || "md"} data-align={block.content.align || "start"} data-color={block.content.color || "text"}>{block.content.links.filter((link) => link.enabled !== false).map((link, index) => <a key={`${link.provider}-${link.url}-${index}`} href={link.url} onClick={editorLink(editorMode)} rel="noopener noreferrer" aria-label={link.label} data-provider={link.provider}><span className="landing-social-icon"><SocialIcon provider={link.provider}/></span><span className="landing-social-label">{field(renderField, block, "links.label", link.label, { index, singleLine: true })}</span></a>)}</nav>;
     default: return null;
   }
+}
+
+function Block(props) {
+  return <div className="landing-visual-surface" {...appearanceData(props.block.style?.appearance)}><BlockContent {...props}/></div>;
 }
 
 function DropZone({ target, actions }) {
@@ -82,8 +120,7 @@ function DropZone({ target, actions }) {
 
 function isPlacementTarget(payload, target) {
   if (!payload || !target) return false;
-  if (payload.kind === "palette-pattern") return target.kind === "section-before" || target.kind === "section-after";
-  if (payload.kind === "palette-block") return target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end";
+  if (payload.kind === "palette-pattern" || payload.kind === "palette-block") return target.kind === "block-before" || target.kind === "region-end";
   return false;
 }
 
@@ -96,23 +133,24 @@ function sectionBackground(background) {
   return {};
 }
 
-export default function LandingRenderer({ document, resolveForm = null, editorMode = false, selection = null, editorActions = null, renderField = null }) {
+export default function LandingRenderer({ document, resolveForm = null, resolvePageLink = null, editorMode = false, selection = null, editorActions = null, renderField = null }) {
   assertLandingDocument(document);
   const design = document.settings.design_system;
   const style = { "--lp-page": design.colors.page_background || "#ffffff", "--lp-surface": design.colors.surface || "#ffffff", "--lp-text": design.colors.text || "#151515", "--lp-muted": design.colors.muted || "#6b6b6b", "--lp-accent": design.colors.primary || "#9b7618", "--lp-font": design.typography.body || "Inter, system-ui, sans-serif", "--lp-heading-font": design.typography.headings || design.typography.body || "Inter, system-ui, sans-serif", "--lp-radius": design.radii.button || "12px", "--lp-card-radius": design.radii.card || "16px", "--lp-media-radius": design.radii.media || "16px", "--lp-width": design.content_widths.standard || "1120px" };
   return <main className="landing-renderer" lang={document.locale} style={style}>
     {document.sections.map((section, sectionIndex) => <div className="landing-editor-section-wrap" key={section.id}>
       <DropZone target={{ kind: "section-before", sectionId: section.id }} actions={editorActions}/>
-      <section draggable={editorMode} data-drag-kind="section" data-drag-id={section.id} data-selected={(selection?.kind === "section" && selection.id === section.id) || undefined} data-section-id={section.id} data-layout={section.layout} data-align={section.style?.align || "start"} data-spacing={section.style?.spacing || "md"} data-padding-top={section.style?.padding_top} data-padding-bottom={section.style?.padding_bottom} data-content-width={section.style?.content_width || "standard"} data-background={typeof section.style?.background === "object" ? section.style.background.type : section.style?.background ? "solid" : "inherit"} data-border={section.style?.border} data-radius={section.style?.radius} data-shadow={section.style?.shadow} data-tablet-align={section.responsive?.tablet?.align} data-mobile-align={section.responsive?.mobile?.align} data-tablet-layout={section.responsive?.tablet?.layout} data-mobile-layout={section.responsive?.mobile?.layout} data-tablet-hidden={section.responsive?.tablet?.hidden || undefined} data-mobile-hidden={section.responsive?.mobile?.hidden || undefined} data-tablet-spacing={section.responsive?.tablet?.spacing} data-mobile-spacing={section.responsive?.mobile?.spacing} style={sectionBackground(section.style?.background)}>
+      <section id={section.anchor || undefined} draggable={editorMode} data-drag-kind="section" data-drag-id={section.id} data-selected={(selection?.kind === "section" && selection.id === section.id) || undefined} data-section-id={section.id} data-layout={section.layout} data-align={section.style?.align || "start"} data-spacing={section.style?.spacing || "md"} data-padding-top={section.style?.padding_top} data-padding-bottom={section.style?.padding_bottom} data-content-width={section.style?.content_width || "standard"} data-background={typeof section.style?.background === "object" ? section.style.background.type : section.style?.background ? "solid" : "inherit"} data-border={section.style?.border} data-radius={section.style?.radius} data-shadow={section.style?.shadow} data-tablet-align={section.responsive?.tablet?.align} data-mobile-align={section.responsive?.mobile?.align} data-tablet-layout={section.responsive?.tablet?.layout} data-mobile-layout={section.responsive?.mobile?.layout} data-tablet-hidden={section.responsive?.tablet?.hidden || undefined} data-mobile-hidden={section.responsive?.mobile?.hidden || undefined} data-tablet-spacing={section.responsive?.tablet?.spacing} data-mobile-spacing={section.responsive?.mobile?.spacing} style={sectionBackground(section.style?.background)}>
         {editorMode && <SectionChrome section={section} editorActions={editorActions}/>}
+        <div className="landing-section-visual-surface" {...appearanceData(section.style?.appearance)} aria-hidden="true"/>
         {section.regions.map((region) => <div key={region.id} data-region-id={region.id} data-region-span={region.span}>
           {region.blocks.map((block) => <div className="landing-editor-block-wrap" key={block.id}>
             <DropZone target={{ kind: "block-before", blockId: block.id, regionId: region.id }} actions={editorActions}/>
-            <div draggable={editorMode && editorActions?.editing?.blockId !== block.id} data-drag-kind="block" data-drag-id={block.id} data-selected={(selection?.kind === "block" && selection.id === block.id) || undefined} data-block-id={block.id} data-align={block.style?.align || "start"} data-color={block.style?.color} data-text-variant={block.style?.text_variant} data-text-size={block.style?.text_size} data-text-weight={block.style?.text_weight} data-font-family={block.style?.font_family} data-max-width={block.style?.max_width} data-spacing={block.style?.spacing} data-border={block.style?.border} data-radius={block.style?.radius} data-shadow={block.style?.shadow} data-tablet-align={block.responsive?.tablet?.align} data-mobile-align={block.responsive?.mobile?.align} data-tablet-hidden={block.responsive?.tablet?.hidden || undefined} data-mobile-hidden={block.responsive?.mobile?.hidden || undefined} data-tablet-spacing={block.responsive?.tablet?.spacing} data-mobile-spacing={block.responsive?.mobile?.spacing}>
+            <div draggable={editorMode && editorActions?.editing?.blockId !== block.id} data-drag-kind="block" data-drag-id={block.id} data-selected={(selection?.kind === "block" && selection.id === block.id) || undefined} data-block-id={block.id} data-block-type={block.type} data-align={block.style?.align || "start"} data-color={block.style?.color} data-text-variant={block.style?.text_variant} data-text-size={block.style?.text_size} data-text-weight={block.style?.text_weight} data-font-family={block.style?.font_family} data-line-height={block.style?.line_height} data-letter-spacing={block.style?.letter_spacing} data-max-width={block.style?.max_width || "none"} data-spacing={block.style?.spacing} data-padding-top={block.style?.padding_top || "none"} data-padding-bottom={block.style?.padding_bottom || "none"} data-border={block.style?.border} data-radius={block.style?.radius} data-shadow={block.style?.shadow} data-tablet-align={block.responsive?.tablet?.align} data-mobile-align={block.responsive?.mobile?.align} data-tablet-hidden={block.responsive?.tablet?.hidden || undefined} data-mobile-hidden={block.responsive?.mobile?.hidden || undefined} data-tablet-spacing={block.responsive?.tablet?.spacing} data-mobile-spacing={block.responsive?.mobile?.spacing}>
               {editorMode && <BlockChrome block={block} selected={selection?.kind === "block" && selection.id === block.id} editorActions={editorActions}/>}
-              <Block block={block} resolveForm={resolveForm} buttonDefaults={design.buttons} renderField={editorMode ? renderField : null} editorMode={editorMode}/>
+              <Block block={block} resolveForm={resolveForm} resolvePageLink={resolvePageLink} buttonDefaults={design.buttons} renderField={editorMode ? renderField : null} editorMode={editorMode}/>
             </div>
-            {!editorActions?.pendingInsert && <DropZone target={{ kind: "block-after", blockId: block.id, regionId: region.id }} actions={editorActions}/>}
+            <DropZone target={{ kind: "block-after", blockId: block.id, regionId: region.id }} actions={editorActions}/>
           </div>)}
           <DropZone target={{ kind: "region-end", regionId: region.id }} actions={editorActions}/>
         </div>)}

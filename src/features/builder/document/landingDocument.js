@@ -1,3 +1,5 @@
+import { validateVisualAppearance } from "./visualAppearance.js";
+
 export const LANDING_SCHEMA_VERSION = 1;
 export const LANDING_DOCUMENT_TYPE = "landing_page";
 export const LANDING_LIMITS = Object.freeze({
@@ -26,6 +28,8 @@ const ROOT_KEYS = new Set([
 
 const SECTION_KEYS = new Set([
   "id",
+  "label",
+  "anchor",
   "layout",
   "style",
   "responsive",
@@ -63,11 +67,14 @@ const STYLE_KEYS = new Set([
   "text_size",
   "text_weight",
   "font_family",
+  "line_height",
+  "letter_spacing",
   "max_width",
   "border",
   "shadow",
   "padding_top",
   "padding_bottom",
+  "appearance",
 ]);
 
 const RESPONSIVE_STYLE_KEYS = new Set([
@@ -173,6 +180,10 @@ function validateStyle(style, errors, path) {
   }
 
   for (const [key, value] of Object.entries(style)) {
+    if (key === "appearance") {
+      if (!validateVisualAppearance(value)) errors.push({ path: `${path}.${key}`, code: "INVALID_APPEARANCE" });
+      continue;
+    }
     if (key === "background") {
       if (typeof value === "string") {
         if (!validToken(value)) {
@@ -404,6 +415,10 @@ function validateStyle(style, errors, path) {
         path: `${path}.${key}`,
         code: "INVALID_STYLE_VALUE",
       });
+    } else if (key === "line_height" && !["tight", "normal", "relaxed"].includes(value)) {
+      errors.push({ path: `${path}.${key}`, code: "INVALID_STYLE_VALUE" });
+    } else if (key === "letter_spacing" && !["tight", "normal", "wide"].includes(value)) {
+      errors.push({ path: `${path}.${key}`, code: "INVALID_STYLE_VALUE" });
     } else if (
       key === "border" &&
       ![
@@ -885,6 +900,10 @@ export const BLOCK_REGISTRY =
                   "secondary",
                   "outline",
                   "ghost",
+                  "gradient",
+                  "glass",
+                  "soft",
+                  "elevated",
                 ].includes(
                   action.variant
                 )
@@ -1587,6 +1606,44 @@ export const BLOCK_REGISTRY =
       },
     },
 
+    site_header: {
+      version: 1,
+      operations: ["update_content", "update_style", "move", "remove"],
+      defaults: {
+        preset: "logo_nav_cta",
+        logo_url: "",
+        brand_name: "ORVESEN",
+        logo_size: "md",
+        nav_items: [
+          { id: "nav-servicios", label: "Servicios", target: { type: "section", anchor: "servicios" }, enabled: true },
+          { id: "nav-nosotros", label: "Nosotros", target: { type: "section", anchor: "nosotros" }, enabled: true },
+          { id: "nav-contacto", label: "Contacto", target: { type: "section", anchor: "contacto" }, enabled: true },
+        ],
+        cta: { label: "Comenzar", href: "#contacto", enabled: true },
+        sticky: false,
+        surface: "solid",
+        text_color: "text",
+        shadow: "subtle",
+        border: "subtle",
+        spacing: "md",
+        alignment: "spread",
+      },
+      validate(content, errors, path) {
+        const keys = ["preset", "logo_url", "brand_name", "logo_size", "nav_items", "cta", "sticky", "surface", "text_color", "shadow", "border", "spacing", "alignment"];
+        const presets = ["logo_nav_cta", "centered_nav", "centered_logo", "split", "minimal", "transparent", "solid", "dark", "light", "sticky", "cta_heavy"];
+        const targetValid = (target) => plainObject(target) && ownKeysValid(target, new Set(["type", "section_id", "anchor", "asset_id", "url", "email", "phone"])) && (
+          (target.type === "section" && (!target.section_id || validId(target.section_id)) && typeof target.anchor === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(target.anchor)) ||
+          (target.type === "page" && validId(target.asset_id)) ||
+          (target.type === "url" && validSafeLink(target.url)) ||
+          (target.type === "email" && typeof target.email === "string" && validSafeLink(`mailto:${target.email}`)) ||
+          (target.type === "phone" && typeof target.phone === "string" && validSafeLink(`tel:${target.phone}`))
+        );
+        const navValid = Array.isArray(content?.nav_items) && content.nav_items.length <= 10 && content.nav_items.every((item) => plainObject(item) && ownKeysValid(item, new Set(["id", "label", "href", "target", "enabled"])) && (!item.id || /^[a-z][a-z0-9_-]{0,47}$/.test(item.id)) && validText(item.label, 80, false) && (item.target ? targetValid(item.target) : validSafeLink(item.href)) && typeof item.enabled === "boolean");
+        const ctaValid = plainObject(content?.cta) && ownKeysValid(content.cta, new Set(["label", "href", "enabled"])) && validText(content.cta.label, 80, false) && validSafeLink(content.cta.href) && typeof content.cta.enabled === "boolean";
+        if (!validateExactObject(content, keys, errors, path, "INVALID_SITE_HEADER") || !presets.includes(content.preset) || !(content.logo_url === "" || validHttpsUrl(content.logo_url)) || !validText(content.brand_name, 100, false) || !["sm", "md", "lg"].includes(content.logo_size) || !navValid || !ctaValid || typeof content.sticky !== "boolean" || !["transparent", "solid", "dark", "light"].includes(content.surface) || !["text", "muted", "primary", "light", "dark"].includes(content.text_color) || !["none", "subtle", "soft"].includes(content.shadow) || !["none", "subtle", "standard"].includes(content.border) || !["sm", "md", "lg"].includes(content.spacing) || !["start", "center", "spread"].includes(content.alignment)) errors.push({ path, code: "INVALID_SITE_HEADER" });
+      },
+    },
+
     social_links: {
       version: 1,
       operations: [
@@ -1596,6 +1653,11 @@ export const BLOCK_REGISTRY =
         "remove",
       ],
       defaults: {
+        variant: "outline",
+        size: "md",
+        gap: "md",
+        align: "start",
+        color: "text",
         links: [
           {
             provider:
@@ -1604,6 +1666,7 @@ export const BLOCK_REGISTRY =
               "https://example.com",
             label:
               "Sitio web",
+            enabled: true,
           },
         ],
       },
@@ -1626,7 +1689,7 @@ export const BLOCK_REGISTRY =
         if (
           !validateExactObject(
             content,
-            ["links"],
+            ["variant", "size", "gap", "align", "color", "links"],
             errors,
             path,
             "INVALID_SOCIAL"
@@ -1644,6 +1707,7 @@ export const BLOCK_REGISTRY =
                   "provider",
                   "url",
                   "label",
+                  "enabled",
                 ])
               ) ||
               !providers.includes(
@@ -1656,8 +1720,13 @@ export const BLOCK_REGISTRY =
                 link.label,
                 80,
                 false
-              )
+              ) || (link.enabled !== undefined && typeof link.enabled !== "boolean")
           )
+          || (content.variant !== undefined && !["minimal", "circle", "square", "filled", "outline"].includes(content.variant))
+          || (content.size !== undefined && !["sm", "md", "lg"].includes(content.size))
+          || (content.gap !== undefined && !["sm", "md", "lg"].includes(content.gap))
+          || (content.align !== undefined && !["start", "center", "end"].includes(content.align))
+          || (content.color !== undefined && !["text", "muted", "primary"].includes(content.color))
         ) {
           errors.push({
             path,
@@ -2089,6 +2158,10 @@ export function validateLandingDocument(
     }
 
     ids.add(section.id);
+
+    if ((section.label !== undefined && !validText(section.label, 120, true)) || (section.anchor !== undefined && (typeof section.anchor !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(section.anchor)))) {
+      errors.push({ path: sectionPath, code: "INVALID_SECTION_NAVIGATION" });
+    }
 
     if (
       ![

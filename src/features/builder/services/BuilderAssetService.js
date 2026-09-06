@@ -82,3 +82,15 @@ export async function saveBuilderAssetDraft({ assetId, expectedRevision, documen
   fail(error);
   return data;
 }
+
+export async function saveBuilderFormDraft({ assetId, expectedRevision, document }) {
+  const { data, error } = await supabase.rpc("save_builder_form_draft", {
+    target_asset_id: assetId,
+    expected_revision: expectedRevision,
+    requested_schema_version: document.schema_version,
+    requested_document: document,
+  });
+  if (error?.message?.includes("BUILDER_DRAFT_CONFLICT")) throw new BuilderDraftConflictError(error);
+  fail(error);
+  return data;
+}
