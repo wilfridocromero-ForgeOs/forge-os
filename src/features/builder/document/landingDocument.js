@@ -83,6 +83,13 @@ const RESPONSIVE_STYLE_KEYS = new Set([
   "align",
   "spacing",
   "hidden",
+  "text_variant",
+  "text_size",
+  "line_height",
+  "letter_spacing",
+  "max_width",
+  "padding_top",
+  "padding_bottom",
 ]);
 
 const DESIGN_KEYS = [
@@ -585,6 +592,37 @@ function validateResponsive(
         path: `${path}.${breakpoint}.spacing`,
         code: "INVALID_TOKEN",
       });
+    }
+
+    if (
+      override.text_variant !== undefined &&
+      !["lead", "body", "small"].includes(override.text_variant)
+    ) errors.push({ path: `${path}.${breakpoint}.text_variant`, code: "INVALID_TEXT_VARIANT" });
+
+    if (
+      override.text_size !== undefined &&
+      !["xs", "sm", "md", "lg", "xl", "2xl"].includes(override.text_size)
+    ) errors.push({ path: `${path}.${breakpoint}.text_size`, code: "INVALID_TEXT_SIZE" });
+
+    if (
+      override.line_height !== undefined &&
+      !["tight", "normal", "relaxed"].includes(override.line_height)
+    ) errors.push({ path: `${path}.${breakpoint}.line_height`, code: "INVALID_LINE_HEIGHT" });
+
+    if (
+      override.letter_spacing !== undefined &&
+      !["tight", "normal", "wide"].includes(override.letter_spacing)
+    ) errors.push({ path: `${path}.${breakpoint}.letter_spacing`, code: "INVALID_LETTER_SPACING" });
+
+    if (
+      override.max_width !== undefined &&
+      !["none", "narrow", "standard", "wide"].includes(override.max_width)
+    ) errors.push({ path: `${path}.${breakpoint}.max_width`, code: "INVALID_MAX_WIDTH" });
+
+    for (const key of ["padding_top", "padding_bottom"]) {
+      if (override[key] !== undefined && !["none", "xs", "sm", "md", "lg", "xl"].includes(override[key])) {
+        errors.push({ path: `${path}.${breakpoint}.${key}`, code: "INVALID_SPACING" });
+      }
     }
   }
 }
@@ -1842,6 +1880,10 @@ export function createPrimitiveBlock(
     );
   }
 
+  const creationStyle = type === "form_reference"
+    ? { max_width: "standard", align: "center" }
+    : undefined;
+
   return {
     id,
     type,
@@ -1851,6 +1893,7 @@ export function createPrimitiveBlock(
       content ??
         definition.defaults
     ),
+    ...(creationStyle ? { style: creationStyle } : {}),
   };
 }
 

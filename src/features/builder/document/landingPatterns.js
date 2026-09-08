@@ -42,8 +42,13 @@ const section = (layout, regions, style = undefined) => ({
   regions,
 });
 
-const block = (type, content) =>
-  createPrimitiveBlock(type, id(), content);
+const block = (type, content) => {
+  const created = createPrimitiveBlock(type, id(), content);
+  // A pattern's regions own its composition; standalone creation defaults must
+  // not resize a child relative to the whole section.
+  if (type === "form_reference") delete created.style;
+  return created;
+};
 
 const previewFor = (group, idValue) => {
   if (group === "Hero") {
@@ -289,6 +294,7 @@ export function createLandingPattern(
         ),
         {
           content_width: "wide",
+          align: "center",
         }
       );
 
@@ -316,6 +322,7 @@ export function createLandingPattern(
         ),
         {
           content_width: "wide",
+          align: "center",
         }
       );
 
@@ -347,6 +354,7 @@ export function createLandingPattern(
         ),
         {
           content_width: "wide",
+          align: "center",
         }
       );
 
@@ -413,6 +421,7 @@ export function createLandingPattern(
         ),
         {
           content_width: "wide",
+          align: "center",
         }
       );
 

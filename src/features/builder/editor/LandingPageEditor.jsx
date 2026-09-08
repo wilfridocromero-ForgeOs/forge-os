@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowUp, Copy, GripVertical, Heading, Image, Layers3, Maximize2, Monitor, MousePointerClick, Palette, Pilcrow, Redo2, Smartphone, Tablet, Trash2, Type, Undo2, Waypoints } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -10,9 +10,10 @@ import LandingRenderer from "../renderer/LandingRenderer.jsx";
 import "../renderer/LandingRenderer.css";
 import { listBuilderAssets, loadBuilderAssetDraft, saveBuilderAssetDraft, saveBuilderFormDraft } from "../services/BuilderAssetService.js";
 import FormRenderer from "../form/FormRenderer.jsx";
-import { createFormField } from "../form/formDocument.js";
+import { changeFormFieldType, createFormField, validateFormDocument } from "../form/formDocument.js";
 import { createLandingAutosave } from "./landingAutosave.js";
 import { calculateAutoScrollVelocity, sameLandingDropTarget } from "./landingAutoScroll.js";
+import { constrainFloatingPanel, getFloatingViewport, intersectFloatingViewport, placeFloatingPanel, sameFloatingPosition } from "./floatingPanelPosition.js";
 import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop, LANDING_DRAG_TYPE } from "./landingDnD.js";
 import { duplicateEditorSelection, findEditorSelection, landingEditorReducer, moveEditorSelection } from "./landingEditorState.js";
 import { getBlockToolbarControls, toolbarDeleteNeedsConfirmation } from "./landingToolbarControls.js";
@@ -79,6 +80,7 @@ export default function LandingPageEditor({ asset }) {
   const [pendingInsert, setPendingInsert] = useState(null);
   const [elementSearch, setElementSearch] = useState("");
   const autosaveRef = useRef(null); const saveDelayRef = useRef(600); const stateRef = useRef(null); const dragRef = useRef(null);
+  const autosaveErrorRef = useRef("");
   const formsRef = useRef([]); const formSaveQueuesRef = useRef(new Map()); const formRevisionsRef = useRef(new Map());
   const libraryDragRef = useRef(null);
   const canvasShellRef = useRef(null);
@@ -96,9 +98,9 @@ export default function LandingPageEditor({ asset }) {
       autosaveRef.current = createLandingAutosave({
         save: ({ expectedRevision, document }) => saveBuilderAssetDraft({ assetId: asset.id, expectedRevision, document }),
         onStatus: setStatus,
-        onSaved: (revision, document) => dispatch({ type: "saved", revision, document }),
+        onSaved: (revision, document) => { setError((current) => current === autosaveErrorRef.current ? "" : current); autosaveErrorRef.current = ""; dispatch({ type: "saved", revision, document }); },
         onConflict: () => setLocalConflictDocument(stateRef.current?.document || null),
-        onError: (value) => setError(value.message || "No se pudo guardar el borrador."),
+        onError: (value) => { const message = value.message || "No se pudo guardar el borrador."; autosaveErrorRef.current = message; setError(message); },
       });
       autosaveRef.current.initialize(draft.revision);
     }).catch((value) => setError(value.message || "No se pudo cargar el borrador."));
@@ -373,7 +375,15 @@ export default function LandingPageEditor({ asset }) {
   }
   function moveSelection(selection, delta) { replace(moveEditorSelection(state.document, selection, delta), "move"); }
   function duplicateSelection(selection) { replace(duplicateEditorSelection(state.document, selection), "duplicate"); }
-  async function leave() { await autosaveRef.current?.flush(); navigate("/construir"); }
+  async function leave() {
+    const saved = await autosaveRef.current?.flush();
+    if (saved === false) {
+      const message = "No se pudo guardar el borrador. Reintenta antes de salir.";
+      setError((current) => { if (current) return current; autosaveErrorRef.current = message; return message; });
+      return;
+    }
+    navigate("/construir");
+  }
   async function reloadRemote() { const draft = await loadBuilderAssetDraft(asset.id); autosaveRef.current.reset(draft.revision); dispatch({ type: "remote", draft }); setLocalConflictDocument(null); setError(""); }
 
   function canvasClick(event) {
@@ -559,7 +569,13 @@ export default function LandingPageEditor({ asset }) {
         forms={forms}
         pages={pages}
         sections={state.document.sections}
+        preview={state.preview}
         onSaveForm={(formId, document) => {
+          const formValidation = validateFormDocument(document);
+          if (!formValidation.valid) {
+            setError(formValidation.errors[0] || "BUILDER_FORM_DOCUMENT_INVALID");
+            return Promise.resolve(false);
+          }
           setForms((items) => items.map((item) => item.id === formId ? { ...item, draft: document } : item));
           const previous = formSaveQueuesRef.current.get(formId) || Promise.resolve();
           const queued = previous.then(async () => {
@@ -569,6 +585,7 @@ export default function LandingPageEditor({ asset }) {
             const saved = await saveBuilderFormDraft({ assetId: formId, expectedRevision: revision, document });
             formRevisionsRef.current.set(formId,saved.revision);
             setForms((items) => items.map((item) => item.id === formId ? { ...item, draft: saved.document, draft_revision: saved.revision } : item));
+            setError("");
           }).catch((value) => setError(value.message || "No se pudo guardar el formulario conectado."));
           formSaveQueuesRef.current.set(formId, queued);
           return queued;
@@ -646,6 +663,8 @@ const QUICK_COLORS = [
 
 function QuickPopover({ id, openMenu, setOpenMenu, label, trigger, children }) {
   const open = openMenu === id;
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
   const storageKey = `orvesen.builder.panel.${id}`;
   const [panelPosition, setPanelPosition] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(storageKey)) || { x: Math.max(24, window.innerWidth - 390), y: 96 }; }
@@ -661,21 +680,55 @@ function QuickPopover({ id, openMenu, setOpenMenu, label, trigger, children }) {
   useEffect(() => {
     try { sessionStorage.setItem(storageKey, JSON.stringify(panelPosition)); } catch { /* Session preferences are optional. */ }
   }, [panelPosition, storageKey]);
+  const floatingViewport = useCallback(() => {
+    const viewport = getFloatingViewport(window.visualViewport, window.innerWidth, window.innerHeight);
+    const editor = triggerRef.current?.closest(".landing-editor")?.getBoundingClientRect();
+    return intersectFloatingViewport(viewport, editor);
+  }, []);
+  const containPanel = useCallback((anchorAware = false) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const viewport = floatingViewport();
+    const triggerRect = triggerRef.current?.getBoundingClientRect();
+    setPanelPosition((current) => {
+      const dimensions = { width: rect.width, height: rect.height };
+      const next = anchorAware && triggerRect
+        ? placeFloatingPanel(triggerRect, dimensions, viewport)
+        : constrainFloatingPanel(current, dimensions, viewport);
+      return sameFloatingPosition(current, next) ? current : next;
+    });
+  }, [floatingViewport]);
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    containPanel(true);
+    const viewport = window.visualViewport;
+    const reclamp = () => containPanel(true);
+    window.addEventListener("resize", reclamp);
+    viewport?.addEventListener("resize", reclamp);
+    viewport?.addEventListener("scroll", reclamp);
+    return () => {
+      window.removeEventListener("resize", reclamp);
+      viewport?.removeEventListener("resize", reclamp);
+      viewport?.removeEventListener("scroll", reclamp);
+    };
+  }, [containPanel, open]);
   const beginDrag = (event) => {
     if (window.matchMedia("(max-width: 720px)").matches) return;
     event.preventDefault();
     const origin = { pointerX: event.clientX, pointerY: event.clientY, x: panelPosition.x, y: panelPosition.y };
-    const move = (nextEvent) => setPanelPosition({
-      x: Math.max(12, Math.min(window.innerWidth - 372, origin.x + nextEvent.clientX - origin.pointerX)),
-      y: Math.max(12, Math.min(window.innerHeight - 160, origin.y + nextEvent.clientY - origin.pointerY)),
-    });
+    const move = (nextEvent) => {
+      const rect = panelRef.current?.getBoundingClientRect() || { width: 360, height: 420 };
+      const viewport = floatingViewport();
+      setPanelPosition(constrainFloatingPanel({ x: origin.x + nextEvent.clientX - origin.pointerX, y: origin.y + nextEvent.clientY - origin.pointerY }, rect, viewport));
+    };
     const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", end, { once: true });
   };
   return <div className={`landing-quick-popover ${open ? "is-open" : ""}`}>
-    <button type="button" className="landing-quick-trigger" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setOpenMenu(open ? null : id); }}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
+    <button ref={triggerRef} type="button" className="landing-quick-trigger" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setOpenMenu(open ? null : id); }}>{trigger}<span className="landing-quick-chevron">⌄</span></button>
     {open && typeof document !== "undefined" && createPortal(
-      <div className="landing-quick-popover-panel landing-quick-portal-panel landing-floating-panel" style={{ left: panelPosition.x, top: panelPosition.y }} onClick={(event) => event.stopPropagation()}>
+      <div ref={panelRef} className="landing-floating-panel" style={{ left: panelPosition.x, top: panelPosition.y }} onClick={(event) => event.stopPropagation()}>
         <header className="landing-floating-panel-header" onPointerDown={beginDrag}><span><GripVertical size={15}/>{label || "Opciones"}</span><button type="button" aria-label="Cerrar panel" onPointerDown={(event)=>event.stopPropagation()} onClick={close}>×</button></header>
         <div className="landing-floating-panel-content">{children}</div>
       </div>,
@@ -691,7 +744,7 @@ function FormQuickEditor({ form, onSave }) {
   return <div className="landing-form-quick-editor">
     <label>Texto del botón<input defaultValue={form.draft.settings.submit_label} onBlur={(event)=>commit((next)=>{next.settings.submit_label=event.target.value})}/></label>
     <label>Mensaje de éxito<input defaultValue={form.draft.settings.success_message} onBlur={(event)=>commit((next)=>{next.settings.success_message=event.target.value})}/></label>
-    <div className="landing-form-quick-fields">{form.draft.fields.map((field,index)=><details key={field.id}><summary>{field.label || field.type}</summary><label>Tipo<select value={field.type} onChange={(event)=>updateField(field.id,{type:event.target.value,...(["select","radio"].includes(event.target.value)&&!field.options?{options:["Opción 1"]}:{})})}>{["text","email","tel","textarea","select","checkbox","radio","number","url"].map((type)=><option key={type}>{type}</option>)}</select></label><label>Label<input defaultValue={field.label} onBlur={(event)=>updateField(field.id,{label:event.target.value})}/></label><label>Placeholder<input defaultValue={field.placeholder} onBlur={(event)=>updateField(field.id,{placeholder:event.target.value})}/></label>{["select","radio"].includes(field.type)&&<label>Opciones<textarea defaultValue={(field.options||[]).join("\n")} onBlur={(event)=>updateField(field.id,{options:event.target.value.split("\n").map((value)=>value.trim()).filter(Boolean).slice(0,30)})}/></label>}<label><input type="checkbox" checked={field.required} onChange={(event)=>updateField(field.id,{required:event.target.checked})}/> Requerido</label><label>Ancho<select value={field.width} onChange={(event)=>updateField(field.id,{width:event.target.value})}><option value="full">Completo</option><option value="half">Mitad</option></select></label><div><button type="button" disabled={index===0} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index-1,0,item)})}><ArrowUp size={14}/></button><button type="button" disabled={index===form.draft.fields.length-1} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index+1,0,item)})}><ArrowDown size={14}/></button><button type="button" onClick={()=>commit((next)=>next.fields.splice(index+1,0,{...structuredClone(field),id:createBuilderId()}))}><Copy size={14}/></button><button type="button" onClick={()=>commit((next)=>{next.fields=next.fields.filter((item)=>item.id!==field.id)})}><Trash2 size={14}/></button></div></details>)}</div>
+    <div className="landing-form-quick-fields">{form.draft.fields.map((field,index)=><details key={field.id}><summary>{field.label || field.type}</summary><label>Tipo<select value={field.type} onChange={(event)=>commit((next)=>{next.fields=next.fields.map((item)=>item.id===field.id?changeFormFieldType(item,event.target.value):item)})}>{["text","email","tel","textarea","select","checkbox","radio","number","url"].map((type)=><option key={type}>{type}</option>)}</select></label><label>Label<input defaultValue={field.label} onBlur={(event)=>updateField(field.id,{label:event.target.value})}/></label><label>Placeholder<input defaultValue={field.placeholder} onBlur={(event)=>updateField(field.id,{placeholder:event.target.value})}/></label>{["select","radio"].includes(field.type)&&<label>Opciones<textarea defaultValue={(field.options||[]).join("\n")} onBlur={(event)=>updateField(field.id,{options:event.target.value.split("\n").map((value)=>value.trim()).filter(Boolean).slice(0,30)})}/></label>}<label><input type="checkbox" checked={field.required} onChange={(event)=>updateField(field.id,{required:event.target.checked})}/> Requerido</label><label>Ancho<select value={field.width} onChange={(event)=>updateField(field.id,{width:event.target.value})}><option value="full">Completo</option><option value="half">Mitad</option></select></label><div><button type="button" disabled={index===0} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index-1,0,item)})}><ArrowUp size={14}/></button><button type="button" disabled={index===form.draft.fields.length-1} onClick={()=>commit((next)=>{const [item]=next.fields.splice(index,1);next.fields.splice(index+1,0,item)})}><ArrowDown size={14}/></button><button type="button" onClick={()=>commit((next)=>next.fields.splice(index+1,0,{...structuredClone(field),id:createBuilderId()}))}><Copy size={14}/></button><button type="button" onClick={()=>commit((next)=>{next.fields=next.fields.filter((item)=>item.id!==field.id)})}><Trash2 size={14}/></button></div></details>)}</div>
     <button type="button" onClick={()=>commit((next)=>next.fields.push(createFormField("text")))}>＋ Añadir campo</button>
   </div>;
 }
@@ -710,7 +763,17 @@ function AppearancePanel({ value = {}, onChange }) {
   </div>;
 }
 
-function ContextualStyleToolbar({ selection, selected, apply, forms = [], pages = [], sections = [], onSaveForm, buttonDefaults = {}, onMore, onDuplicate, onDelete, onMoveUp, onMoveDown, onSelectSection, onClose, position = "top", onTogglePosition }) {
+const RESPONSIVE_BLOCK_STYLE_KEYS = new Set(["align", "spacing", "text_variant", "text_size", "line_height", "letter_spacing", "max_width", "padding_top", "padding_bottom"]);
+
+function applyViewportBlockStyle({ apply, blockId, preview, changes, group }) {
+  const responsive = {};
+  const base = {};
+  for (const [key, value] of Object.entries(changes)) (preview === "desktop" || !RESPONSIVE_BLOCK_STYLE_KEYS.has(key) ? base : responsive)[key] = value;
+  if (Object.keys(base).length) apply({ type:"update_block_style", block_id:blockId, changes:base }, `${group}-base`, 600);
+  if (Object.keys(responsive).length) apply({ type:"update_block_responsive", block_id:blockId, breakpoint:preview, changes:responsive }, `${group}-${preview}`, 600);
+}
+
+function ContextualStyleToolbar({ selection, selected, apply, forms = [], pages = [], sections = [], preview = "desktop", onSaveForm, buttonDefaults = {}, onMore, onDuplicate, onDelete, onMoveUp, onMoveDown, onSelectSection, onClose, position = "top", onTogglePosition }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [actionIndex, setActionIndex] = useState(0);
   if (!selection || !selected) return null;
@@ -723,17 +786,28 @@ function ContextualStyleToolbar({ selection, selected, apply, forms = [], pages 
 
   if (selection.kind === "section") {
     const section = selected;
-    const style = section.style || {};
+    const baseStyle = section.style || {};
+    const responsiveStyle = preview === "desktop" ? {} : section.responsive?.[preview] || {};
+    const style = { ...baseStyle, ...responsiveStyle };
     const allBlocks = section.regions?.flatMap((region) => region.blocks || []) || [];
     const allPricing = allBlocks.length > 1 && allBlocks.every((block) => block.type === "pricing_card");
     const allFeatures = allBlocks.length > 1 && allBlocks.every((block) => block.type === "feature_item");
     const allStats = allBlocks.length > 1 && allBlocks.every((block) => block.type === "stat");
     const groupLabel = allPricing ? "Pricing · Grupo" : allFeatures ? "Features · Grupo" : allStats ? "Stats · Grupo" : "Sección · Grupo";
-    const updateSection = (changes) => apply({ type:"update_section_style", section_id:section.id, changes }, `quick-section-${section.id}`, 600);
+    const updateSection = (changes) => {
+      const responsive = {};
+      const base = {};
+      for (const [key, value] of Object.entries(changes)) {
+        if (preview !== "desktop" && key === "align") responsive[key] = value;
+        else base[key] = value;
+      }
+      if (Object.keys(base).length) apply({ type:"update_section_style", section_id:section.id, changes:base }, `quick-section-${section.id}-base`, 600);
+      if (Object.keys(responsive).length) apply({ type:"update_section_responsive", section_id:section.id, breakpoint:preview, changes:responsive }, `quick-section-${section.id}-${preview}`, 600);
+    };
     const updateSectionData = (changes) => apply({ type:"update_section", section_id:section.id, changes }, `quick-section-data-${section.id}`, 600);
     const top = style.padding_top || "none";
     const bottom = style.padding_bottom || "none";
-    const width = style.content_width || "standard";
+    const width = baseStyle.content_width || "standard";
 
     return <div className={`landing-quick-toolbar landing-element-toolbar-v3 is-${position}`} role="toolbar" aria-label="Editar grupo o sección" onClick={(event)=>event.stopPropagation()}>
       <span className="landing-quick-kind">{groupLabel}</span>
@@ -766,8 +840,8 @@ function ContextualStyleToolbar({ selection, selected, apply, forms = [], pages 
   if (selection.kind !== "block" || !selected?.block) return null;
   const block = selected.block;
   const declaredControls = getBlockToolbarControls(block);
-  const style = block.style || {};
-  const updateStyle = (changes) => apply({ type:"update_block_style", block_id:block.id, changes }, `quick-style-${block.id}`, 600);
+  const style = { ...(block.style || {}), ...(preview === "desktop" ? {} : block.responsive?.[preview] || {}) };
+  const updateStyle = (changes) => applyViewportBlockStyle({ apply, blockId:block.id, preview, changes, group:`quick-style-${block.id}` });
   const appearanceControls = <QuickPopover id="appearance" openMenu={openMenu} setOpenMenu={setOpenMenu} label="Diseño visual" trigger={<Palette size={15}/>}><AppearancePanel value={style.appearance} onChange={(appearance)=>updateStyle({appearance})}/></QuickPopover>;
   const resetGlobal = () => apply({ type:"reset_block_style", block_id:block.id }, `quick-global-${block.id}`, 600);
   const width = style.max_width || "none";
@@ -1050,8 +1124,9 @@ function Inspector({ selection, selected, forms, apply, preview, onDelete, onDup
   if (!selected) return null;
   const block = selection.kind === "block" ? selected.block : null; const section = selection.kind === "section" ? selected : selected.section; const content = block?.content;
   const updateContent = (changes) => apply({ type: "update_block_content", block_id: block.id, changes }, `content-${block.id}`, 600);
-  const updateStyle = (changes) => apply({ type: "update_block_style", block_id: block.id, changes }, `style-${block.id}`, 600);
   const responsiveBreakpoint = preview === "desktop" ? null : preview;
+  const effectiveStyle = block ? { ...(block.style || {}), ...(responsiveBreakpoint ? block.responsive?.[responsiveBreakpoint] || {} : {}) } : {};
+  const updateStyle = (changes) => applyViewportBlockStyle({ apply, blockId:block.id, preview, changes, group:`style-${block.id}` });
   const responsive = responsiveBreakpoint ? (block || section).responsive?.[responsiveBreakpoint] || {} : null;
   const updateResponsive = (changes) => apply({ type: block ? "update_block_responsive" : "update_section_responsive", [block ? "block_id" : "section_id"]: (block || section).id, breakpoint: responsiveBreakpoint, changes }, `responsive-${(block || section).id}-${responsiveBreakpoint}`, 600);
   const resetResponsive = () => apply({ type: block ? "reset_block_responsive" : "reset_section_responsive", [block ? "block_id" : "section_id"]: (block || section).id, breakpoint: responsiveBreakpoint }, `responsive-reset-${(block || section).id}`, 600);
@@ -1072,7 +1147,7 @@ function Inspector({ selection, selected, forms, apply, preview, onDelete, onDup
   <label>Etiqueta accesible<input value={content.label} onChange={(event) => updateContent({ label: event.target.value })}/></label>
 </div>}<ProfessionalContentControls block={block} updateContent={updateContent}/></div>}
     </details>}
-    {block && <details className="landing-inspector-accordion" open><summary><span>Appearance</span><span aria-hidden="true">⌄</span></summary><BlockStyleControls block={block} updateStyle={updateStyle} apply={apply}/></details>}
+    {block && <details className="landing-inspector-accordion" open><summary><span>Appearance</span><span aria-hidden="true">⌄</span></summary><BlockStyleControls block={block} style={effectiveStyle} updateStyle={updateStyle} apply={apply}/></details>}
     {!block && <details className="landing-inspector-accordion" open><summary><span>Appearance &amp; Layout</span><span aria-hidden="true">⌄</span></summary><SectionControls section={section} changeLayout={changeLayout} apply={apply}/></details>}
     {responsiveBreakpoint && <details className="landing-inspector-accordion"><summary><span>Responsive</span><span aria-hidden="true">⌄</span></summary>
     {responsiveBreakpoint && <div className="landing-inspector-group"><h3>{responsiveBreakpoint === "tablet" ? "Tablet" : "Mobile"} override</h3><label>Alineación<select value={responsive.align || ""} onChange={(event) => updateResponsive({ align: event.target.value || undefined })}><option value="">Heredar</option><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label><label>Espaciado<select value={responsive.spacing || ""} onChange={(event) => updateResponsive({ spacing: event.target.value || undefined })}><option value="">Heredar</option>{["none","xs","sm","md","lg","xl"].map((size) => <option key={size}>{size}</option>)}</select></label><label><input type="checkbox" checked={responsive.hidden || false} onChange={(event) => updateResponsive({ hidden: event.target.checked })}/> Ocultar en {responsiveBreakpoint}</label>{!block && <label>Layout<select value={responsive.layout || ""} onChange={(event) => updateResponsive({ layout: event.target.value || undefined })}><option value="">Heredar</option><option value="stack">Apilar</option><option value="columns">Columnas</option></select></label>}<button type="button" onClick={resetResponsive}>Reset responsive override</button></div>}
@@ -1139,13 +1214,12 @@ function ActionControls({ content, updateContent }) {
   return <><label>Etiqueta<input value={action.label} onChange={(event) => update({ label: event.target.value })}/></label><label>URL<input value={action.href} onChange={(event) => update({ href: event.target.value })}/></label><h3>Button Style</h3><label>Estilo<select value={action.variant || ""} onChange={(event) => update({ variant: event.target.value || undefined })}><option value="">Page Style / Inherited</option><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="outline">Outline</option><option value="ghost">Ghost</option></select></label><label>Tamaño<select value={action.size || ""} onChange={(event) => update({ size: event.target.value || undefined })}><option value="">Page Style / Inherited</option><option value="sm">Small</option><option value="md">Medium</option><option value="lg">Large</option></select></label><label>Ancho<select value={action.width || ""} onChange={(event) => update({ width: event.target.value || undefined })}><option value="">Page Style / Inherited</option><option value="auto">Auto</option><option value="full">Full</option></select></label><label>Radio<select value={action.radius || ""} onChange={(event) => update({ radius: event.target.value || undefined })}><option value="">Page Style / Inherited</option>{["none","sm","md","lg","pill"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Sombra<select value={action.shadow || ""} onChange={(event) => update({ shadow: event.target.value || undefined })}><option value="">Page Style / Inherited</option>{["none","subtle","soft","medium"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Borde<select value={action.border || ""} onChange={(event) => update({ border: event.target.value || undefined })}><option value="">Page Style / Inherited</option>{["none","subtle","standard"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Fondo<select value={action.background || ""} onChange={(event) => update({ background: event.target.value || undefined })}>{backgroundOptions}</select></label><label>Texto<select value={action.text_color || ""} onChange={(event) => update({ text_color: event.target.value || undefined })}>{tokenOptions}</select></label><label>Color de borde<select value={action.border_color || ""} onChange={(event) => update({ border_color: event.target.value || undefined })}>{tokenOptions}</select></label><button type="button" onClick={reset}>Reset to Page Style</button></>;
 }
 
-function BlockStyleControls({ block, updateStyle, apply }) {
-  const style = block.style || {};
+function BlockStyleControls({ block, style = block.style || {}, updateStyle, apply }) {
   const typography = block.type === "heading" || block.type === "text";
   const textBearing = ["heading","text","feature_item","stat","testimonial","pricing_card","faq_item"].includes(block.type);
   return <div className="landing-inspector-group">
     <h3>Diseño · Desktop/Base</h3>
-    <label>Alineación<select value={style.align || "start"} onChange={(event) => updateStyle({ align: event.target.value })}><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label>
+    <label>Posición del bloque<select value={style.align || "start"} onChange={(event) => updateStyle({ align: event.target.value })}><option value="start">Inicio</option><option value="center">Centro</option><option value="end">Final</option></select></label>
     <label>Ancho del bloque<select value={style.max_width || "none"} onChange={(event) => updateStyle({ max_width: event.target.value })}><option value="none">100%</option><option value="wide">90%</option><option value="standard">75%</option><option value="narrow">50%</option></select></label>
     <label>Espacio arriba<select value={style.padding_top || "none"} onChange={(event) => updateStyle({ padding_top: event.target.value })}>{["none","xs","sm","md","lg","xl"].map((value) => <option key={value} value={value}>{({none:"0",xs:"8",sm:"16",md:"24",lg:"40",xl:"64"})[value]}px</option>)}</select></label>
     <label>Espacio abajo<select value={style.padding_bottom || "none"} onChange={(event) => updateStyle({ padding_bottom: event.target.value })}>{["none","xs","sm","md","lg","xl"].map((value) => <option key={value} value={value}>{({none:"0",xs:"8",sm:"16",md:"24",lg:"40",xl:"64"})[value]}px</option>)}</select></label>

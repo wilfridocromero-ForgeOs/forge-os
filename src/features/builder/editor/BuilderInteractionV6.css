@@ -38,9 +38,9 @@
 
 /* Block positioning is visible, not just text alignment. When a block has a
    readable max width, these rules place the complete block left/center/right. */
-.landing-renderer [data-block-id][data-align=start]{margin-left:0!important;margin-right:auto!important}
-.landing-renderer [data-block-id][data-align=center]{margin-left:auto!important;margin-right:auto!important}
-.landing-renderer [data-block-id][data-align=end]{margin-left:auto!important;margin-right:0!important}
+.landing-renderer [data-block-id][data-block-align=start]{margin-left:0!important;margin-right:auto!important}
+.landing-renderer [data-block-id][data-block-align=center]{margin-left:auto!important;margin-right:auto!important}
+.landing-renderer [data-block-id][data-block-align=end]{margin-left:auto!important;margin-right:0!important}
 
 /* Give common visual blocks an actual measurable width when max-width is used,
    otherwise margin:auto cannot visibly move a shrink-to-content/100% element. */
@@ -128,7 +128,74 @@
 
 @media(max-width:900px){
   .landing-page-frame>.landing-renderer::after{min-height:6rem}
-  .landing-renderer [data-block-id][data-max-width=narrow]{width:72%!important}
-  .landing-renderer [data-block-id][data-max-width=standard]{width:88%!important}
-  .landing-renderer [data-block-id][data-max-width=wide]{width:96%!important}
+}
+@media(max-width:767px){
+  .landing-renderer [data-block-id][data-max-width=narrow]:not([data-mobile-max-width]){width:72%!important}
+  .landing-renderer [data-block-id][data-max-width=standard]:not([data-mobile-max-width]){width:88%!important}
+  .landing-renderer [data-block-id][data-max-width=wide]:not([data-mobile-max-width]){width:96%!important}
+}
+@media(min-width:768px) and (max-width:900px){
+  .landing-renderer [data-block-id][data-max-width=narrow]:not([data-tablet-max-width]){width:72%!important}
+  .landing-renderer [data-block-id][data-max-width=standard]:not([data-tablet-max-width]){width:88%!important}
+  .landing-renderer [data-block-id][data-max-width=wide]:not([data-tablet-max-width]){width:96%!important}
+}
+
+/* Explicit block positioning is measured against the section content box.
+   Natural Pattern blocks keep their region-relative layout. */
+.landing-renderer [data-block-id][data-section-relative=true],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true],
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true]{
+  position:relative;
+  margin-right:0!important;
+}
+.landing-renderer [data-block-id][data-section-relative=true][data-max-width=none]{width:var(--lp-section-width-full)!important;max-width:none}
+.landing-renderer [data-block-id][data-section-relative=true][data-max-width=narrow]{width:min(var(--lp-section-width-narrow),38rem)!important}
+.landing-renderer [data-block-id][data-section-relative=true][data-max-width=standard]{width:min(var(--lp-section-width-standard),52rem)!important}
+.landing-renderer [data-block-id][data-section-relative=true][data-max-width=wide]{width:min(var(--lp-section-width-wide),68rem)!important}
+.landing-renderer [data-block-id][data-section-relative=true][data-block-align=start]{left:var(--lp-section-offset);translate:0;margin-left:0!important}
+.landing-renderer [data-block-id][data-section-relative=true][data-block-align=center]{left:var(--lp-section-center-offset);translate:-50% 0;margin-left:0!important}
+.landing-renderer [data-block-id][data-section-relative=true][data-block-align=end]{left:var(--lp-section-end-offset);translate:-100% 0;margin-left:0!important}
+
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=none],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=none]{width:var(--lp-section-width-full)!important;max-width:none}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true]{left:var(--lp-section-offset);translate:0;width:var(--lp-section-width-full)!important;margin-left:0!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=narrow],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=narrow]{width:min(var(--lp-section-width-narrow),38rem)!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=standard],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=standard]{width:min(var(--lp-section-width-standard),52rem)!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=wide],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=wide]{width:min(var(--lp-section-width-wide),68rem)!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=start],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=start]{left:var(--lp-section-offset);translate:0;margin-left:0!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=center],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=center]{left:var(--lp-section-center-offset);translate:-50% 0;margin-left:0!important}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=end],
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=end]{left:var(--lp-section-end-offset);translate:-100% 0;margin-left:0!important}
+
+@media(max-width:767px){
+  .landing-renderer [data-block-id][data-mobile-section-relative=true]{left:var(--lp-section-offset);translate:0;width:var(--lp-section-width-full)!important;margin-left:0!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=narrow]:not([data-mobile-max-width]){width:var(--lp-section-width-mobile-narrow)!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=standard]:not([data-mobile-max-width]){width:var(--lp-section-width-mobile-standard)!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=wide]:not([data-mobile-max-width]){width:var(--lp-section-width-mobile-wide)!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=none]{width:var(--lp-section-width-full)!important;max-width:none}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=narrow]{width:min(var(--lp-section-width-narrow),38rem)!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=standard]{width:min(var(--lp-section-width-standard),52rem)!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-max-width=wide]{width:min(var(--lp-section-width-wide),68rem)!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=start]{left:var(--lp-section-offset);translate:0;margin-left:0!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=center]{left:var(--lp-section-center-offset);translate:-50% 0;margin-left:0!important}
+  .landing-renderer [data-block-id][data-mobile-section-relative=true][data-mobile-block-align=end]{left:var(--lp-section-end-offset);translate:-100% 0;margin-left:0!important}
+}
+@media(min-width:768px) and (max-width:1023px){
+  .landing-renderer [data-block-id][data-tablet-section-relative=true]{left:var(--lp-section-offset);translate:0;width:var(--lp-section-width-full)!important;margin-left:0!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=narrow]:not([data-tablet-max-width]){width:var(--lp-section-width-mobile-narrow)!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=standard]:not([data-tablet-max-width]){width:var(--lp-section-width-mobile-standard)!important}
+  .landing-renderer [data-block-id][data-section-relative=true][data-max-width=wide]:not([data-tablet-max-width]){width:var(--lp-section-width-mobile-wide)!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=none]{width:var(--lp-section-width-full)!important;max-width:none}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=narrow]{width:min(var(--lp-section-width-narrow),38rem)!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=standard]{width:min(var(--lp-section-width-standard),52rem)!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-max-width=wide]{width:min(var(--lp-section-width-wide),68rem)!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=start]{left:var(--lp-section-offset);translate:0;margin-left:0!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=center]{left:var(--lp-section-center-offset);translate:-50% 0;margin-left:0!important}
+  .landing-renderer [data-block-id][data-tablet-section-relative=true][data-tablet-block-align=end]{left:var(--lp-section-end-offset);translate:-100% 0;margin-left:0!important}
 }

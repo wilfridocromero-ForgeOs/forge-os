@@ -24,9 +24,9 @@
 .landing-renderer [data-block-id][data-max-width=narrow]{width:50%}
 .landing-renderer [data-block-id][data-max-width=standard]{width:75%}
 .landing-renderer [data-block-id][data-max-width=wide]{width:90%}
-.landing-renderer [data-block-id][data-align=start]{margin-left:0;margin-right:auto}
-.landing-renderer [data-block-id][data-align=center]{margin-left:auto;margin-right:auto}
-.landing-renderer [data-block-id][data-align=end]{margin-left:auto;margin-right:0}
+.landing-renderer [data-block-id][data-block-align=start]{margin-left:0;margin-right:auto}
+.landing-renderer [data-block-id][data-block-align=center]{margin-left:auto;margin-right:auto}
+.landing-renderer [data-block-id][data-block-align=end]{margin-left:auto;margin-right:0}
 
 .landing-renderer [data-block-id][data-padding-top=none]{margin-top:0!important}
 .landing-renderer [data-block-id][data-padding-top=xs]{margin-top:8px!important}
@@ -42,9 +42,6 @@
 .landing-renderer [data-block-id][data-padding-bottom=xl]{margin-bottom:64px!important}
 
 /* Position cards without forcing their internal text to follow that position. */
-.landing-renderer [data-block-id][data-align=start]{text-align:left}
-.landing-renderer [data-block-id][data-align=center]{text-align:center}
-.landing-renderer [data-block-id][data-align=end]{text-align:right}
 
 /* Compact contextual toolbar. */
 .landing-element-toolbar-v3{max-width:min(calc(100vw - 28px),960px);overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;gap:4px;padding:5px!important;border-radius:14px!important}
@@ -76,9 +73,6 @@
 .landing-canvas-shell.is-dragging .landing-drop-zone.is-active span{position:relative;z-index:1;background:var(--le-panel);padding:2px 8px;border-radius:999px}
 
 @media(max-width:900px){
-  .landing-renderer [data-block-id][data-max-width=narrow]{width:72%}
-  .landing-renderer [data-block-id][data-max-width=standard]{width:88%}
-  .landing-renderer [data-block-id][data-max-width=wide]{width:96%}
   .landing-element-toolbar-v3{left:8px!important;right:8px!important;width:auto!important;max-width:none}
   .landing-element-toolbar-v3 .landing-quick-kind{display:none}
   .landing-compact-align button{padding-inline:7px!important}

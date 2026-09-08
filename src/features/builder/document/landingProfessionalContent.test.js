@@ -63,6 +63,54 @@ test("pattern catalog provides a lightweight visual descriptor without changing 
   }
 });
 
+const withoutGeneratedIds = (value) => {
+  if (Array.isArray(value)) return value.map(withoutGeneratedIds);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "id").map(([key, item]) => [key, withoutGeneratedIds(item)]));
+  return value;
+};
+
+test("pattern creation is viewport-independent and preserves its desktop structural base", () => {
+  const fromDesktop = createLandingPattern("pricing_3");
+  const fromMobile = createLandingPattern("pricing_3");
+  assert.deepEqual(withoutGeneratedIds(fromMobile), withoutGeneratedIds(fromDesktop));
+  assert.deepEqual(fromDesktop.regions.map((region) => region.span), [4, 4, 4]);
+  assert.equal(fromDesktop.responsive, undefined);
+});
+
+test("primitive creation uses universal semantic defaults rather than the active viewport", () => {
+  const desktopHeading = createPrimitiveBlock("heading", id());
+  const mobileHeading = createPrimitiveBlock("heading", id());
+  const desktopForm = createPrimitiveBlock("form_reference", id());
+  const mobileForm = createPrimitiveBlock("form_reference", id());
+  assert.deepEqual(withoutGeneratedIds(mobileHeading), withoutGeneratedIds(desktopHeading));
+  assert.deepEqual(withoutGeneratedIds(mobileForm), withoutGeneratedIds(desktopForm));
+  assert.equal(desktopHeading.style, undefined);
+  assert.deepEqual(desktopForm.style, { max_width: "standard", align: "center" });
+});
+
+test("semantic three-card patterns balance their group without changing child styles", () => {
+  for (const patternId of ["features_3", "services", "testimonial_grid", "pricing_3"]) {
+    const section = createLandingPattern(patternId);
+    assert.equal(section.style.align, "center", patternId);
+    assert.equal(section.regions.length, 3, patternId);
+    assert.ok(section.regions.every((region) => region.span === 4), patternId);
+    assert.ok(section.regions.flatMap((region) => region.blocks).every((block) => block.style === undefined), patternId);
+  }
+});
+
+test("group positioning and responsive overrides never mutate Heading Text or Video children", () => {
+  const document = createLandingDocument();
+  const section = createLandingPattern("video_feature");
+  document.sections.push(section);
+  const childrenBefore = structuredClone(section.regions.map((region) => region.blocks));
+  const centered = applyLandingOperation(document, { type: "update_section_style", section_id: section.id, changes: { content_width: "standard", align: "center" } });
+  const mobileStart = applyLandingOperation(centered, { type: "update_section_responsive", section_id: section.id, breakpoint: "mobile", changes: { align: "start" } });
+  assert.deepEqual(mobileStart.sections[0].regions.map((region) => region.blocks), childrenBefore);
+  assert.deepEqual(mobileStart.sections[0].style, { content_width: "standard", align: "center" });
+  assert.deepEqual(mobileStart.sections[0].responsive, { mobile: { align: "start" } });
+  assert.equal(validateLandingDocument(JSON.parse(JSON.stringify(mobileStart))).valid, true);
+});
+
 test("controlled section backgrounds validate and unsafe values are rejected", () => {
   const validBackgrounds = [
     { type: "solid", color: "surface" },
@@ -96,6 +144,32 @@ test("responsive overrides keep one tree and reset only their breakpoint", () =>
   assert.deepEqual(mobile.sections[0].regions[0].blocks[0].responsive, { tablet: { align: "center", spacing: "lg" }, mobile: { hidden: true } });
   const reset = applyLandingOperation(mobile, { type: "reset_block_responsive", block_id: blockId, breakpoint: "tablet" });
   assert.deepEqual(reset.sections[0].regions[0].blocks[0].responsive, { mobile: { hidden: true } });
+});
+
+test("responsive presentation persists without mutating the desktop base", () => {
+  for (const type of ["heading", "text", "action_group", "form_reference", "pricing_card"]) {
+    const document = documentWith(createPrimitiveBlock(type, id()));
+    const blockId = document.sections[0].regions[0].blocks[0].id;
+    const desktop = applyLandingOperation(document, { type: "update_block_style", block_id: blockId, changes: { max_width: "wide", align: "start", padding_top: "sm" } });
+    const mobile = applyLandingOperation(desktop, { type: "update_block_responsive", block_id: blockId, breakpoint: "mobile", changes: { max_width: "narrow", align: "center", padding_top: "none" } });
+    const reloaded = JSON.parse(JSON.stringify(mobile));
+    const block = reloaded.sections[0].regions[0].blocks[0];
+    assert.deepEqual(block.style, { max_width: "wide", align: "start", padding_top: "sm" }, `${type} desktop`);
+    assert.deepEqual(block.responsive.mobile, { max_width: "narrow", align: "center", padding_top: "none" }, `${type} mobile`);
+    assert.equal(validateLandingDocument(reloaded).valid, true, type);
+  }
+});
+
+test("responsive presentation inherits when absent and rejects unknown values", () => {
+  const document = documentWith(createPrimitiveBlock("heading", id()));
+  const block = document.sections[0].regions[0].blocks[0];
+  block.style = { max_width: "standard", text_size: "xl" };
+  assert.equal(block.responsive, undefined);
+  assert.equal(validateLandingDocument(document).valid, true);
+  block.responsive = { mobile: { max_width: "tiny" } };
+  assert.equal(validateLandingDocument(document).valid, false);
+  block.responsive = { mobile: { arbitrary_css: "1px" } };
+  assert.equal(validateLandingDocument(document).valid, false);
 });
 
 test("empty heading and text remain valid canonical content", () => {

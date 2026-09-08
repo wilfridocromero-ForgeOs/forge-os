@@ -39,9 +39,15 @@ export const FORM_FIELD_TYPES = Object.freeze([
   { type: "url", label: "URL" },
 ]);
 
-export const createFormFieldId = () => {
-  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
-  return `field-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+export const createFormFieldId = (cryptoProvider = globalThis.crypto) => {
+  if (typeof cryptoProvider?.randomUUID === "function") return cryptoProvider.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof cryptoProvider?.getRandomValues === "function") cryptoProvider.getRandomValues(bytes);
+  else for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 };
 
 export function createFormField(type = "text") {
@@ -55,6 +61,16 @@ export function createFormField(type = "text") {
   };
   if (["select", "radio"].includes(type)) return { ...base, options: ["Opción 1", "Opción 2", "Opción 3"] };
   return base;
+}
+
+export function changeFormFieldType(field, type) {
+  const next = { ...field, type };
+  if (["select", "radio"].includes(type)) {
+    if (!Array.isArray(next.options) || next.options.length === 0) next.options = ["Opción 1"];
+  } else {
+    delete next.options;
+  }
+  return next;
 }
 
 export function createFormDocument() {
@@ -84,6 +100,7 @@ export function validateFormDocument(document) {
   const legacyKeys = new Set(["submit_label", "success_message", "layout", "card_style"]);
   const modernKeys = new Set(["submit_label", "success_message", "layout", "style_preset", "inherit_page_theme", "background", "card_background", "border_color", "radius", "shadow", "padding", "field_background", "field_border", "label_color", "input_color", "placeholder_color", "submit_variant", "vertical_spacing", "button_alignment", "button_width", "appearance"]);
   if (Object.keys(rawSettings).some((key) => !(legacySettings ? legacyKeys : modernKeys).has(key))) errors.push("La configuración del formulario contiene propiedades desconocidas.");
+  if (typeof rawSettings.submit_label !== "string" || rawSettings.submit_label.length < 1 || rawSettings.submit_label.length > 80 || typeof rawSettings.success_message !== "string" || rawSettings.success_message.length > 500) errors.push("Los mensajes del formulario no son válidos.");
   if (legacySettings && (rawSettings.layout !== "stack" || !["clean", "minimal", "soft"].includes(rawSettings.card_style))) errors.push("La configuración legacy del formulario no es válida.");
   const settings = resolveFormStyle(document?.settings);
   if (!legacySettings && !FORM_STYLE_PRESETS.includes(settings.style_preset)) errors.push("El preset visual del formulario no es válido.");
@@ -95,12 +112,17 @@ export function validateFormDocument(document) {
   if (!["stack", "two_column"].includes(settings.layout) || !["sm", "md", "lg"].includes(settings.vertical_spacing) || !["start", "center", "end"].includes(settings.button_alignment) || !["auto", "full"].includes(settings.button_width)) errors.push("El layout del formulario no es válido.");
   if (!validateVisualAppearance(settings.appearance)) errors.push("La apariencia del formulario no es válida.");
   for (const field of document?.fields || []) {
-    if (!field?.id || ids.has(field.id)) errors.push("Hay campos con identidad inválida o repetida.");
+    const allowedFieldKeys = new Set(["id", "type", "label", "placeholder", "required", "width", "options"]);
+    if (Object.keys(field || {}).some((key) => !allowedFieldKeys.has(key))) errors.push("Un campo contiene propiedades desconocidas.");
+    if (typeof field?.id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(field.id) || ids.has(field.id)) errors.push("Hay campos con identidad inválida o repetida.");
     ids.add(field?.id);
     if (!FORM_FIELD_TYPES.some((item) => item.type === field?.type)) errors.push(`Tipo de campo inválido: ${field?.type || "desconocido"}.`);
     if (typeof field?.label !== "string" || field.label.length > 120) errors.push("Un campo tiene un label inválido.");
+    if (typeof field?.placeholder !== "string" || field.placeholder.length > 240 || typeof field?.required !== "boolean") errors.push("Un campo tiene configuración incompleta.");
     if (!["full", "half"].includes(field?.width || "full")) errors.push("Un campo tiene ancho inválido.");
     if (["select", "radio"].includes(field?.type) && (!Array.isArray(field.options) || field.options.length < 1 || field.options.length > 30)) errors.push("Un campo de opciones necesita entre 1 y 30 opciones.");
+    if (["select", "radio"].includes(field?.type) && field.options?.some((option) => typeof option !== "string" || option.length > 120)) errors.push("Un campo contiene opciones inválidas.");
+    if (!["select", "radio"].includes(field?.type) && Object.prototype.hasOwnProperty.call(field || {}, "options")) errors.push("Solo select y radio pueden contener opciones.");
   }
   return { valid: errors.length === 0, errors };
 }

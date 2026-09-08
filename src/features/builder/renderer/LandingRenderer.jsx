@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { assertLandingDocument, safeVideoEmbedUrl } from "../document/landingDocument.js";
 import { appearanceData } from "../document/visualAppearance.js";
+import { getFloatingViewport, intersectFloatingViewport, placeFloatingPanel } from "../editor/floatingPanelPosition.js";
+import { hasSectionRelativeBlockLayout } from "./sectionRelativeBlockLayout.js";
 import "./LandingRendererV3.css";
 import "./LandingRendererV4.css";
 import "./LandingVisualSystemV5.css";
@@ -54,10 +57,33 @@ const EDITOR_BLOCK_LABELS = {
 };
 
 function EditorMenu({ label, children }) {
-  return <details className="landing-editor-menu" onClick={(event) => event.stopPropagation()}>
-    <summary aria-label={label} title={label}>•••</summary>
-    <div className="landing-editor-menu-popover">{children}</div>
-  </details>;
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+  const [position, setPosition] = useState({ x: 12, y: 12 });
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current || !panelRef.current) return undefined;
+    const place = () => {
+      const viewport = getFloatingViewport(window.visualViewport, window.innerWidth, window.innerHeight);
+      const editor = triggerRef.current?.closest(".landing-editor")?.getBoundingClientRect();
+      const bounds = intersectFloatingViewport(viewport, editor);
+      setPosition(placeFloatingPanel(triggerRef.current.getBoundingClientRect(), panelRef.current.getBoundingClientRect(), bounds));
+    };
+    place();
+    const visualViewport = window.visualViewport;
+    window.addEventListener("resize", place);
+    visualViewport?.addEventListener("resize", place);
+    visualViewport?.addEventListener("scroll", place);
+    return () => {
+      window.removeEventListener("resize", place);
+      visualViewport?.removeEventListener("resize", place);
+      visualViewport?.removeEventListener("scroll", place);
+    };
+  }, [open]);
+  return <div className="landing-editor-menu" onClick={(event) => event.stopPropagation()}>
+    <button ref={triggerRef} type="button" className="landing-editor-menu-trigger" aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen((value) => !value)}>•••</button>
+    {open && typeof document !== "undefined" && createPortal(<div ref={panelRef} className="landing-floating-panel landing-editor-menu-floating" style={{ left:position.x, top:position.y }} role="menu" onClick={(event) => event.stopPropagation()}>{children}</div>, document.body)}
+  </div>;
 }
 
 function SectionChrome({ section, editorActions }) {
@@ -135,18 +161,103 @@ function sectionBackground(background) {
 
 export default function LandingRenderer({ document, resolveForm = null, resolvePageLink = null, editorMode = false, selection = null, editorActions = null, renderField = null }) {
   assertLandingDocument(document);
+  const rendererRef = useRef(null);
+  useLayoutEffect(() => {
+    const root = rendererRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return undefined;
+    const syncSectionGeometry = () => {
+      root.querySelectorAll("[data-section-id]").forEach((section) => {
+        const sectionStyle = getComputedStyle(section);
+        const sectionRect = section.getBoundingClientRect();
+        const paddingLeft = Number.parseFloat(sectionStyle.paddingLeft) || 0;
+        const paddingRight = Number.parseFloat(sectionStyle.paddingRight) || 0;
+        const borderLeft = Number.parseFloat(sectionStyle.borderLeftWidth) || 0;
+        const usableLeft = sectionRect.left + borderLeft + paddingLeft;
+        const usableWidth = Math.max(0, section.clientWidth - paddingLeft - paddingRight);
+        section.querySelectorAll("[data-section-relative=true], [data-tablet-section-relative=true], [data-mobile-section-relative=true]").forEach((block) => {
+          const region = block.closest("[data-region-id]");
+          if (!region) return;
+          const offset = usableLeft - region.getBoundingClientRect().left;
+          block.style.setProperty("--lp-section-offset", `${offset}px`);
+          block.style.setProperty("--lp-section-center-offset", `${offset + usableWidth / 2}px`);
+          block.style.setProperty("--lp-section-end-offset", `${offset + usableWidth}px`);
+          block.style.setProperty("--lp-section-width-full", `${usableWidth}px`);
+          block.style.setProperty("--lp-section-width-wide", `${usableWidth * 0.9}px`);
+          block.style.setProperty("--lp-section-width-standard", `${usableWidth * 0.75}px`);
+          block.style.setProperty("--lp-section-width-narrow", `${usableWidth * 0.5}px`);
+          block.style.setProperty("--lp-section-width-mobile-wide", `${usableWidth * 0.96}px`);
+          block.style.setProperty("--lp-section-width-mobile-standard", `${usableWidth * 0.88}px`);
+          block.style.setProperty("--lp-section-width-mobile-narrow", `${usableWidth * 0.72}px`);
+        });
+      });
+    };
+    syncSectionGeometry();
+    const observer = new ResizeObserver(syncSectionGeometry);
+    observer.observe(root);
+    root.querySelectorAll("[data-section-id]").forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [document]);
   const design = document.settings.design_system;
   const style = { "--lp-page": design.colors.page_background || "#ffffff", "--lp-surface": design.colors.surface || "#ffffff", "--lp-text": design.colors.text || "#151515", "--lp-muted": design.colors.muted || "#6b6b6b", "--lp-accent": design.colors.primary || "#9b7618", "--lp-font": design.typography.body || "Inter, system-ui, sans-serif", "--lp-heading-font": design.typography.headings || design.typography.body || "Inter, system-ui, sans-serif", "--lp-radius": design.radii.button || "12px", "--lp-card-radius": design.radii.card || "16px", "--lp-media-radius": design.radii.media || "16px", "--lp-width": design.content_widths.standard || "1120px" };
-  return <main className="landing-renderer" lang={document.locale} style={style}>
+  return <main ref={rendererRef} className="landing-renderer" lang={document.locale} style={style}>
     {document.sections.map((section, sectionIndex) => <div className="landing-editor-section-wrap" key={section.id}>
       <DropZone target={{ kind: "section-before", sectionId: section.id }} actions={editorActions}/>
       <section id={section.anchor || undefined} draggable={editorMode} data-drag-kind="section" data-drag-id={section.id} data-selected={(selection?.kind === "section" && selection.id === section.id) || undefined} data-section-id={section.id} data-layout={section.layout} data-align={section.style?.align || "start"} data-spacing={section.style?.spacing || "md"} data-padding-top={section.style?.padding_top} data-padding-bottom={section.style?.padding_bottom} data-content-width={section.style?.content_width || "standard"} data-background={typeof section.style?.background === "object" ? section.style.background.type : section.style?.background ? "solid" : "inherit"} data-border={section.style?.border} data-radius={section.style?.radius} data-shadow={section.style?.shadow} data-tablet-align={section.responsive?.tablet?.align} data-mobile-align={section.responsive?.mobile?.align} data-tablet-layout={section.responsive?.tablet?.layout} data-mobile-layout={section.responsive?.mobile?.layout} data-tablet-hidden={section.responsive?.tablet?.hidden || undefined} data-mobile-hidden={section.responsive?.mobile?.hidden || undefined} data-tablet-spacing={section.responsive?.tablet?.spacing} data-mobile-spacing={section.responsive?.mobile?.spacing} style={sectionBackground(section.style?.background)}>
         {editorMode && <SectionChrome section={section} editorActions={editorActions}/>}
         <div className="landing-section-visual-surface" {...appearanceData(section.style?.appearance)} aria-hidden="true"/>
-        {section.regions.map((region) => <div key={region.id} data-region-id={region.id} data-region-span={region.span}>
+        <div className="landing-section-composition" data-composition-layout={section.layout} data-composition-width={section.style?.content_width || "standard"} data-composition-align={section.style?.align || "start"} data-tablet-composition-align={section.responsive?.tablet?.align} data-mobile-composition-align={section.responsive?.mobile?.align} data-tablet-composition-layout={section.responsive?.tablet?.layout} data-mobile-composition-layout={section.responsive?.mobile?.layout}>
+        {section.regions.map((region, regionIndex) => <div key={region.id} data-region-id={region.id} data-region-span={region.span} data-tablet-incomplete-row={(section.layout === "columns" && section.regions.length > 1 && section.regions.length % 2 === 1 && regionIndex === section.regions.length - 1) || undefined}>
           {region.blocks.map((block) => <div className="landing-editor-block-wrap" key={block.id}>
             <DropZone target={{ kind: "block-before", blockId: block.id, regionId: region.id }} actions={editorActions}/>
-            <div draggable={editorMode && editorActions?.editing?.blockId !== block.id} data-drag-kind="block" data-drag-id={block.id} data-selected={(selection?.kind === "block" && selection.id === block.id) || undefined} data-block-id={block.id} data-block-type={block.type} data-align={block.style?.align || "start"} data-color={block.style?.color} data-text-variant={block.style?.text_variant} data-text-size={block.style?.text_size} data-text-weight={block.style?.text_weight} data-font-family={block.style?.font_family} data-line-height={block.style?.line_height} data-letter-spacing={block.style?.letter_spacing} data-max-width={block.style?.max_width || "none"} data-spacing={block.style?.spacing} data-padding-top={block.style?.padding_top || "none"} data-padding-bottom={block.style?.padding_bottom || "none"} data-border={block.style?.border} data-radius={block.style?.radius} data-shadow={block.style?.shadow} data-tablet-align={block.responsive?.tablet?.align} data-mobile-align={block.responsive?.mobile?.align} data-tablet-hidden={block.responsive?.tablet?.hidden || undefined} data-mobile-hidden={block.responsive?.mobile?.hidden || undefined} data-tablet-spacing={block.responsive?.tablet?.spacing} data-mobile-spacing={block.responsive?.mobile?.spacing}>
+            <div
+              draggable={editorMode && editorActions?.editing?.blockId !== block.id}
+              data-drag-kind="block"
+              data-drag-id={block.id}
+              data-selected={(selection?.kind === "block" && selection.id === block.id) || undefined}
+              data-block-id={block.id}
+              data-block-type={block.type}
+              data-align={block.style?.align || "start"}
+              data-block-align={block.style?.align || "start"}
+              data-section-relative={hasSectionRelativeBlockLayout(block, section) || undefined}
+              data-color={block.style?.color}
+              data-text-variant={block.style?.text_variant}
+              data-text-size={block.style?.text_size}
+              data-text-weight={block.style?.text_weight}
+              data-font-family={block.style?.font_family}
+              data-line-height={block.style?.line_height}
+              data-letter-spacing={block.style?.letter_spacing}
+              data-max-width={block.style?.max_width || "none"}
+              data-spacing={block.style?.spacing}
+              data-padding-top={block.style?.padding_top || "none"}
+              data-padding-bottom={block.style?.padding_bottom || "none"}
+              data-border={block.style?.border}
+              data-radius={block.style?.radius}
+              data-shadow={block.style?.shadow}
+              data-tablet-align={block.responsive?.tablet?.align}
+              data-mobile-align={block.responsive?.mobile?.align}
+              data-tablet-block-align={block.responsive?.tablet?.align}
+              data-mobile-block-align={block.responsive?.mobile?.align}
+              data-tablet-section-relative={hasSectionRelativeBlockLayout(block, section, "tablet") || undefined}
+              data-mobile-section-relative={hasSectionRelativeBlockLayout(block, section, "mobile") || undefined}
+              data-tablet-hidden={block.responsive?.tablet?.hidden || undefined}
+              data-mobile-hidden={block.responsive?.mobile?.hidden || undefined}
+              data-tablet-spacing={block.responsive?.tablet?.spacing}
+              data-mobile-spacing={block.responsive?.mobile?.spacing}
+              data-tablet-max-width={block.responsive?.tablet?.max_width}
+              data-mobile-max-width={block.responsive?.mobile?.max_width}
+              data-tablet-text-size={block.responsive?.tablet?.text_size}
+              data-mobile-text-size={block.responsive?.mobile?.text_size}
+              data-tablet-text-variant={block.responsive?.tablet?.text_variant}
+              data-mobile-text-variant={block.responsive?.mobile?.text_variant}
+              data-tablet-line-height={block.responsive?.tablet?.line_height}
+              data-mobile-line-height={block.responsive?.mobile?.line_height}
+              data-tablet-letter-spacing={block.responsive?.tablet?.letter_spacing}
+              data-mobile-letter-spacing={block.responsive?.mobile?.letter_spacing}
+              data-tablet-padding-top={block.responsive?.tablet?.padding_top}
+              data-mobile-padding-top={block.responsive?.mobile?.padding_top}
+              data-tablet-padding-bottom={block.responsive?.tablet?.padding_bottom}
+              data-mobile-padding-bottom={block.responsive?.mobile?.padding_bottom}
+            >
               {editorMode && <BlockChrome block={block} selected={selection?.kind === "block" && selection.id === block.id} editorActions={editorActions}/>}
               <Block block={block} resolveForm={resolveForm} resolvePageLink={resolvePageLink} buttonDefaults={design.buttons} renderField={editorMode ? renderField : null} editorMode={editorMode}/>
             </div>
@@ -154,6 +265,7 @@ export default function LandingRenderer({ document, resolveForm = null, resolveP
           </div>)}
           <DropZone target={{ kind: "region-end", regionId: region.id }} actions={editorActions}/>
         </div>)}
+        </div>
       </section>
       {(!editorActions?.pendingInsert || sectionIndex === document.sections.length - 1) && <DropZone target={{ kind: "section-after", sectionId: section.id }} actions={editorActions}/>}
     </div>)}
