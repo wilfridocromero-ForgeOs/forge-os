@@ -52,6 +52,11 @@ export function suggestUniqueBuilderPageSlug(name, pages = []) {
   return suggestion;
 }
 
+export function resolveBuilderSitePagePath(pages = [], pageAssetId) {
+  if (typeof pageAssetId !== "string" || !pageAssetId) return null;
+  return pages.find((page) => page?.page_asset_id === pageAssetId)?.slug || null;
+}
+
 export function orderBuilderSitePages(pages = []) {
   return [...pages].sort((left, right) => {
     if (Boolean(left.is_home) !== Boolean(right.is_home)) return left.is_home ? -1 : 1;

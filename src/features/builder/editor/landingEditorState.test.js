@@ -240,3 +240,109 @@ test("editor ingress rejects duplicate or mixed Footer structures and canonicali
   assert.deepEqual(replaced.document.sections.map((section)=>section.id),[trailing.id,footer.id]);
   assert.equal(replaced.dirty,true);
 });
+
+const invalidHeadingState = () => {
+  const input = draft();
+  const heading = input.document.sections[0].regions[0].blocks.find((block) => block.type === "heading");
+  const state = createLandingEditorState(input);
+  const document = structuredClone(state.document);
+  document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content = { text: 42, level: 9, bogus: true };
+  return { state: { ...state, document }, headingId: heading.id };
+};
+
+const failingContent = { type: "update_block_content", block_id: "70000000-0000-4000-8000-000000000009", changes: { text: "x" } };
+
+test("a rejected mutation reports BUILDER_BLOCK_NOT_FOUND without any state change", () => {
+  const state = createLandingEditorState(draft());
+  const next = landingEditorReducer(state, { type: "operation", operation: failingContent, group: "typing", at: 100 });
+
+  assert.notEqual(next, state);
+  assert.equal(next.lastFailure.code, "BUILDER_BLOCK_NOT_FOUND");
+  assert.equal(next.lastFailure.operation, failingContent);
+
+  // Nothing else about the editor moves, so autosave cannot be triggered by a refusal.
+  assert.equal(next.document, state.document);
+  assert.deepEqual(next.past, []);
+  assert.deepEqual(next.future, []);
+  assert.equal(next.dirty, false);
+  assert.equal(next.revision, state.revision);
+  assert.equal(next.selection, state.selection);
+  assert.equal(next.lastGroup, null);
+});
+
+test("a rejected mutation preserves redo history and the recorded document baseline", () => {
+  const input = draft();
+  const heading = input.document.sections[0].regions[0].blocks.find((block) => block.type === "heading");
+  let state = createLandingEditorState(input);
+  state = landingEditorReducer(state, { type: "operation", operation: { type: "update_block_content", block_id: heading.id, changes: { text: "Editado" } }, group: "typing", at: 100 });
+  state = landingEditorReducer(state, { type: "undo" });
+
+  assert.equal(state.future.length, 1);
+  assert.equal(state.dirty, true);
+  const document = state.document;
+  const past = state.past;
+
+  const failed = landingEditorReducer(state, { type: "operation", operation: failingContent, group: "typing", at: 200 });
+
+  assert.equal(failed.lastFailure.code, "BUILDER_BLOCK_NOT_FOUND");
+  assert.equal(failed.document, document);
+  assert.equal(failed.past, past);
+  assert.deepEqual(failed.future, state.future);
+  assert.equal(failed.dirty, state.dirty);
+  assert.equal(failed.revision, state.revision);
+
+  // Redo still works, so a refusal never poisons later edits or the redo stack.
+  // Undo/redo do not clear the report: they are not edits.
+  const recovered = landingEditorReducer(failed, { type: "redo" });
+  assert.equal(recovered.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "Editado");
+  assert.equal(recovered.lastFailure.id, failed.lastFailure.id);
+});
+
+test("validation details from assertLandingDocument survive into the failure contract", () => {
+  const { state, headingId } = invalidHeadingState();
+  const next = landingEditorReducer(state, {
+    type: "operation",
+    operation: { type: "update_block_content", block_id: headingId, changes: { text: "Válido" } },
+    group: "typing",
+    at: 100,
+  });
+
+  assert.equal(next.lastFailure.code, "BUILDER_DOCUMENT_INVALID");
+  assert.match(next.lastFailure.message, /BUILDER_DOCUMENT_INVALID/);
+  // The vocabulary validator short-circuits an unknown heading content key.
+  assert.deepEqual(next.lastFailure.errors, [{ path: "$.sections.0.regions.0.blocks.0.content", code: "INVALID_HEADING" }]);
+  assert.equal(next.document, state.document);
+  assert.deepEqual(next.past, []);
+  assert.equal(next.dirty, false);
+});
+
+test("a failure stays observable until a successful mutation or an explicit dismissal", () => {
+  const input = draft();
+  const heading = input.document.sections[0].regions[0].blocks.find((block) => block.type === "heading");
+  let state = createLandingEditorState(input);
+  state = landingEditorReducer(state, { type: "operation", operation: failingContent, group: "typing", at: 100 });
+  const firstFailure = state.lastFailure;
+  assert.ok(firstFailure.id > 0);
+
+  // A save settling is not a new edit, so it must not erase the reported failure.
+  state = landingEditorReducer(state, { type: "saved", revision: 5, document: state.document });
+  assert.equal(state.lastFailure.id, firstFailure.id);
+
+  // A later repeated refusal is a new attempt and must be distinguishable.
+  state = landingEditorReducer(state, { type: "operation", operation: failingContent, group: "typing", at: 150 });
+  assert.ok(state.lastFailure.id > firstFailure.id);
+
+  state = landingEditorReducer(state, { type: "clear_failure" });
+  assert.equal(state.lastFailure, null);
+  assert.equal(landingEditorReducer(state, { type: "clear_failure" }), state);
+
+  // A successful edit clears the failure and commits the document normally.
+  let recovered = landingEditorReducer(state, { type: "operation", operation: { type: "update_block_content", block_id: heading.id, changes: { text: "Recuperado" } }, group: "typing", at: 200 });
+  assert.equal(recovered.lastFailure, null);
+  assert.equal(recovered.dirty, true);
+  assert.equal(recovered.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "Recuperado");
+  assert.equal(recovered.past.length, 1);
+
+  recovered = landingEditorReducer(recovered, { type: "undo" });
+  assert.equal(recovered.document.sections[0].regions[0].blocks.find((block) => block.id === heading.id).content.text, "Una propuesta clara para avanzar");
+});

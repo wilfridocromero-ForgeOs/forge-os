@@ -1,6 +1,7 @@
 import { applyLandingOperation, applyLandingOperations, enforceSiteFooterOrder, insertSectionWithFooterContract, inspectSiteFooter, sectionContainsSiteFooter } from "../document/landingOperations.js";
 import { assertLandingDocument } from "../document/landingDocument.js";
 import { carryActionElementIds, findBuilderSelection, normalizeBuilderSelection, reconcileBuilderSelection } from "./landingEditorSelection.js";
+import { createMutationFailure } from "./landingMutationFailure.js";
 
 const MAX_HISTORY = 100;
 const clone = (value) => structuredClone(value);
@@ -11,7 +12,7 @@ export function createLandingEditorState(draft) {
   const footer = inspectSiteFooter(document);
   const footerOrderChanged = footer.count === 1 && footer.location.sectionIndex !== document.sections.length - 1;
   enforceSiteFooterOrder(document);
-  return { document, revision: draft.revision, past: [], future: [], selection: null, preview: "desktop", dirty: footerOrderChanged, lastGroup: null, lastChangedAt: 0 };
+  return { document, revision: draft.revision, past: [], future: [], selection: null, preview: "desktop", dirty: footerOrderChanged, lastGroup: null, lastChangedAt: 0, lastFailure: null };
 }
 
 function commit(state, document, group, at = Date.now()) {
@@ -19,18 +20,23 @@ function commit(state, document, group, at = Date.now()) {
   carryActionElementIds(state.document, document);
   const grouped = group && group === state.lastGroup && at - state.lastChangedAt < 700;
   const past = grouped ? state.past : [...state.past, clone(state.document)].slice(-MAX_HISTORY);
-  return { ...state, document, past, future: [], selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: group || null, lastChangedAt: at };
+  return { ...state, document, past, future: [], selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: group || null, lastChangedAt: at, lastFailure: null };
 }
 
-function safely(state, producer) { try { return producer(); } catch { return state; } }
+// A refused mutation keeps the previous state exactly as it was — document,
+// history, revision and dirty flag — and only records why it was refused.
+function refuse(state, error, operation) {
+  return { ...state, lastFailure: createMutationFailure(error, { operation }) };
+}
 
 export function landingEditorReducer(state, action) {
   switch (action.type) {
     case "select": return { ...state, selection: reconcileBuilderSelection(normalizeBuilderSelection(action.selection, state.document), state.document) };
     case "preview": return { ...state, preview: action.preview, selection: reconcileBuilderSelection(state.selection, state.document) };
-    case "operation": return safely(state, () => commit(state, applyLandingOperation(state.document, action.operation), action.group, action.at));
-    case "operations": return safely(state, () => commit(state, applyLandingOperations(state.document, action.operations), action.group, action.at));
-    case "replace": return safely(state, () => commit(state, enforceSiteFooterOrder(clone(action.document)), action.group, action.at));
+    case "operation": try { return commit(state, applyLandingOperation(state.document, action.operation), action.group, action.at); } catch (error) { return refuse(state, error, action.operation); }
+    case "operations": try { return commit(state, applyLandingOperations(state.document, action.operations), action.group, action.at); } catch (error) { return refuse(state, error, action.operations); }
+    case "replace": try { return commit(state, enforceSiteFooterOrder(clone(action.document)), action.group, action.at); } catch (error) { return refuse(state, error, null); }
+    case "clear_failure": return state.lastFailure === null ? state : { ...state, lastFailure: null };
     case "undo": if (!state.past.length) return state; else { const document = clone(state.past.at(-1)); carryActionElementIds(state.document, document); return { ...state, document, past: state.past.slice(0, -1), future: [clone(state.document), ...state.future].slice(0, MAX_HISTORY), selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: null }; }
     case "redo": if (!state.future.length) return state; else { const document = clone(state.future[0]); carryActionElementIds(state.document, document); return { ...state, document, past: [...state.past, clone(state.document)].slice(-MAX_HISTORY), future: state.future.slice(1), selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: null }; }
     case "saved": return action.document === state.document ? { ...state, revision: action.revision, dirty: false } : { ...state, revision: action.revision };

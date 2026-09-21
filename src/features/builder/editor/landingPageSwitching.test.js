@@ -9,9 +9,27 @@ import {
   flushAndNavigateToBuilderPage,
   getActiveBuilderSitePage,
 } from "./landingPageSwitching.js";
+import { resolveBuilderSitePagePath } from "../services/BuilderSiteServiceCore.js";
 
 const PAGE_A = "11111111-1111-4111-8111-111111111111";
 const PAGE_B = "22222222-2222-4222-8222-222222222222";
+
+test("internal page links resolve from the Site page slug, not the asset public slug", () => {
+  const sitePages = [
+    { page_asset_id: PAGE_A, name: "Inicio", slug: "/", is_home: true, position: 1 },
+    { page_asset_id: PAGE_B, name: "Servicios", slug: "/servicios", is_home: false, position: 2 },
+  ];
+  // The pages loaded as builder_assets carry no public_slug, so the resolver must
+  // read the Site page model, which is the canonical owner of the slug.
+  const assetPages = [{ id: PAGE_B, name: "Servicios", asset_type: "landing_page" }];
+  assert.equal(assetPages[0].public_slug, undefined);
+  assert.equal(resolveBuilderSitePagePath(sitePages, PAGE_A), "/");
+  assert.equal(resolveBuilderSitePagePath(sitePages, PAGE_B), "/servicios");
+  assert.equal(resolveBuilderSitePagePath(sitePages, "33333333-3333-4333-8333-333333333333"), null);
+  assert.equal(resolveBuilderSitePagePath(sitePages, undefined), null);
+  assert.equal(resolveBuilderSitePagePath([], PAGE_B), null);
+  assert.equal(resolveBuilderSitePagePath(undefined, PAGE_B), null);
+});
 
 test("active Page and SPA route resolve from the current page asset", () => {
   const pages = [{ page_asset_id: PAGE_A, name: "Inicio" }, { page_asset_id: PAGE_B, name: "Servicios" }];

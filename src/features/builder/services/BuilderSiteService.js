@@ -5,6 +5,7 @@ export {
   createBuilderSiteService,
   normalizeBuilderPageSlug,
   orderBuilderSitePages,
+  resolveBuilderSitePagePath,
   suggestUniqueBuilderPageSlug,
 } from "./BuilderSiteServiceCore.js";
 

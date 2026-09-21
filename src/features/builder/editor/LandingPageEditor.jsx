@@ -10,7 +10,7 @@ import { createLandingPattern, LANDING_PATTERN_CATALOG } from "../document/landi
 import LandingRenderer from "../renderer/LandingRenderer.jsx";
 import "../renderer/LandingRenderer.css";
 import { listBuilderAssets, loadBuilderAssetDraft, saveBuilderAssetDraft, saveBuilderFormDraft } from "../services/BuilderAssetService.js";
-import { createBuilderSitePage, loadBuilderSiteForPage } from "../services/BuilderSiteService.js";
+import { createBuilderSitePage, loadBuilderSiteForPage, resolveBuilderSitePagePath } from "../services/BuilderSiteService.js";
 import FormRenderer from "../form/FormRenderer.jsx";
 import { changeFormFieldType, createFormField, validateFormDocument } from "../form/formDocument.js";
 import { createLandingAutosave } from "./landingAutosave.js";
@@ -20,6 +20,7 @@ import { calculateAutoScrollVelocity, sameLandingDropTarget } from "./landingAut
 import { constrainFloatingPanel, getFloatingViewport, intersectFloatingViewport, placeFloatingPanel, sameFloatingPosition } from "./floatingPanelPosition.js";
 import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop, LANDING_DRAG_TYPE } from "./landingDnD.js";
 import { duplicateEditorSelection, findEditorSelection, landingEditorReducer, moveEditorSelection } from "./landingEditorState.js";
+import { BUILDER_MUTATION_FAILED } from "./landingMutationFailure.js";
 import { getBlockToolbarControls, getSelectionToolbarContext, toolbarDeleteNeedsConfirmation } from "./landingToolbarControls.js";
 import { BUILDER_CONTEXT_LAYER, BUILDER_INSPECTOR_LAYER, registerBuilderDismissableLayer } from "./builderDismissableLayer.js";
 import {
@@ -117,6 +118,20 @@ const createBuilderId = () => {
 };
 const newSection = () => ({ id: createBuilderId(), layout: "stack", regions: [{ id: createBuilderId(), span: 12, blocks: [] }] });
 const saveLabel = (status) => ({ saved: "Guardado", saving: "Guardando…", unsaved: "Sin guardar", conflict: "Conflicto", error: "Error" })[status] || status;
+const MUTATION_FAILURE_LABELS = {
+  BUILDER_SECTION_NOT_FOUND: "La sección ya no existe. Recarga la página.",
+  BUILDER_REGION_NOT_FOUND: "La zona de destino ya no existe.",
+  BUILDER_BLOCK_NOT_FOUND: "El elemento ya no existe.",
+  BUILDER_BLOCK_TYPE_INVALID: "Ese tipo de elemento no es válido.",
+  BUILDER_OPERATION_INVALID: "Esa edición no está permitida.",
+  BUILDER_SITE_FOOTER_ALREADY_EXISTS: "La página ya tiene un Footer.",
+  BUILDER_SITE_FOOTER_REQUIRES_DEDICATED_SECTION: "El Footer necesita su propia sección.",
+  BUILDER_SITE_FOOTER_POSITION_LOCKED: "El Footer siempre ocupa el final de la página.",
+  BUILDER_DOCUMENT_INVALID: "La edición produciría un documento no válido.",
+  BUILDER_MUTATION_FAILED: "No se pudo aplicar la edición.",
+};
+const mutationFailureMessage = (failure) => MUTATION_FAILURE_LABELS[failure?.code] || MUTATION_FAILURE_LABELS[BUILDER_MUTATION_FAILED];
+const mutationFailureDetail = (failure) => failure?.errors?.length ? `${failure.errors.length} ${failure.errors.length === 1 ? "detalle" : "detalles"}` : "";
 
 export default function LandingPageEditor({ asset }) {
   const navigate = useNavigate();
@@ -673,6 +688,13 @@ export default function LandingPageEditor({ asset }) {
   if (!state) return <div className="landing-editor-state">Cargando borrador…</div>;
   if (asset.lifecycle === "archived") return <div className="landing-editor-state"><strong>Landing archivada</strong><p>Este asset no puede editarse.</p><button onClick={() => navigate("/construir")}>Volver</button></div>;
   const validation = validateLandingDocument(state.document);
+  const mutationFailure = state.lastFailure;
+  // A refused mutation is the most immediate feedback, so it wins over a background save error.
+  const failureAlert = mutationFailure && status !== "conflict"
+    ? { kind: "failure", message: mutationFailureMessage(mutationFailure), detail: mutationFailureDetail(mutationFailure), failure: mutationFailure }
+    : error
+      ? { kind: "save", message: error, detail: "" }
+      : null;
   const footerState = inspectSiteFooter(state.document);
   const hasTerminalFooter = footerState.count === 1
     && footerState.location?.sectionIndex === state.document.sections.length - 1
@@ -681,7 +703,7 @@ export default function LandingPageEditor({ asset }) {
 
   return <div className={`landing-editor ${state.selection && !panelOpen ? "has-context-toolbar" : ""} ${toolbarCollapsed ? "toolbar-collapsed" : ""} ${pendingInsert ? "is-mobile-placing" : ""}`}>
     <header className="landing-editor-bar"><button onClick={leave} aria-label="Volver a Builder"><ArrowLeft/></button><div className="landing-editor-identity"><span>BUILDER · LANDING</span><strong>{asset.name}</strong><small>Borrador</small></div><LandingPagesControl assetId={asset.id} assetName={asset.name} pages={siteModel.pages} status={sitePagesStatus} error={sitePagesError} busy={Boolean(pageTransitionId)} onReload={() => { setSitePagesStatus("loading"); setSitePagesError(""); setSitePagesReload((value) => value + 1); }} onSelect={switchSitePage} onCreate={createSitePage}/><div className="landing-editor-history"><button onClick={() => dispatch({ type: "undo" })} disabled={!state.past.length} aria-label="Deshacer"><Undo2/></button><button onClick={() => dispatch({ type: "redo" })} disabled={!state.future.length} aria-label="Rehacer"><Redo2/></button></div><div className="landing-preview-switch" aria-label="Vista responsive">{PREVIEWS.map(({ id, label, Icon }) => <button key={id} title={label} className={state.preview === id ? "is-active" : ""} onClick={() => dispatch({ type: "preview", preview: id })} aria-pressed={state.preview === id}><Icon/><span>{label}</span></button>)}</div><span className={`landing-save ${status}`}>{saveLabel(status)}</span></header>
-    {(error || status === "conflict") && <div className="landing-editor-alert" role="alert"><span>{status === "conflict" ? "Esta página cambió en otra sesión." : error}</span>{status === "conflict" ? <><button onClick={reloadRemote}>Recargar versión remota</button><button onClick={() => navigator.clipboard?.writeText(JSON.stringify(localConflictDocument, null, 2))}>Copiar cambios locales</button></> : status === "error" && <button onClick={() => autosaveRef.current?.retry()}>Reintentar guardado</button>}</div>}
+    {(failureAlert || status === "conflict") && <div className="landing-editor-alert" role="alert"><span title={failureAlert?.failure?.message || undefined}>{status === "conflict" ? "Esta página cambió en otra sesión." : failureAlert.message}{failureAlert?.detail ? ` · ${failureAlert.detail}` : ""}</span>{status === "conflict" ? <><button onClick={reloadRemote}>Recargar versión remota</button><button onClick={() => navigator.clipboard?.writeText(JSON.stringify(localConflictDocument, null, 2))}>Copiar cambios locales</button></> : failureAlert?.kind === "save" && status === "error" ? <button onClick={() => autosaveRef.current?.retry()}>Reintentar guardado</button> : failureAlert?.kind === "failure" ? <button onClick={() => dispatch({ type: "clear_failure" })}>Descartar</button> : null}</div>}
     <div className={`landing-editor-body ${panelOpen && state.selection ? "has-inspector" : ""} ${mobileAddOpen ? "mobile-add-open" : ""} ${globalStylesOpen ? "has-global-styles" : ""}`}>
       <aside className="landing-palette">
         <button type="button" className="landing-mobile-sheet-handle" aria-label="Cerrar panel" onClick={closeMobileTools}><span/></button>
@@ -724,7 +746,7 @@ export default function LandingPageEditor({ asset }) {
           </div>
         </section>
       </div>, document.body)}
-      <main ref={canvasShellRef} className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`} data-terminal-footer={hasTerminalFooter || undefined}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} data-terminal-footer={hasTerminalFooter || undefined} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p>{pendingInsert ? <button type="button" className="landing-empty-place" onClick={(event) => { event.preventDefault(); event.stopPropagation(); placePendingInsert({ kind: "canvas-end" }); }}>+ Colocar aquí</button> : <div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div>}</div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolvePageLink={(pageId)=>pages.find((page)=>page.id===pageId)?.public_slug?`/p/${pages.find((page)=>page.id===pageId)?.public_slug}`:"#"} resolveForm={(id, label) => {
+      <main ref={canvasShellRef} className={`landing-canvas-shell ${dragState.payload ? "is-dragging" : ""}`}><div className={`landing-viewport landing-viewport-${state.preview}`} data-terminal-footer={hasTerminalFooter || undefined}><span className="landing-viewport-label">{state.preview} preview</span><div className={`landing-page-frame landing-preview-${state.preview}`} data-terminal-footer={hasTerminalFooter || undefined} onClick={canvasClick} onDragStart={dragStart} onDragEnd={dragEnd} onDragOver={dragOver} onDrop={drop}>{!state.document.sections.length ? <div className="landing-empty" data-drop-kind="canvas-end"><Layers3/><h2>Comienza tu página</h2><p>Añade una estructura clara y conviértela en una experiencia real.</p>{pendingInsert ? <button type="button" className="landing-empty-place" onClick={(event) => { event.preventDefault(); event.stopPropagation(); placePendingInsert({ kind: "canvas-end" }); }}>+ Colocar aquí</button> : <div><button onClick={(event) => { event.stopPropagation(); addPattern("hero"); }}>Añadir Hero</button><button onClick={(event) => { event.stopPropagation(); apply({ type: "add_section", section: newSection() }, "insert"); }}>Añadir sección</button></div>}</div> : <LandingRenderer document={state.document} editorMode selection={state.selection} editorActions={editorActions} renderField={(props) => <InlineEditableField {...props} editing={editing} onBegin={beginInlineEdit} onChange={updateInlineField} onEnd={() => setEditing(null)}/>} resolvePageLink={(pageId)=>resolveBuilderSitePagePath(siteModel.pages, pageId) || "#"} resolveForm={(id, label) => {
   const form = forms.find((item) => item.id === id);
   return form?.draft?.document_type === "form"
     ? <div className="landing-form-connected"><div className="landing-form-connected-label"><strong>{form.name}</strong><small>{label}</small></div><FormRenderer document={form.draft} editorMode/></div>
