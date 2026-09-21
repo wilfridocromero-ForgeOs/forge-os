@@ -27,6 +27,9 @@ test("asset workspace routes typed assets into their visual editors", async () =
   assert.match(page, /asset_type === "landing_page"/);
   assert.match(page, /FormBuilder/);
   assert.match(page, /asset_type === "form"/);
+  assert.match(page, /model\.asset\.id !== assetId/);
+  assert.match(page, /<LandingPageEditor key=\{model\.asset\.id\}/);
+  assert.match(page, /let active = true/);
   assert.match(styles, /@media \(max-width: 767px\)/);
   assert.match(styles, /var\(--bb-card\)/);
 });

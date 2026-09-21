@@ -6,7 +6,7 @@ import { applyLandingOperation } from "./landingOperations.js";
 
 const id = () => crypto.randomUUID();
 const documentWith = (block) => ({ ...createLandingDocument(), sections: [{ id: id(), layout: "stack", regions: [{ id: id(), span: 12, blocks: [block] }] }] });
-const professionalTypes = ["site_header", "logo", "feature_item", "stat", "testimonial", "video", "pricing_card", "faq_item", "divider", "spacer", "social_links"];
+const professionalTypes = ["site_header", "site_footer", "logo", "feature_item", "stat", "testimonial", "video", "pricing_card", "faq_item", "divider", "spacer", "social_links"];
 
 test("all professional primitives have canonical defaults and validate", () => {
   for (const type of professionalTypes) assert.equal(validateLandingDocument(documentWith(createPrimitiveBlock(type, id()))).valid, true, type);
@@ -47,6 +47,29 @@ test("every professional pattern expands to valid primitives with unique identit
   }
 });
 
+test("Footer patterns insert site_footer while persisted legacy Footer compositions remain valid", () => {
+  for (const patternId of ["footer_simple", "footer_business"]) {
+    const section = createLandingPattern(patternId);
+    const blocks = section.regions.flatMap((region) => region.blocks);
+    assert.equal(blocks.length, 1, patternId);
+    assert.equal(blocks[0].type, "site_footer", patternId);
+    assert.equal(section.anchor, undefined, "Footer insertion must not create duplicate global anchors");
+    assert.equal(validateLandingDocument({ ...createLandingDocument(), sections:[section] }).valid, true, patternId);
+  }
+
+  const legacy = createLandingDocument();
+  legacy.sections = [{
+    id: id(),
+    layout: "columns",
+    regions: [
+      { id:id(), span:8, blocks:[createPrimitiveBlock("logo", id()), createPrimitiveBlock("text", id())] },
+      { id:id(), span:4, blocks:[createPrimitiveBlock("social_links", id())] },
+    ],
+  }];
+  assert.equal(validateLandingDocument(legacy).valid, true);
+  assert.equal(legacy.sections[0].regions.flatMap((region) => region.blocks).some((block) => block.type === "site_footer"), false);
+});
+
 test("a realistic professional page remains comfortably inside document limits", () => {
   const document = createLandingDocument();
   for (const patternId of ["hero_split", "logo_row", "features_3", "stats_row", "services", "testimonial_single", "video_feature", "pricing_3", "faq_list", "lead_split", "footer_business"]) document.sections.push(createLandingPattern(patternId));
@@ -56,7 +79,7 @@ test("a realistic professional page remains comfortably inside document limits",
 });
 
 test("pattern catalog provides a lightweight visual descriptor without changing insertion", () => {
-  assert.equal(LANDING_PATTERN_CATALOG.length, 20);
+  assert.equal(LANDING_PATTERN_CATALOG.length, 19);
   for (const pattern of LANDING_PATTERN_CATALOG) {
     assert.match(pattern.preview, /^(hero|split|logos|stats|cards|quotes|media|pricing|faq|cta|form|footer)$/);
     assert.equal(validateLandingDocument({ ...createLandingDocument(), sections: [createLandingPattern(pattern.id)] }).valid, true);
@@ -84,8 +107,8 @@ test("primitive creation uses universal semantic defaults rather than the active
   const mobileForm = createPrimitiveBlock("form_reference", id());
   assert.deepEqual(withoutGeneratedIds(mobileHeading), withoutGeneratedIds(desktopHeading));
   assert.deepEqual(withoutGeneratedIds(mobileForm), withoutGeneratedIds(desktopForm));
-  assert.equal(desktopHeading.style, undefined);
-  assert.deepEqual(desktopForm.style, { max_width: "standard", align: "center" });
+  assert.deepEqual(desktopHeading.style, { padding_bottom: "sm" });
+  assert.deepEqual(desktopForm.style, { max_width: "standard", align: "center", padding_top: "md", padding_bottom: "md" });
 });
 
 test("semantic three-card patterns balance their group without changing child styles", () => {
@@ -106,7 +129,7 @@ test("group positioning and responsive overrides never mutate Heading Text or Vi
   const centered = applyLandingOperation(document, { type: "update_section_style", section_id: section.id, changes: { content_width: "standard", align: "center" } });
   const mobileStart = applyLandingOperation(centered, { type: "update_section_responsive", section_id: section.id, breakpoint: "mobile", changes: { align: "start" } });
   assert.deepEqual(mobileStart.sections[0].regions.map((region) => region.blocks), childrenBefore);
-  assert.deepEqual(mobileStart.sections[0].style, { content_width: "standard", align: "center" });
+  assert.deepEqual(mobileStart.sections[0].style, { padding_top: "md", padding_bottom: "md", content_width: "standard", align: "center" });
   assert.deepEqual(mobileStart.sections[0].responsive, { mobile: { align: "start" } });
   assert.equal(validateLandingDocument(JSON.parse(JSON.stringify(mobileStart))).valid, true);
 });
@@ -131,7 +154,7 @@ test("controlled section backgrounds validate and unsafe values are rejected", (
 test("typography inherits, overrides locally and resets by removing differences", () => {
   const document = documentWith(createPrimitiveBlock("heading", id())); const blockId = document.sections[0].regions[0].blocks[0].id;
   const styled = applyLandingOperation(document, { type: "update_block_style", block_id: blockId, changes: { align: "center", text_size: "xl", text_weight: "bold", color: "primary", max_width: "narrow", spacing: "lg" } });
-  assert.deepEqual(styled.sections[0].regions[0].blocks[0].style, { align: "center", text_size: "xl", text_weight: "bold", color: "primary", max_width: "narrow", spacing: "lg" });
+  assert.deepEqual(styled.sections[0].regions[0].blocks[0].style, { padding_bottom: "sm", align: "center", text_size: "xl", text_weight: "bold", color: "primary", max_width: "narrow", spacing: "lg" });
   const reset = applyLandingOperation(styled, { type: "reset_block_style", block_id: blockId });
   assert.equal("style" in reset.sections[0].regions[0].blocks[0], false);
 });
@@ -154,7 +177,8 @@ test("responsive presentation persists without mutating the desktop base", () =>
     const mobile = applyLandingOperation(desktop, { type: "update_block_responsive", block_id: blockId, breakpoint: "mobile", changes: { max_width: "narrow", align: "center", padding_top: "none" } });
     const reloaded = JSON.parse(JSON.stringify(mobile));
     const block = reloaded.sections[0].regions[0].blocks[0];
-    assert.deepEqual(block.style, { max_width: "wide", align: "start", padding_top: "sm" }, `${type} desktop`);
+    const expectedBottom = ["heading"].includes(type) ? "sm" : ["text", "action_group", "form_reference"].includes(type) ? "md" : undefined;
+    assert.deepEqual(block.style, { ...(expectedBottom ? { padding_bottom: expectedBottom } : {}), max_width: "wide", align: "start", padding_top: "sm" }, `${type} desktop`);
     assert.deepEqual(block.responsive.mobile, { max_width: "narrow", align: "center", padding_top: "none" }, `${type} mobile`);
     assert.equal(validateLandingDocument(reloaded).valid, true, type);
   }
@@ -197,4 +221,14 @@ test("action styles are controlled local differences and can reset to page defau
   for (const [key, value] of [["variant","neon"],["size","giant"],["shadow","glow"],["background","#raw"]]) { const invalid = structuredClone(document); invalid.sections[0].regions[0].blocks[0].content.actions[0][key] = value; assert.equal(validateLandingDocument(invalid).valid, false, key); }
   const inherited = structuredClone(document); inherited.sections[0].regions[0].blocks[0].content.actions[0] = { label: "Comenzar", href: "#" };
   assert.equal(validateLandingDocument(inherited).valid, true); assert.deepEqual(inherited.settings.design_system.buttons, document.settings.design_system.buttons);
+});
+
+test("patterns own exterior spacing while their children keep pattern composition", () => {
+  const pattern = createLandingPattern("cta_centered");
+  assert.equal(pattern.style.padding_top, "md");
+  assert.equal(pattern.style.padding_bottom, "md");
+  for (const child of pattern.regions.flatMap((region) => region.blocks)) {
+    assert.equal(child.style?.padding_top, undefined);
+    assert.equal(child.style?.padding_bottom, undefined);
+  }
 });

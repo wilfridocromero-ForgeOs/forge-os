@@ -35,18 +35,28 @@ const region = (blocks, span = 12) => ({
   blocks,
 });
 
+export const DEFAULT_PATTERN_SPACING = Object.freeze({
+  padding_top: "md",
+  padding_bottom: "md",
+});
+
 const section = (layout, regions, style = undefined) => ({
   id: id(),
   layout,
-  ...(style ? { style } : {}),
+  style: { ...DEFAULT_PATTERN_SPACING, ...(style || {}) },
   regions,
 });
 
 const block = (type, content) => {
   const created = createPrimitiveBlock(type, id(), content);
   // A pattern's regions own its composition; standalone creation defaults must
-  // not resize a child relative to the whole section.
+  // not resize or add exterior rhythm to children inside the pattern.
   if (type === "form_reference") delete created.style;
+  else if (created.style) {
+    delete created.style.padding_top;
+    delete created.style.padding_bottom;
+    if (Object.keys(created.style).length === 0) delete created.style;
+  }
   return created;
 };
 
@@ -106,8 +116,7 @@ export const LANDING_PATTERN_CATALOG = Object.freeze(
     ["lead_form", "Lead Capture", "Lead Form"],
     ["lead_split", "Lead Capture", "Split Lead Capture"],
 
-    ["footer_simple", "Footer", "Simple Footer"],
-    ["footer_business", "Footer", "Business Footer"],
+    ["site_footer", "Footer", "Footer"],
   ].map(([idValue, group, label]) => ({
     id: idValue,
     group,
@@ -537,61 +546,44 @@ export function createLandingPattern(
         ),
       ]);
 
-    case "footer_simple":
-      return section(
-        "columns",
-        [
-          region(
-            [
-              block("logo", {
-                url: "https://example.com/logo.png",
-                alt: "Marca",
-                width: "sm",
-                href: "",
-              }),
+    case "footer_simple": {
+      const footer = block("site_footer");
+      footer.content = {
+        ...footer.content,
+        preset: "minimal",
+        social_enabled: false,
+        surface: "transparent",
+        text_color: "text",
+        border: "subtle",
+        spacing: "sm",
+        gap: "sm",
+      };
+      footer.style = { max_width: "none", align: "center", appearance: { radius: "none" } };
+      const result = section("stack", [region([footer])], {
+        content_width: "wide",
+        align: "center",
+        background: { type: "solid", color: "surface" },
+        padding_top: "sm",
+        padding_bottom: "sm",
+      });
+      result.label = "Footer";
+      return result;
+    }
 
-              block("text", {
-                text: "© Empresa. Todos los derechos reservados.",
-              }),
-            ],
-            8
-          ),
-
-          region([block("social_links")], 4),
-        ],
-        {
-          content_width: "wide",
-        }
-      );
-
-    case "footer_business":
-      return section(
-        "columns",
-        [
-          region(
-            [
-              block("logo", {
-                url: "https://example.com/logo.png",
-                alt: "Marca",
-                width: "md",
-                href: "",
-              }),
-
-              block("text", {
-                text: "Inteligencia empresarial para avanzar.",
-              }),
-            ],
-            5
-          ),
-
-          region([feature("Empresa")], 3),
-
-          region([block("social_links")], 4),
-        ],
-        {
-          content_width: "wide",
-        }
-      );
+    case "site_footer":
+    case "footer_business": {
+      const footer = block("site_footer");
+      footer.style = { max_width: "wide", align: "center", appearance: { radius: "none" } };
+      const result = section("stack", [region([footer])], {
+        content_width: "wide",
+        align: "center",
+        background: { type: "solid", color: "text" },
+        padding_top: "md",
+        padding_bottom: "md",
+      });
+      result.label = "Footer";
+      return result;
+    }
 
     default:
       return null;

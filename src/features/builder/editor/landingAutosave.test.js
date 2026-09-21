@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createLandingDocument, createPrimitiveBlock, validateLandingDocument } from "../document/landingDocument.js";
+import { applyHeaderLayoutPreset, resetHeaderNavItemStyle, updateHeaderNavItemStyle, updateHeaderNavStyle } from "./landingHeaderEditing.js";
+import { addFooterLink, applyFooterLayoutPreset } from "./landingFooterEditing.js";
 import { createLandingAutosave } from "./landingAutosave.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -83,4 +86,97 @@ test("save and reload preserve a representative complete Builder document exactl
   const queue = createLandingAutosave({ save: async ({ document: value }) => { persisted = structuredClone(value); return { revision: 2 }; }, onStatus() {}, onSaved() {}, onConflict() {}, onError() {}, setTimer: (callback) => { callback(); return 1; }, clearTimer() {} });
   queue.initialize(1); queue.schedule(document, 0); assert.equal(await queue.flush(), true);
   assert.deepEqual(structuredClone(persisted), document);
+});
+
+test("Header Composer preset, global Nav style, item override and reset persist through confirmed autosaves", async () => {
+  const header = createPrimitiveBlock("site_header", "33333333-3333-4333-8333-333333333333");
+  header.content = applyHeaderLayoutPreset(header.content, "classic");
+  header.content = updateHeaderNavStyle(header.content, { font_size: "lg", radius: "pill" });
+  header.content = updateHeaderNavItemStyle(header.content, "nav-contacto", { font_weight: "bold" });
+  const document = createLandingDocument();
+  document.sections = [{
+    id: "11111111-1111-4111-8111-111111111111",
+    layout: "stack",
+    regions: [{ id: "22222222-2222-4222-8222-222222222222", span: 12, blocks: [header] }],
+  }];
+  assert.deepEqual(validateLandingDocument(document), { valid: true, errors: [] });
+
+  const statuses = [];
+  let persisted = null;
+  let revision = 8;
+  const queue = createLandingAutosave({
+    save: async ({ expectedRevision, document: requestedDocument }) => {
+      assert.equal(expectedRevision, revision);
+      assert.deepEqual(validateLandingDocument(requestedDocument), { valid: true, errors: [] });
+      persisted = structuredClone(requestedDocument);
+      revision += 1;
+      return { revision };
+    },
+    onStatus: (status) => statuses.push(status),
+    onSaved() {}, onConflict() {}, onError() {},
+    setTimer: (callback) => { callback(); return 1; },
+    clearTimer() {},
+  });
+  queue.initialize(revision);
+  queue.schedule(document, 0);
+  assert.equal(await queue.flush(), true);
+  assert.deepEqual(statuses, ["unsaved", "saving", "saved"]);
+  assert.deepEqual(persisted, document);
+
+  const reloadedHeader = persisted.sections[0].regions[0].blocks[0];
+  assert.equal(reloadedHeader.content.preset, "classic");
+  assert.deepEqual(reloadedHeader.content.nav_style, { font_size: "lg", radius: "pill" });
+  assert.deepEqual(reloadedHeader.content.nav_items.find((item) => item.id === "nav-contacto").style, { font_weight: "bold" });
+
+  const resetDocument = structuredClone(persisted);
+  const resetHeader = resetDocument.sections[0].regions[0].blocks[0];
+  resetHeader.content = resetHeaderNavItemStyle(resetHeader.content, "nav-contacto");
+  queue.schedule(resetDocument, 0);
+  assert.equal(await queue.flush(), true);
+  assert.equal(statuses.at(-1), "saved");
+  assert.equal("style" in persisted.sections[0].regions[0].blocks[0].content.nav_items.find((item) => item.id === "nav-contacto"), false);
+  assert.deepEqual(validateLandingDocument(persisted), { valid: true, errors: [] });
+});
+
+test("Footer preset, content, links, social and appearance survive a confirmed autosave roundtrip", async () => {
+  const footer = createPrimitiveBlock("site_footer", "33333333-3333-4333-8333-333333333333");
+  footer.content = applyFooterLayoutPreset(footer.content, "columns");
+  footer.content = addFooterLink(footer.content, "empresa", "casos");
+  footer.content.brand = { ...footer.content.brand, name:"ORVESEN Media", tagline:"Estrategia y ejecución." };
+  footer.content.social_enabled = true;
+  footer.content.social = {
+    ...footer.content.social,
+    links: [{ provider:"linkedin", url:"https://linkedin.com/company/orvesen", label:"LinkedIn", enabled:true }],
+  };
+  footer.content.copyright = "© ORVESEN Media.";
+  footer.style = { max_width:"wide", align:"center", appearance:{ radius:"md" } };
+
+  const document = createLandingDocument();
+  document.sections = [{
+    id: "11111111-1111-4111-8111-111111111111",
+    layout: "stack",
+    style: { content_width:"wide", align:"center", padding_top:"md", padding_bottom:"md" },
+    regions: [{ id:"22222222-2222-4222-8222-222222222222", span:12, blocks:[footer] }],
+  }];
+  assert.deepEqual(validateLandingDocument(document), { valid:true, errors:[] });
+
+  let persisted = null;
+  const statuses = [];
+  const queue = createLandingAutosave({
+    save: async ({ expectedRevision, document: requestedDocument }) => {
+      assert.equal(expectedRevision, 4);
+      persisted = structuredClone(requestedDocument);
+      return { revision:5 };
+    },
+    onStatus: (status) => statuses.push(status),
+    onSaved() {}, onConflict() {}, onError() {},
+    setTimer: (callback) => { callback(); return 1; },
+    clearTimer() {},
+  });
+  queue.initialize(4);
+  queue.schedule(document, 0);
+  assert.equal(await queue.flush(), true);
+  assert.deepEqual(statuses, ["unsaved", "saving", "saved"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(persisted)), document);
+  assert.deepEqual(validateLandingDocument(persisted), { valid:true, errors:[] });
 });

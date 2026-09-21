@@ -17,11 +17,13 @@ export default function BuilderAssetWorkspace() {
   const routeError = isBuilderAssetType(assetType) ? "" : "El tipo de asset no existe.";
 
   useEffect(() => {
-    if (!isBuilderAssetType(assetType)) return;
+    let active = true;
+    if (!isBuilderAssetType(assetType)) return () => { active = false; };
     loadBuilderAsset(assetId).then((value) => {
       if (value.asset.asset_type !== assetType) throw new Error("La ruta no coincide con el tipo real del asset.");
-      setModel(value);
-    }).catch((value) => setError(value.message));
+      if (active) { setError(""); setRenaming(false); setModel(value); }
+    }).catch((value) => { if (active) setError(value.message); });
+    return () => { active = false; };
   }, [assetId, assetType]);
 
   const latest = useMemo(() => latestBuilderAssetVersion(model?.versions), [model]);
@@ -35,8 +37,8 @@ export default function BuilderAssetWorkspace() {
     } catch (value) { setError(value.message); }
   }
 
-  if (!model) return <div className="builder-loading">{routeError || error || "Cargando asset…"}</div>;
-  if (model.asset.asset_type === "landing_page") return <LandingPageEditor asset={model.asset}/>;
+  if (!model || model.asset.id !== assetId) return <div className="builder-loading">{routeError || error || "Cargando asset…"}</div>;
+  if (model.asset.asset_type === "landing_page") return <LandingPageEditor key={model.asset.id} asset={model.asset}/>;
   if (model.asset.asset_type === "form") return <FormBuilder asset={model.asset}/>;
   const TypeIcon = model.asset.asset_type === "form" ? FormInput : FileText;
 

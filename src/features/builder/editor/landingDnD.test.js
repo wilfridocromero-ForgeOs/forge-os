@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createLandingDocument, createPrimitiveBlock } from "../document/landingDocument.js";
-import { createHeroPattern } from "../document/landingPatterns.js";
+import { createHeroPattern, createLandingPattern } from "../document/landingPatterns.js";
 import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop } from "./landingDnD.js";
 import { createLandingEditorState, landingEditorReducer } from "./landingEditorState.js";
 
@@ -74,7 +74,61 @@ test("a completed drop is one history transaction and undo/redo preserve selecti
   state = landingEditorReducer(state, { type: "select", selection: { kind: "block", id: selectedId } });
   const moved = applyLandingDrop(state.document, { kind: "block", id: selectedId }, { kind: "region-end", regionId: state.document.sections[1].regions[1].id });
   state = landingEditorReducer(state, { type: "replace", document: moved, group: "drag" });
-  assert.equal(state.past.length, 1); assert.equal(state.selection.id, selectedId);
+  assert.equal(state.past.length, 1); assert.equal(state.selection.blockId, selectedId);
   state = landingEditorReducer(state, { type: "undo" }); assert.equal(state.document.sections[0].regions[0].blocks[0].id, selectedId);
   state = landingEditorReducer(state, { type: "redo" }); assert.equal(state.document.sections[1].regions[1].blocks.at(-1).id, selectedId);
+});
+
+test("Footer palette and pattern drops are unique and always resolve to the absolute end", () => {
+  const input = documentWithSections();
+  const footerPattern = () => createLandingPattern("footer_simple");
+  const inserted = applyLandingDrop(input,{kind:"palette-pattern",id:"footer_simple"},{kind:"section-before",sectionId:input.sections[0].id},{createPattern:footerPattern});
+  assert.equal(inserted.sections.at(-1).regions[0].blocks[0].type,"site_footer");
+
+  const duplicate = applyLandingDrop(inserted,{kind:"palette-pattern",id:"footer_business"},{kind:"canvas-end"},{createPattern:()=>createLandingPattern("footer_business")});
+  assert.equal(duplicate,inserted);
+
+  const ids = [
+    "90000000-0000-4000-8000-000000000001",
+    "90000000-0000-4000-8000-000000000002",
+    "90000000-0000-4000-8000-000000000003",
+  ];
+  const direct = applyLandingDrop(input,{kind:"palette-block",id:"site_footer"},{kind:"block-before",blockId:input.sections[0].regions[0].blocks[0].id,regionId:input.sections[0].regions[0].id},{createId:()=>ids.shift()});
+  assert.equal(direct.sections.at(-1).regions[0].blocks[0].type,"site_footer");
+  assert.equal(direct.sections.at(-1).regions[0].blocks.length,1);
+});
+
+test("normal drops at canvas or Footer targets remain before the dedicated Footer", () => {
+  const footer = createLandingPattern("footer_simple");
+  const input = { ...createLandingDocument(), sections:[createHeroPattern(),footer] };
+  let counter = 20;
+  const id = () => `91000000-0000-4000-8000-${String(counter++).padStart(12,"0")}`;
+
+  const canvasBlock = applyLandingDrop(input,{kind:"palette-block",id:"heading"},{kind:"canvas-end"},{createId:id});
+  assert.equal(canvasBlock.sections.at(-1).id,footer.id);
+  assert.equal(canvasBlock.sections.at(-2).regions[0].blocks[0].type,"heading");
+
+  const footerRegion = footer.regions[0];
+  const targetBlock = applyLandingDrop(input,{kind:"palette-block",id:"text"},{kind:"region-end",regionId:footerRegion.id},{createId:id});
+  assert.equal(targetBlock.sections.at(-1).id,footer.id);
+  assert.equal(targetBlock.sections.at(-2).regions[0].blocks[0].type,"text");
+
+  const normalBlock = input.sections[0].regions[0].blocks[0];
+  const moved = applyLandingDrop(input,{kind:"block",id:normalBlock.id},{kind:"block-after",blockId:footerRegion.blocks[0].id,regionId:footerRegion.id},{createId:id});
+  assert.equal(moved.sections.at(-1).id,footer.id);
+  assert.equal(moved.sections.at(-2).regions[0].blocks[0].id,normalBlock.id);
+
+  const normalPattern = applyLandingDrop(input,{kind:"palette-pattern",id:"hero"},{kind:"block-after",blockId:footerRegion.blocks[0].id,regionId:footerRegion.id},{createPattern:()=>createHeroPattern(),createId:id});
+  assert.equal(normalPattern.sections.at(-1).id,footer.id);
+  assert.notEqual(normalPattern.sections.at(-2).id,input.sections[0].id);
+});
+
+test("Footer section and block cannot be dragged above normal content", () => {
+  const footer = createLandingPattern("footer_simple");
+  const input = { ...createLandingDocument(), sections:[createHeroPattern(),footer] };
+  const sectionMove = applyLandingDrop(input,{kind:"section",id:footer.id},{kind:"section-before",sectionId:input.sections[0].id});
+  assert.equal(sectionMove,input);
+  const footerBlock = footer.regions[0].blocks[0];
+  const blockMove = applyLandingDrop(input,{kind:"block",id:footerBlock.id},{kind:"region-end",regionId:input.sections[0].regions[0].id});
+  assert.equal(blockMove,input);
 });

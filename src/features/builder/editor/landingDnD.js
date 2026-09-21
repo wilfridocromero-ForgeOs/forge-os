@@ -1,4 +1,5 @@
 import { assertLandingDocument, createPrimitiveBlock } from "../document/landingDocument.js";
+import { enforceSiteFooterOrder, insertSectionWithFooterContract, inspectSiteFooter, sectionContainsSiteFooter } from "../document/landingOperations.js";
 
 export const LANDING_DRAG_TYPE = "application/x-orvesen-landing-item";
 const clone = (value) => structuredClone(value);
@@ -34,40 +35,67 @@ function locateBlockRegion(document, blockId) {
   return document.sections.flatMap((section) => section.regions).find((region) => region.blocks.some((block) => block.id === blockId));
 }
 
+function locateRegionSection(document, regionId) {
+  return document.sections.find((section) => section.regions.some((region) => region.id === regionId));
+}
+
+const createSingleBlockSection = (block, createId) => ({ id:createId(), layout:"stack", regions:[{id:createId(),span:12,blocks:[block]}] });
+
 export function applyLandingDrop(document, payload, target, { createPattern, createId = () => crypto.randomUUID() } = {}) {
   if (!isValidLandingDrop(payload, target)) return document;
   const next = clone(document);
+  try { enforceSiteFooterOrder(next); }
+  catch { return document; }
+
+  if (payload.kind === "palette-block" && payload.id === "site_footer") {
+    if (inspectSiteFooter(next).count) return document;
+    const section = createSingleBlockSection(createPrimitiveBlock("site_footer", createId()), createId);
+    insertSectionWithFooterContract(next, section, next.sections.length);
+    return assertLandingDocument(next);
+  }
+
   if (payload.kind === "section") {
     const from = next.sections.findIndex((section) => section.id === payload.id);
     const targetIndex = next.sections.findIndex((section) => section.id === target.sectionId);
     if (from < 0 || targetIndex < 0) return document;
+    if (sectionContainsSiteFooter(next.sections[from])) return document;
     const [section] = next.sections.splice(from, 1);
     let insertion = next.sections.findIndex((item) => item.id === target.sectionId);
     if (target.kind === "section-after") insertion += 1;
-    next.sections.splice(insertion, 0, section);
+    insertSectionWithFooterContract(next, section, insertion);
     return assertLandingDocument(next);
   }
   if (payload.kind === "palette-pattern") {
     const section = createPattern?.(payload.id);
     if (!section) return document;
+    if (sectionContainsSiteFooter(section)) {
+      if (inspectSiteFooter(next).count) return document;
+      try { insertSectionWithFooterContract(next, section, next.sections.length); }
+      catch { return document; }
+      return assertLandingDocument(next);
+    }
     if (target.blockId) {
       const ownerIndex = next.sections.findIndex((item) => item.regions.some((region) => region.blocks.some((block) => block.id === target.blockId)));
       if (ownerIndex < 0) return document;
       const owner = next.sections[ownerIndex];
+      if (sectionContainsSiteFooter(owner)) {
+        insertSectionWithFooterContract(next, section, ownerIndex);
+        return assertLandingDocument(next);
+      }
       const ownerRegion = owner.regions.find((region) => region.blocks.some((block) => block.id === target.blockId));
       const blockIndex = ownerRegion.blocks.findIndex((block) => block.id === target.blockId);
       const splitIndex = blockIndex + (target.kind === "block-after" ? 1 : 0);
 
       if (owner.regions.length !== 1) {
-        next.sections.splice(ownerIndex + (target.kind === "block-after" ? 1 : 0), 0, section);
+        insertSectionWithFooterContract(next, section, ownerIndex + (target.kind === "block-after" ? 1 : 0));
         return assertLandingDocument(next);
       }
       if (splitIndex === 0) {
-        next.sections.splice(ownerIndex, 0, section);
+        insertSectionWithFooterContract(next, section, ownerIndex);
         return assertLandingDocument(next);
       }
       if (splitIndex === ownerRegion.blocks.length) {
-        next.sections.splice(ownerIndex + 1, 0, section);
+        insertSectionWithFooterContract(next, section, ownerIndex + 1);
         return assertLandingDocument(next);
       }
 
@@ -75,7 +103,8 @@ export function applyLandingDrop(document, payload, target, { createPattern, cre
       trailing.id = createId();
       trailing.regions[0].id = createId();
       trailing.regions[0].blocks = ownerRegion.blocks.splice(splitIndex);
-      next.sections.splice(ownerIndex + 1, 0, section, trailing);
+      insertSectionWithFooterContract(next, section, ownerIndex + 1);
+      insertSectionWithFooterContract(next, trailing, ownerIndex + 2);
       return assertLandingDocument(next);
     }
     let insertion = next.sections.length;
@@ -87,15 +116,31 @@ export function applyLandingDrop(document, payload, target, { createPattern, cre
       insertion = next.sections.findIndex((item) => item.id === target.sectionId);
       if (target.kind === "section-after") insertion += 1;
     }
-    next.sections.splice(insertion, 0, section);
+    insertSectionWithFooterContract(next, section, insertion);
     return assertLandingDocument(next);
   }
   if (payload.kind === "palette-block" && target.kind === "canvas-end") {
-    next.sections.push({ id: createId(), layout: "stack", regions: [{ id: createId(), span: 12, blocks: [createPrimitiveBlock(payload.id, createId())] }] });
+    const section = createSingleBlockSection(createPrimitiveBlock(payload.id, createId()), createId);
+    insertSectionWithFooterContract(next, section, next.sections.length);
     return assertLandingDocument(next);
   }
   const targetRegion = locateRegion(next, target.regionId);
   if (!targetRegion) return document;
+  const targetSection = locateRegionSection(next, target.regionId);
+  if (sectionContainsSiteFooter(targetSection)) {
+    if (payload.kind === "palette-block") {
+      const section = createSingleBlockSection(createPrimitiveBlock(payload.id, createId()), createId);
+      insertSectionWithFooterContract(next, section, targetSection ? next.sections.indexOf(targetSection) : next.sections.length);
+      return assertLandingDocument(next);
+    }
+    const source = locateBlockRegion(next, payload.id);
+    const block = source?.blocks.find((item) => item.id === payload.id);
+    if (!source || !block || block.type === "site_footer") return document;
+    source.blocks.splice(source.blocks.findIndex((item)=>item.id===payload.id),1);
+    const section = createSingleBlockSection(block, createId);
+    insertSectionWithFooterContract(next, section, inspectSiteFooter(next).location?.sectionIndex ?? next.sections.length);
+    return assertLandingDocument(next);
+  }
   let insertion = targetRegion.blocks.length;
   if (target.blockId) {
     insertion = targetRegion.blocks.findIndex((block) => block.id === target.blockId);
@@ -110,6 +155,7 @@ export function applyLandingDrop(document, payload, target, { createPattern, cre
   if (!source) return document;
   const sourceIndex = source.blocks.findIndex((block) => block.id === payload.id);
   const [block] = source.blocks.splice(sourceIndex, 1);
+  if (block.type === "site_footer") return document;
   if (source === targetRegion && sourceIndex < insertion) insertion -= 1;
   targetRegion.blocks.splice(Math.max(0, insertion), 0, block);
   return assertLandingDocument(next);

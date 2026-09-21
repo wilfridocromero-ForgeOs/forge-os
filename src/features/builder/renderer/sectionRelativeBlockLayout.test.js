@@ -60,7 +60,7 @@ test("renderer wires measured section geometry without moving natural Pattern bl
   const source = await readFile(new URL("./LandingRenderer.jsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../editor/BuilderInteractionV6.css", import.meta.url), "utf8");
   assert.match(source, /new ResizeObserver\(syncSectionGeometry\)/);
-  assert.match(source, /data-section-relative=\{hasSectionRelativeBlockLayout\(block, section\)/);
+  assert.match(source, /data-section-relative=\{block\.type === "site_footer" \? undefined : hasSectionRelativeBlockLayout\(block, section\)/);
   assert.match(source, /--lp-section-center-offset/);
   assert.match(styles, /\[data-section-relative=true\]\[data-block-align=center\]/);
   assert.match(styles, /left:var\(--lp-section-center-offset\);translate:-50% 0/);

@@ -82,13 +82,42 @@
 .landing-renderer [data-block-id][data-align=center]>[role=group] a{justify-content:center;text-align:center}
 .landing-renderer [data-block-id][data-align=end]>[role=group] a{justify-content:flex-end;text-align:right}
 
+/* Action groups render inside the visual-surface wrapper. Align the real
+   controls across the block's available width without stretching buttons. */
+.landing-renderer .landing-action-group{width:100%}
+.landing-renderer [data-block-id][data-block-align=start]>.landing-visual-surface>.landing-action-group{justify-content:flex-start}
+.landing-renderer [data-block-id][data-block-align=center]>.landing-visual-surface>.landing-action-group{justify-content:center}
+.landing-renderer [data-block-id][data-block-align=end]>.landing-visual-surface>.landing-action-group{justify-content:flex-end}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-block-align=start]>.landing-visual-surface>.landing-action-group,
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-block-align=start]>.landing-visual-surface>.landing-action-group{justify-content:flex-start}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-block-align=center]>.landing-visual-surface>.landing-action-group,
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-block-align=center]>.landing-visual-surface>.landing-action-group{justify-content:center}
+.landing-preview-mobile .landing-renderer [data-block-id][data-mobile-block-align=end]>.landing-visual-surface>.landing-action-group,
+.landing-preview-tablet .landing-renderer [data-block-id][data-tablet-block-align=end]>.landing-visual-surface>.landing-action-group{justify-content:flex-end}
+@media(max-width:767px){
+  .landing-renderer [data-block-id][data-mobile-block-align=start]>.landing-visual-surface>.landing-action-group{justify-content:flex-start}
+  .landing-renderer [data-block-id][data-mobile-block-align=center]>.landing-visual-surface>.landing-action-group{justify-content:center}
+  .landing-renderer [data-block-id][data-mobile-block-align=end]>.landing-visual-surface>.landing-action-group{justify-content:flex-end}
+}
+@media(min-width:768px) and (max-width:1023px){
+  .landing-renderer [data-block-id][data-tablet-block-align=start]>.landing-visual-surface>.landing-action-group{justify-content:flex-start}
+  .landing-renderer [data-block-id][data-tablet-block-align=center]>.landing-visual-surface>.landing-action-group{justify-content:center}
+  .landing-renderer [data-block-id][data-tablet-block-align=end]>.landing-visual-surface>.landing-action-group{justify-content:flex-end}
+}
+
 .landing-renderer [data-block-id][data-align=start] p{margin-left:0;margin-right:auto}
 .landing-renderer [data-block-id][data-align=center] p{margin-left:auto;margin-right:auto}
 .landing-renderer [data-block-id][data-align=end] p{margin-left:auto;margin-right:0}
 
-/* Mobile Header separation: keep transparent presets translucent and distinct from page content. */
+/* Mobile Header separation is owned by the Header responsive contract in LandingRenderer.css.
+   Keep this layer neutral so it cannot add height or an artificial gap around the Header. */
 @media (max-width:900px){
-  .landing-renderer [data-block-id][data-block-type=site_header]{margin-bottom:1rem!important}
-  .landing-renderer .landing-site-header{z-index:2;min-height:4rem;padding-top:.8rem;padding-bottom:.8rem}
-  .landing-renderer .landing-site-header[data-surface=transparent]{background:color-mix(in srgb,var(--lp-surface) 88%,transparent);border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .landing-renderer [data-block-id][data-block-type=site_header]{margin-bottom:0!important}
+  .landing-renderer .landing-site-header{z-index:2}
+}
+
+/* Mobile Header V2: structural mobile layout is owned by LandingRenderer.css. */
+@media (max-width:900px){
+  .landing-renderer [data-block-id][data-block-type=site_header]{margin-bottom:0!important}
+  .landing-renderer .landing-site-header{min-height:0!important}
 }

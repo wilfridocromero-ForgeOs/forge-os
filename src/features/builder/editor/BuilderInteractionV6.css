@@ -36,6 +36,24 @@
   pointer-events:none;
 }
 
+/* A terminal Footer owns the real end of the document. Keep the general
+   empty-canvas continuity above for documents without one, but do not grow
+   the viewport/frame/renderer or append a synthetic page tail after it. */
+.landing-viewport[data-terminal-footer=true]{
+  min-height:0!important;
+}
+.landing-page-frame[data-terminal-footer=true]{
+  flex:0 0 auto;
+  min-height:0!important;
+}
+.landing-page-frame[data-terminal-footer=true]>.landing-renderer{
+  flex:0 0 auto;
+  min-height:0!important;
+}
+.landing-page-frame[data-terminal-footer=true]>.landing-renderer::after{
+  content:none;
+}
+
 /* Block positioning is visible, not just text alignment. When a block has a
    readable max width, these rules place the complete block left/center/right. */
 .landing-renderer [data-block-id][data-block-align=start]{margin-left:0!important;margin-right:auto!important}
