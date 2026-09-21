@@ -18,6 +18,11 @@ const validationErrors = (error) => {
 };
 
 const errorCode = (error) => {
+  // A structured refusal (for example a `resolveLandingDrop` decision) carries an
+  // explicit machine code next to its human message. Honour it so the code is
+  // never re-derived from prose.
+  const explicit = typeof error?.code === "string" ? error.code.trim() : "";
+  if (explicit) return explicit;
   const message = typeof error?.message === "string" ? error.message : "";
   const code = message.split(":")[0].trim();
   return code || BUILDER_MUTATION_FAILED;

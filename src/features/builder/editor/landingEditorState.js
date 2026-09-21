@@ -37,6 +37,9 @@ export function landingEditorReducer(state, action) {
     case "operations": try { return commit(state, applyLandingOperations(state.document, action.operations), action.group, action.at); } catch (error) { return refuse(state, error, action.operations); }
     case "replace": try { return commit(state, enforceSiteFooterOrder(clone(action.document)), action.group, action.at); } catch (error) { return refuse(state, error, null); }
     case "clear_failure": return state.lastFailure === null ? state : { ...state, lastFailure: null };
+    // A drop the deterministic resolver refused. Like any other refused mutation
+    // it changes nothing else: no document, history, revision or dirty flag.
+    case "drop_failure": return refuse(state, action.decision, action.operation);
     case "undo": if (!state.past.length) return state; else { const document = clone(state.past.at(-1)); carryActionElementIds(state.document, document); return { ...state, document, past: state.past.slice(0, -1), future: [clone(state.document), ...state.future].slice(0, MAX_HISTORY), selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: null }; }
     case "redo": if (!state.future.length) return state; else { const document = clone(state.future[0]); carryActionElementIds(state.document, document); return { ...state, document, past: [...state.past, clone(state.document)].slice(-MAX_HISTORY), future: state.future.slice(1), selection: reconcileBuilderSelection(state.selection, document), dirty: true, lastGroup: null }; }
     case "saved": return action.document === state.document ? { ...state, revision: action.revision, dirty: false } : { ...state, revision: action.revision };

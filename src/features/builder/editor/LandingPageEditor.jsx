@@ -18,7 +18,7 @@ import { createAndNavigateToBuilderPage, flushAndNavigateToBuilderPage } from ".
 import LandingPagesControl from "./LandingPagesControl.jsx";
 import { calculateAutoScrollVelocity, sameLandingDropTarget } from "./landingAutoScroll.js";
 import { constrainFloatingPanel, getFloatingViewport, intersectFloatingViewport, placeFloatingPanel, sameFloatingPosition } from "./floatingPanelPosition.js";
-import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop, LANDING_DRAG_TYPE } from "./landingDnD.js";
+import { applyLandingDrop, decodeLandingDrag, encodeLandingDrag, isValidLandingDrop, isLandingDropPayload, resolveLandingDrop, LANDING_DRAG_TYPE } from "./landingDnD.js";
 import { duplicateEditorSelection, findEditorSelection, landingEditorReducer, moveEditorSelection } from "./landingEditorState.js";
 import { BUILDER_MUTATION_FAILED } from "./landingMutationFailure.js";
 import { getBlockToolbarControls, getSelectionToolbarContext, toolbarDeleteNeedsConfirmation } from "./landingToolbarControls.js";
@@ -156,6 +156,11 @@ export default function LandingPageEditor({ asset }) {
   const [pendingInsert, setPendingInsert] = useState(null);
   const [elementSearch, setElementSearch] = useState("");
   const autosaveRef = useRef(null); const saveDelayRef = useRef(600); const stateRef = useRef(null); const dragRef = useRef(null);
+  // The target object the user is currently being shown as highlighted. The drop
+  // reuses this exact object so a gesture can never resolve to a different target
+  // than the one that was advertised, even though drop zones change geometry once
+  // one of them becomes active.
+  const dragTargetRef = useRef(null);
   const autosaveErrorRef = useRef("");
   const formsRef = useRef([]); const formSaveQueuesRef = useRef(new Map()); const formRevisionsRef = useRef(new Map());
   const libraryDragRef = useRef(null);
@@ -611,6 +616,23 @@ export default function LandingPageEditor({ asset }) {
     }
     return best;
   }
+  // The target the gesture resolved to. While the pointer stays on the zone that
+  // is currently advertised, the drop reuses that exact object instead of
+  // re-deriving the target from geometry that has already moved.
+  function resolveDropTarget(event, payload) {
+    const frozen = dragTargetRef.current;
+    if (frozen) {
+      const direct = targetFromZone(event.target.closest?.("[data-drop-kind]"));
+      if (direct && sameLandingDropTarget(frozen, direct)) return frozen;
+    }
+    return readTarget(event, payload);
+  }
+  // A structurally refused drop is recorded through the existing mutation-failure
+  // channel. The reducer stores it without touching the document, history, dirty
+  // flag or revision.
+  function routeDropFailure(target, failure) {
+    dispatch({ type: "drop_failure", decision: failure, operation: { type: "landing_drop", payload: dragRef.current, target } });
+  }
   function stopAutoScroll() {
     if (autoScrollRef.current.frame !== null) cancelAnimationFrame(autoScrollRef.current.frame);
     autoScrollRef.current = { frame: null, pointerY: null };
@@ -634,55 +656,68 @@ export default function LandingPageEditor({ asset }) {
   }
   function dragOver(event) {
     const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE));
-    if (!payload) return;
+    if (!isLandingDropPayload(payload)) return;
     autoScrollCanvas(event);
     const target = readTarget(event, payload);
     if (!isValidLandingDrop(payload, target)) {
+      dragTargetRef.current = null;
       setDragState((current) => current.target ? { ...current, target: null } : current);
       return;
     }
     event.preventDefault();
     event.dataTransfer.dropEffect = payload.kind.startsWith("palette") ? "copy" : "move";
+    dragTargetRef.current = target;
     setDragState((current) => sameLandingDropTarget(current.target, target) && current.payload === payload ? current : { payload, target });
   }
   function drop(event) {
-    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE)); const target = readTarget(event, payload);
+    const payload = dragRef.current || decodeLandingDrag(event.dataTransfer.getData(LANDING_DRAG_TYPE));
+    if (!isLandingDropPayload(payload)) return;
+    const target = resolveDropTarget(event, payload);
     if (!isValidLandingDrop(payload, target)) return;
     event.preventDefault();
+    // One gesture, one baseline: the drop always operates on the current editor
+    // document instead of the document captured when this handler was created.
+    const current = stateRef.current?.document || state.document;
+    if (!current) return;
     if (libraryDragRef.current) {
       const saved = libraryDragRef.current;
-      const beforeIds = new Set(state.document.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks.map((block) => block.id))));
-      let next = applyLandingDrop(state.document, payload, target, { createPattern });
-      const inserted = next.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks)).find((block) => !beforeIds.has(block.id) && block.type === "action_group");
-      if (inserted) {
-        const savedStyle = saved.style || {};
-        const actions = [{
-          label: savedStyle.label || saved.name || "Comenzar",
-          href: savedStyle.href || "#",
-          variant: savedStyle.variant || "primary",
-          size: savedStyle.size || "md",
-          width: savedStyle.width || "auto",
-          radius: savedStyle.radius || "md",
-          shadow: savedStyle.shadow || "none",
-          border: savedStyle.border || "none",
-          ...(savedStyle.background ? { background:savedStyle.background } : {}),
-          ...(savedStyle.text_color ? { text_color:savedStyle.text_color } : {}),
-          ...(savedStyle.border_color ? { border_color:savedStyle.border_color } : {})
-        }];
-        next = applyLandingOperations(next, [{ type:"update_block_content", block_id:inserted.id, changes:{ actions } }]);
-        replace(next, "library-drop");
-        dispatch({ type:"select", selection:{ kind:"block", id:inserted.id } });
+      const beforeIds = new Set(current.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks.map((block) => block.id))));
+      const decision = resolveLandingDrop(current, payload, target, { createPattern });
+      if (!decision.ok) routeDropFailure(target, decision);
+      else if (decision.document !== current) {
+        let next = decision.document;
+        const inserted = next.sections.flatMap((section) => section.regions.flatMap((region) => region.blocks)).find((block) => !beforeIds.has(block.id) && block.type === "action_group");
+        if (inserted) {
+          const savedStyle = saved.style || {};
+          const actions = [{
+            label: savedStyle.label || saved.name || "Comenzar",
+            href: savedStyle.href || "#",
+            variant: savedStyle.variant || "primary",
+            size: savedStyle.size || "md",
+            width: savedStyle.width || "auto",
+            radius: savedStyle.radius || "md",
+            shadow: savedStyle.shadow || "none",
+            border: savedStyle.border || "none",
+            ...(savedStyle.background ? { background:savedStyle.background } : {}),
+            ...(savedStyle.text_color ? { text_color:savedStyle.text_color } : {}),
+            ...(savedStyle.border_color ? { border_color:savedStyle.border_color } : {})
+          }];
+          next = applyLandingOperations(next, [{ type:"update_block_content", block_id:inserted.id, changes:{ actions } }]);
+          replace(next, "library-drop");
+          dispatch({ type:"select", selection:{ kind:"block", id:inserted.id } });
+        }
       }
       libraryDragRef.current = null;
       dragEnd();
       return;
     }
-    const next = applyLandingDrop(state.document,payload,target,{createPattern});
-    if (next !== state.document) replace(next,"drag");
+    const decision = resolveLandingDrop(current, payload, target, { createPattern });
+    if (!decision.ok) routeDropFailure(target, decision);
+    else if (decision.document !== current) replace(decision.document, "drag");
     if (["block", "section"].includes(payload.kind)) dispatch({ type: "select", selection: { kind: payload.kind, id: payload.id } });
     dragEnd();
   }
-  function dragEnd() { stopAutoScroll(); libraryDragRef.current = null; dragRef.current = null; setDragState({ payload: null, target: null }); }
+  function dragEnd() { stopAutoScroll(); libraryDragRef.current = null; dragRef.current = null; dragTargetRef.current = null; setDragState({ payload: null, target: null }); }
 
   if (error && !state) return <div className="landing-editor-state"><strong>No se pudo abrir la Landing</strong><p>{error}</p><button onClick={() => navigate("/construir")}>Volver a Builder</button></div>;
   if (!state) return <div className="landing-editor-state">Cargando borrador…</div>;

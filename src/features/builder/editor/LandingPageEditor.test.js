@@ -316,7 +316,12 @@ test("editor insertion routes treat the unique Footer as the final structural bo
   assert.match(source, /const targetRegionId = sectionContainsSiteFooter\(targetSection\) \? null : regionId/);
   assert.match(source, /if \(next !== state\.document\) replace\(next,"move"\)/);
   assert.match(source, /if \(next !== state\.document\) replace\(next,"duplicate"\)/);
-  assert.match(source, /if \(next !== state\.document\) replace\(next,"drag"\)/);
+  // The drop path resolves against the live editor document and applies the
+  // deterministic resolver decision, never the document captured by the handler.
+  assert.match(source, /const current = stateRef\.current\?\.document \|\| state\.document/);
+  assert.match(source, /const decision = resolveLandingDrop\(current, payload, target, \{ createPattern \}\)/);
+  assert.match(source, /else if \(decision\.document !== current\) replace\(decision\.document, "drag"\)/);
+  assert.doesNotMatch(source, /replace\(next,"drag"\)/);
   const start = source.indexOf('if (block.type === "site_footer")');
   const end = source.indexOf('if (block.type === "spacer")',start);
   const footerToolbar = source.slice(start,end);
