@@ -1,6 +1,8 @@
 # ORVESEN Email Marketing — Arquitectura
 
-Estado: Increment 1 implementado (Email Domain Foundation & Safety Core).
+Estado: Increment 1 aplicado y validado en Staging (Email Domain Foundation &
+Safety Core). Increment 2 (Audiences) implementado, solo base de datos, pendiente
+de Staging.
 Rama: `claude/v1`. Dueño del dominio: Claude Code (desarrollo paralelo con Codex y DeepSeek).
 
 > Este dominio registra evidencia de consentimiento y aplica reglas de envío
@@ -139,6 +141,79 @@ Se evalúan en este orden; el primero que falla determina el resultado:
   políticas); sin `USAGE` sobre `private`, no es invocable vía API.
 - Ningún otro helper privado es ejecutable por roles de API.
 
+## 3b. Increment 2 — Audiences (implementado, solo base de datos)
+
+Migración: `supabase/migrations/20260927120000_email_marketing_v1_audiences.sql`.
+No redefine ningún objeto del Increment 1. Único cambio aditivo sobre él:
+`email_audit_log.entity_type` acepta `list`, `tag`, `custom_field`, `segment`, `crm_import`.
+
+### Tablas
+
+| Tabla | Propósito | Mutabilidad |
+|---|---|---|
+| `email_lists` / `email_tags` | Catálogo. Nombre único por organización entre activos (case-insensitive). | `active → archived` (terminal), nombre inmutable, sin borrado. |
+| `email_list_members` / `email_contact_tags` | Pertenencia actual (contacto ↔ lista/tag). FKs compuestas. | Alta/baja vía RPC; historial en auditoría. |
+| `email_custom_field_definitions` | Campos tipados: `text`, `number`, `boolean`, `date`, `select` (opciones). Clave única por organización para siempre. | Definición inmutable; solo archivable. |
+| `email_contact_field_values` | Valor por contacto y campo, validado por tipo (trigger). | Vía RPC; `null` borra el valor. |
+| `email_segments` | Definición `segment.v1` guardada, con `version`. | Cambios incrementan `version`; `archived` terminal. |
+| `email_contact_crm_links` | Vínculo cliente CRM ↔ contacto, con `import_batch_id`. | Append-only. **Sin FK a `public.clients`** (no se toca el esquema CRM). |
+
+### RPCs (todas `SECURITY DEFINER`, org/actor derivados en servidor)
+
+| RPC | Acción `email_can` |
+|---|---|
+| `email_create_list`, `email_archive_list`, `email_add_list_members`, `email_remove_list_members` | `manage_contacts` |
+| `email_create_tag`, `email_archive_tag`, `email_add_contact_tags`, `email_remove_contact_tags` | `manage_contacts` |
+| `email_create_custom_field`, `email_archive_custom_field`, `email_set_contact_fields` | `manage_contacts` |
+| `email_create_segment`, `email_update_segment`, `email_archive_segment` | `manage_contacts` |
+| `email_preview_audience`, `email_preview_segment` | `read` |
+| `email_import_contacts_from_crm` | `manage_contacts` |
+
+Se reutilizan acciones existentes de `email_can` (sin redefinirla): sigue siendo founder/admin.
+Operaciones por lotes: 1..1000 contactos (importación CRM: 1..500 clientes). Ids de otra
+organización son indistinguibles de ids inexistentes.
+
+### DSL `segment.v1`
+
+```json
+{ "version": "segment.v1", "match": "all" | "any", "rules": [ ... ] }   // 1..20 reglas
+{ "type": "list",  "op": "in" | "not_in",  "list_id": "<uuid>" }
+{ "type": "tag",   "op": "has" | "not_has", "tag_id": "<uuid>" }
+{ "type": "field", "field": "locale|timezone|source|email_domain",
+  "op": "eq|neq" (string) | "in|not_in" (1..50 strings) | "is_null|is_not_null" }
+{ "type": "custom_field", "key": "<key>", "op": ..., "value": ... }
+   text: eq, neq, contains, in, not_in | select: eq, neq, in, not_in
+   number/date: eq, neq, gt, gte, lt, lte | boolean: is_true, is_false
+   todos: is_set, is_not_set
+```
+
+- Validación en servidor con claves permitidas por tipo de regla; errores
+  `EMAIL_INVALID_SEGMENT` con detalle `rule N: motivo`.
+- Referencias (listas, tags, campos) deben pertenecer a la organización del llamador.
+- Evaluación interpretada (sin SQL dinámico); solo contactos `active` pueden coincidir.
+- Semántica de ausencia: un valor ausente solo cumple `neq`, `not_in`, `is_null`/`is_not_set`.
+
+### Preview
+
+Devuelve `matched`, `sendable`, `not_sendable_by_reason` (usando
+`private.email_is_sendable`, fail-closed) y una muestra de hasta 50 contactos.
+No crea snapshots ni envía nada.
+
+### Importación CRM
+
+- Acción explícita sobre ids de `public.clients` de la organización activa.
+- Crea contactos con `source = 'import'` (vía `email_create_contact`) o vincula
+  contactos existentes; omite clientes sin email, con email inválido o cuyo
+  contacto está archivado.
+- **Nunca registra consentimiento** (`consent_recorded: false`): los contactos
+  importados no son enviables hasta registrar evidencia con `email_record_consent`.
+- Idempotente: un cliente ya vinculado cuenta como `already_linked`.
+
+### UI
+
+Diferida: requiere coordinar `src/App.jsx`, `Sidebar.jsx` y
+`src/config/capabilities.js` con el trabajo de Codex sobre autorización en frontend.
+
 ## 4. State machines
 
 ### Contact (Increment 1)
@@ -166,8 +241,8 @@ Futuro: `confirmation_requested` / `confirmed` para doble opt-in.
 
 ## 5. Plan incremental
 
-1. **Foundation & Safety Core** ✅ (este documento).
-2. Audiencias: listas, tags, custom fields, segmentos (DSL `segment.v1`), importación desde CRM (acción explícita con atestación de consentimiento). Primera UI.
+1. **Foundation & Safety Core** ✅ (aplicado y validado en Staging).
+2. **Audiences** ✅ base de datos (listas, tags, custom fields, segmentos `segment.v1`, preview, importación CRM sin consentimiento). UI diferida hasta coordinar archivos compartidos.
 3. Sender domains/identities (sin DNS real), templates y versiones inmutables, renderer TS con escaping, borradores de campaña.
 4. Provider abstraction + adaptador `sandbox` + suite de contrato.
 5. Autorización de envío (hash de contenido + audiencia, aprobador humano), snapshot de audiencia, send jobs, dispatcher, rate limiting, reintentos. **Decisión pendiente: `pg_net` + Vault vs. cron externo.**
@@ -208,6 +283,10 @@ node supabase/tests/validate_email_marketing_v1_foundation.mjs
 
 # Integración (PGlite efímero; no se añade a package.json)
 npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_foundation.integration.mjs
+
+# Increment 2
+node supabase/tests/validate_email_marketing_v1_audiences.mjs
+npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_audiences.integration.mjs
 ```
 
 La prueba de integración simula el entorno de Supabase (roles, `auth.uid()`,

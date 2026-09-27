@@ -31,10 +31,13 @@ function functionBlocks() {
   return [...code.matchAll(pattern)].map((m) => ({ name: m[1], args: m[2], header: m[3], body: m[4] }));
 }
 
-test("migration sorts after every existing migration, including Codex's latest known one", () => {
-  const versions = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).map((f) => f.split("_")[0]).sort();
-  assert.equal(versions.at(-1), MIGRATION.split("_")[0]);
-  assert.ok(MIGRATION.split("_")[0] > "20260923172355", "must sort after codex/orb-goal-engine migrations");
+test("migration sorts after every non-email migration, including Codex's latest known one", () => {
+  const version = MIGRATION.split("_")[0];
+  const others = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql") && !f.includes("_email_marketing_"))
+    .map((f) => f.split("_")[0]);
+  assert.ok(others.every((v) => v < version), "must sort after every non-email migration");
+  assert.ok(version > "20260924145451", "must sort after codex/orb-goal-engine migrations");
 });
 
 test("scope: no dependency on shared or other-agent objects", () => {
