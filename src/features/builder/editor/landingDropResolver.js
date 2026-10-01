@@ -25,6 +25,14 @@
 // document-independent gate.
 
 import { assertLandingDocument, createPrimitiveBlock } from "../document/landingDocument.js";
+import {
+  LANDING_SCHEMA_VERSION_V2,
+  isCompositionSection,
+  isDedicatedSurfaceBlock,
+  migrateLandingDocumentV1ToV2,
+  toPatternNode,
+} from "../document/landingComposition.js";
+import { findCompositionNode, moveCompositionNode } from "../document/landingCompositionOperations.js";
 import { enforceSiteFooterOrder, insertSectionWithFooterContract, inspectSiteFooter, sectionContainsSiteFooter } from "../document/landingOperations.js";
 import { sameLandingDropTarget } from "./landingAutoScroll.js";
 
@@ -68,7 +76,20 @@ const MESSAGES = Object.freeze({
 // Document-independent drag payload kinds and drop target kinds. Exported so the
 // drag encoding layer, the resolver and tests all agree on one table.
 export const LANDING_DRAG_KINDS = Object.freeze(["palette-block", "palette-pattern", "block", "section"]);
-export const LANDING_TARGET_KINDS = Object.freeze(["block-before", "block-after", "region-end", "section-before", "section-after", "canvas-end"]);
+export const LANDING_TARGET_KINDS = Object.freeze([
+  "block-before",
+  "block-after",
+  "region-end",
+  // Composition scope (schema v2). ONE boundary has exactly ONE owner, and the owner
+  // is always the FOLLOWING node: `composition-before(index)` means "insert so that
+  // the node currently at `index` ends up after me". The terminal boundary after the
+  // last node is the same kind at `index === composition.length`, which keeps a single
+  // owner rule instead of introducing a competing `composition-after` for the same edge.
+  "composition-before",
+  "section-before",
+  "section-after",
+  "canvas-end",
+]);
 
 const dragKinds = new Set(LANDING_DRAG_KINDS);
 const targetKinds = new Set(LANDING_TARGET_KINDS);
@@ -85,15 +106,24 @@ export function isLandingDropPayload(payload) {
 }
 
 export function isLandingDropTarget(target) {
-  return Boolean(target) && targetKinds.has(target.kind);
+  if (!target || !targetKinds.has(target.kind)) return false;
+  // A composition boundary without an index is not a destination: the index IS the
+  // boundary. Rejecting it here keeps a malformed zone from being advertised and then
+  // refused at drop time.
+  if (target.kind === "composition-before" && !Number.isInteger(target.index)) return false;
+  return true;
 }
 
 export function isCompatibleLandingDrop(payload, target) {
   if (!isLandingDropPayload(payload) || !isLandingDropTarget(target)) return false;
   if (payload.kind === "section") return target.kind.startsWith("section-") && payload.id !== target.sectionId;
-  if (payload.kind === "palette-pattern") return target.kind.startsWith("section-") || target.kind.startsWith("block-") || target.kind === "region-end" || target.kind === "canvas-end";
-  if (payload.kind === "palette-block") return target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end" || target.kind === "canvas-end";
-  if (payload.kind === "block") return target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end";
+  if (payload.kind === "palette-pattern") return target.kind.startsWith("section-") || target.kind.startsWith("block-") || target.kind === "region-end" || target.kind === "canvas-end" || target.kind === "composition-before";
+  // A palette element dropped on a Composition boundary becomes an INDEPENDENT
+  // composition child of that area — a sibling of the Patterns, not a new Section and
+  // not a member of any Pattern. A palette element dropped on a block/region line is
+  // still the internal Pattern gesture.
+  if (payload.kind === "palette-block") return target.kind === "composition-before" || target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end" || target.kind === "section-before" || target.kind === "section-after" || target.kind === "canvas-end";
+  if (payload.kind === "block") return target.kind === "block-before" || target.kind === "block-after" || target.kind === "region-end" || target.kind === "composition-before";
   return false;
 }
 
@@ -101,9 +131,84 @@ export function isCompatibleLandingDrop(payload, target) {
 // Document lookups
 // ---------------------------------------------------------------------------
 
-const locateRegion = (document, regionId) => document.sections.flatMap((section) => section.regions).find((region) => region.id === regionId);
-const locateRegionSection = (document, regionId) => document.sections.find((section) => section.regions.some((region) => region.id === regionId));
-const locateBlockRegion = (document, blockId) => document.sections.flatMap((section) => section.regions).find((region) => region.blocks.some((block) => block.id === blockId));
+// Region and block lookups must search BOTH shapes. In v1 a region lives directly on
+// the Section; in v2 a Pattern's regions live inside a composition node. Missing the
+// second case is what made internal insertion into a v2 Pattern unreachable.
+const regionsOf = (section) => [
+  ...(section.regions || []),
+  ...(section.composition || []).flatMap((node) => (Array.isArray(node.regions) ? node.regions : [])),
+];
+
+const locateRegion = (document, regionId) => document.sections.flatMap(regionsOf).find((region) => region.id === regionId);
+const locateRegionSection = (document, regionId) => document.sections.find((section) => regionsOf(section).some((region) => region.id === regionId));
+const locateBlockRegion = (document, blockId) => document.sections.flatMap(regionsOf).find((region) => region.blocks.some((block) => block.id === blockId));
+
+// An internal signal, never exported and never visible to callers: the resolver converts
+// it into the public `{ ok:false, code, message }` refusal. Using a typed error keeps the
+// mutation body's control flow honest — every early exit is labelled with *why* the
+// document-dependent contract refused it, instead of collapsing into an untyped `null`
+// that callers have to guess about. Defined here (not next to the applier) so the
+// composition helpers below can refuse with the same typed signal.
+const LANDING_REFUSAL = Symbol("landingDropRefusal");
+
+function landRefusal(code, message) {
+  const failure = refuse(code, message);
+  const error = new Error(failure.message);
+  error[LANDING_REFUSAL] = failure;
+  return error;
+}
+
+// A dedicated Header/Footer Section: one Region holding exactly one surface block. It is
+// a protected structure and can never be a composition area.
+const isDedicatedSurfaceSection = (section) => Boolean(section)
+  && section.regions?.length === 1
+  && section.regions[0]?.blocks?.length === 1
+  && isDedicatedSurfaceBlock(section.regions[0].blocks[0]);
+
+// The composition area a drop targets, upgrading the document if the area is still a
+// legacy v1 Section.
+//
+// This is the ONE place a v1 page becomes v2, and it is deliberately an explicit
+// document mutation performed while applying a drop:
+//   - never on render,
+//   - never on load,
+//   - never merely because a page was viewed,
+//   - always as part of the same gesture that needed it.
+//
+// It migrates the whole document rather than one Section, because the schema forbids
+// mixing shapes: a v2 Section beside a legacy one is `LEGACY_REGIONS_IN_V2`. The
+// migration is the pure, tested v1 -> v2 conversion, so Header/Footer stay dedicated,
+// Pattern appearance is preserved, and Pattern node ids are drawn from the caller's id
+// factory — which is what makes the result deterministic for a given editor.
+function materializeComposition(document, sectionId, createId) {
+  const existing = document.sections.find((section) => section.id === sectionId);
+  if (!existing) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_NOT_FOUND);
+  if (isCompositionSection(existing)) return document;
+  if (isDedicatedSurfaceSection(existing)) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_LOCKED);
+  void createId;
+  if (document.schema_version === LANDING_SCHEMA_VERSION_V2) {
+    // v2 already, but this Section is neither a composition area nor a dedicated
+    // surface: that shape is invalid and must not be silently repaired.
+    throw landRefusal(LANDING_DROP_REFUSAL.SHAPE_INVALID, "La sección no es un área de composición.");
+  }
+  const upgraded = migrateLandingDocumentV1ToV2(document, { createId });
+  if (!upgraded.sections.some((section) => section.id === sectionId && isCompositionSection(section))) {
+    throw landRefusal(LANDING_DROP_REFUSAL.SHAPE_INVALID, "La sección no se pudo convertir en área de composición.");
+  }
+  return upgraded;
+}
+
+// Insert an independent composition node at an exact index. The node is never a
+// Region child and never gets a Section of its own: it becomes a direct child of the
+// area, a sibling of the Patterns.
+function insertCompositionNodeAt(document, sectionId, index, node, createId) {
+  const upgraded = materializeComposition(document, sectionId, createId);
+  const section = upgraded.sections.find((candidate) => candidate.id === sectionId);
+  if (!section || !Array.isArray(section.composition)) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_NOT_FOUND);
+  const at = Math.max(0, Math.min(index, section.composition.length));
+  section.composition.splice(at, 0, node);
+  return assertLandingDocument(upgraded);
+}
 
 // ---------------------------------------------------------------------------
 // Feasibility: the document-dependent part of the decision.
@@ -135,8 +240,41 @@ export function inspectLandingDrop(document, payload, target) {
     return { ok: true };
   }
 
+  // Composition scope. The destination is a visual composition AREA, and the drop
+  // becomes an independent child of it. Feasibility is the document-side question
+  // "could this area accept this node at this index?", answered without mutating.
+  if (target.kind === "composition-before") {
+    const section = document.sections.find((candidate) => candidate.id === target.sectionId);
+    if (!section) return { ok: false, code: LANDING_DROP_REFUSAL.SECTION_NOT_FOUND };
+    // A dedicated Header/Footer is a protected single surface, never a composition area.
+    if (isDedicatedSurfaceSection(section)) return { ok: false, code: LANDING_DROP_REFUSAL.SECTION_LOCKED };
+    if (!Number.isInteger(target.index) || target.index < 0) return { ok: false, code: LANDING_DROP_REFUSAL.SHAPE_INVALID };
+    // The index is bounded by the length the area will have when the drop runs. A v1
+    // Section has no composition array yet, but its whole region tree migrates into
+    // exactly ONE implicit Pattern node — so its terminal boundary is at 1, not 0.
+    // Bounding by 0 here is what made dropping below a legacy Pattern impossible.
+    const length = Array.isArray(section.composition) ? section.composition.length : section.regions?.length ? 1 : 0;
+    if (target.index > length) return { ok: false, code: LANDING_DROP_REFUSAL.SHAPE_INVALID };
+    // Dragging an EXISTING composition node (an independent Block or a Pattern) to a
+    // composition boundary is a move. Its feasibility is simply that the node exists:
+    // the operation itself preserves every sibling.
+    if (payload.kind === "block") {
+      const located = findCompositionNode(document, payload.id);
+      if (!located) return { ok: false, code: LANDING_DROP_REFUSAL.BLOCK_NOT_FOUND };
+      return { ok: true };
+    }
+    return { ok: true };
+  }
+
   if (payload.kind === "palette-block") {
     if (target.kind === "canvas-end") return { ok: true };
+    // Standalone content: the element lands in a fresh normal Section next to the
+    // boundary it was dropped on, so only that boundary has to exist.
+    if (target.kind === "section-before" || target.kind === "section-after") {
+      if (!target.sectionId) return { ok: false, code: LANDING_DROP_REFUSAL.SECTION_NOT_FOUND };
+      if (!document.sections.some((section) => section.id === target.sectionId)) return { ok: false, code: LANDING_DROP_REFUSAL.SECTION_NOT_FOUND };
+      return { ok: true };
+    }
     if (!target.regionId) return { ok: false, code: LANDING_DROP_REFUSAL.REGION_NOT_FOUND };
     if (!locateRegion(document, target.regionId)) return { ok: false, code: LANDING_DROP_REFUSAL.REGION_NOT_FOUND };
     if (target.blockId && !locateBlockRegion(document, target.blockId)) return { ok: false, code: LANDING_DROP_REFUSAL.BLOCK_NOT_FOUND };
@@ -247,21 +385,59 @@ export function isLandingDropApplied(document, payload, target) {
 
 const createSingleBlockSection = (block, createId) => ({ id: createId(), layout: "stack", regions: [{ id: createId(), span: 12, blocks: [block] }] });
 
-// An internal signal, never exported and never visible to callers: the resolver
-// converts it into the public `{ ok:false, code, message }` refusal. Using a
-// typed error keeps the mutation body's control flow honest — every early exit is
-// labelled with *why* the document-dependent contract refused it, instead of
-// collapsing into an untyped `null` that callers have to guess about.
-const LANDING_REFUSAL = Symbol("landingDropRefusal");
-
-function landRefusal(code, message) {
-  const failure = refuse(code, message);
-  const error = new Error(failure.message);
-  error[LANDING_REFUSAL] = failure;
-  return error;
-}
-
 function applyDrop(document, payload, target, { createPattern, createId }) {
+  // --- Composition scope (schema v2) ---------------------------------------
+  //
+  // A primitive dropped on a Composition boundary becomes an INDEPENDENT child of that
+  // visual area: a sibling of the Patterns, never a member of one, never wrapped in a
+  // synthetic Region, and never given a Section of its own. This is the path that
+  // replaces the old "one primitive => one giant Section" behaviour.
+  //
+  // If the area is still a legacy v1 Section, the same gesture upgrades the document
+  // (see `materializeComposition`) — one operation, one history entry.
+  if (target.kind === "composition-before") {
+    const section = document.sections.find((candidate) => candidate.id === target.sectionId);
+    if (!section) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_NOT_FOUND);
+    if (isDedicatedSurfaceSection(section)) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_LOCKED);
+    if (payload.kind === "section") throw landRefusal(LANDING_DROP_REFUSAL.INCOMPATIBLE_TARGET);
+    if (!Number.isInteger(target.index) || target.index < 0) throw landRefusal(LANDING_DROP_REFUSAL.SHAPE_INVALID);
+
+    if (payload.kind === "palette-block") {
+      if (payload.id === "site_footer") throw landRefusal(LANDING_DROP_REFUSAL.INCOMPATIBLE_TARGET);
+      const node = createPrimitiveBlock(payload.id, createId());
+      return insertCompositionNodeAt(document, target.sectionId, target.index, node, createId);
+    }
+
+    if (payload.kind === "palette-pattern") {
+      const pattern = createPattern?.(payload.id);
+      if (!pattern) throw landRefusal(LANDING_DROP_REFUSAL.SHAPE_INVALID, "El patrón solicitado no existe.");
+      if (sectionContainsSiteFooter(pattern)) {
+        // The Footer is terminal by contract; it does not become a composition child.
+        if (inspectSiteFooter(document).count) throw landRefusal(LANDING_DROP_REFUSAL.FOOTER_ALREADY_EXISTS);
+        insertSectionWithFooterContract(document, pattern, document.sections.length);
+        return assertLandingDocument(document);
+      }
+      const node = toPatternNode(pattern, payload.id, { createId });
+      return insertCompositionNodeAt(document, target.sectionId, target.index, node, createId);
+    }
+
+    if (payload.kind === "block") {
+      // Moving an EXISTING independent Block between composition positions. This is the
+      // same node, so it is a move, not an insert: identity is preserved and no copy is
+      // created. `index` is the position in the list the caller saw.
+      const located = findCompositionNode(document, payload.id);
+      if (!located) throw landRefusal(LANDING_DROP_REFUSAL.BLOCK_NOT_FOUND);
+      if (located.sectionId === target.sectionId) {
+        return moveCompositionNode(document, payload.id, target.sectionId, target.index);
+      }
+      // A Pattern is moved with the same operation, so a Pattern and a Block share one
+      // code path and neither can disturb the other's siblings.
+      return moveCompositionNode(document, payload.id, target.sectionId, target.index);
+    }
+
+    throw landRefusal(LANDING_DROP_REFUSAL.INCOMPATIBLE_TARGET);
+  }
+
   if (payload.kind === "palette-block" && payload.id === "site_footer") {
     const section = createSingleBlockSection(createPrimitiveBlock("site_footer", createId()), createId);
     insertSectionWithFooterContract(document, section, document.sections.length);
@@ -331,6 +507,18 @@ function applyDrop(document, payload, target, { createPattern, createId }) {
       if (target.kind === "section-after") insertion += 1;
     }
     insertSectionWithFooterContract(document, section, insertion);
+    return assertLandingDocument(document);
+  }
+
+  // Standalone page content. A palette element dropped on a Section boundary is
+  // not part of any Pattern: it becomes its own normal Section holding that single
+  // element, placed exactly at the boundary the user aimed at. This is the only
+  // difference from the `canvas-end` case, which appends that Section last.
+  if (payload.kind === "palette-block" && (target.kind === "section-before" || target.kind === "section-after")) {
+    const boundaryIndex = document.sections.findIndex((section) => section.id === target.sectionId);
+    if (boundaryIndex < 0) throw landRefusal(LANDING_DROP_REFUSAL.SECTION_NOT_FOUND);
+    const section = createSingleBlockSection(createPrimitiveBlock(payload.id, createId()), createId);
+    insertSectionWithFooterContract(document, section, boundaryIndex + (target.kind === "section-after" ? 1 : 0));
     return assertLandingDocument(document);
   }
 
@@ -409,13 +597,23 @@ const describeOperation = (payload, target, effect) => ({
   type: LANDING_DROP_OPERATION,
   effect,
   payload: { kind: payload.kind, id: payload.id },
-  target: { kind: target.kind, ...(target.blockId ? { blockId: target.blockId } : {}), ...(target.sectionId ? { sectionId: target.sectionId } : {}), ...(target.regionId ? { regionId: target.regionId } : {}) },
+  target: {
+    kind: target.kind,
+    ...(target.blockId ? { blockId: target.blockId } : {}),
+    ...(target.sectionId ? { sectionId: target.sectionId } : {}),
+    ...(target.regionId ? { regionId: target.regionId } : {}),
+    // Composition targets carry the exact insertion index, so the recorded operation
+    // states where the node went — which is what makes redo deterministic and lets a
+    // later semantic operator (Orb) replay the decision without geometry.
+    ...(Number.isInteger(target.index) ? { index: target.index } : {}),
+  },
 });
 
 const effectOf = (payload, target) => {
   if (payload.kind === "section") return "move-section";
   if (payload.kind === "palette-pattern") return "insert-section";
   if (payload.kind === "block") return "move-block";
+  if (target.kind === "composition-before") return "insert-block";
   return target.kind === "canvas-end" ? "insert-section" : "insert-block";
 };
 

@@ -1,11 +1,26 @@
 import { validateVisualAppearance } from "./visualAppearance.js";
+import {
+  COMPOSITION_ERROR,
+  configureLandingComposition,
+  validateLandingComposition,
+} from "./landingComposition.js";
 
 export const LANDING_SCHEMA_VERSION = 1;
+// Schema v2: the composition model. Declared here (not imported) so this module
+// stays free of a dependency on `landingComposition.js` — that module imports the
+// canonical rules from here, and a cycle would leave those bindings uninitialised.
+export const LANDING_SCHEMA_VERSION_V2 = 2;
 export const LANDING_DOCUMENT_TYPE = "landing_page";
 export const LANDING_LIMITS = Object.freeze({
   sections: 50,
   blocks: 500,
   bytes: 512 * 1024,
+  // Schema v2 safety ceilings (not UX recommendations): `composition` bounds one
+  // composition area's node count, `patterns` bounds how many Pattern nodes a whole
+  // document may hold. Together with `blocks` and `bytes` they stop a v2 page from
+  // growing unbounded structure through composition alone.
+  composition: 256,
+  patterns: 128,
 });
 export const LANDING_BREAKPOINTS = Object.freeze({
   desktop: 1024,
@@ -78,6 +93,11 @@ const SECTION_KEYS = new Set([
   "style",
   "responsive",
   "regions",
+  // Schema v2: the ordered composition of a visual area. A v1 Section carries
+  // `regions` and no `composition`; a v2 composition area carries `composition`
+  // with `regions` empty. The two shapes are never mixed (see COMPOSITION_IN_V1 /
+  // LEGACY_REGIONS_IN_V2 in landingComposition.js).
+  "composition",
 ]);
 
 const REGION_KEYS = new Set([
@@ -156,6 +176,22 @@ const plainObject = (value) =>
 const validId = (value) =>
   typeof value === "string" &&
   ID_PATTERN.test(value);
+
+// A dedicated surface Section is the one legacy shape schema v2 keeps as-is: it is a
+// single protected Header/Footer block alone in its own Section, in both versions.
+// Kept local instead of imported from `landingOperations.js` so the document schema
+// stays free of a dependency on the operations layer.
+const isDedicatedSurfaceSection = (section) => Array.isArray(section?.regions)
+  && section.regions.length === 1
+  && Array.isArray(section.regions[0]?.blocks)
+  && section.regions[0].blocks.length === 1
+  && (section.regions[0].blocks[0]?.type === "site_footer" || section.regions[0].blocks[0]?.type === "site_header");
+
+const isDedicatedSiteFooterSection = (section) => isDedicatedSurfaceSection(section)
+  && section.regions[0].blocks[0].type === "site_footer";
+
+const isDedicatedSiteHeaderSection = (section) => isDedicatedSurfaceSection(section)
+  && section.regions[0].blocks[0].type === "site_header";
 
 const validText = (value, max, allowEmpty = true) =>
   typeof value === "string" &&
@@ -2045,7 +2081,10 @@ export function validateLandingDocument(
   }
 
   if (
-    document.schema_version !== 1
+    document.schema_version !==
+      LANDING_SCHEMA_VERSION &&
+    document.schema_version !==
+      LANDING_SCHEMA_VERSION_V2
   ) {
     errors.push({
       path: "$.schema_version",
@@ -2276,6 +2315,13 @@ export function validateLandingDocument(
 
   const ids = new Set();
   let blockCount = 0;
+  // Schema v2 sharing the v1 counters: Pattern nodes and their blocks are counted
+  // against the same LANDING_LIMITS, so composition cannot bypass them.
+  const counters = {
+    get blocks() { return blockCount; },
+    set blocks(value) { blockCount = value; },
+    patterns: 0,
+  };
 
   for (
     const [
@@ -2318,6 +2364,41 @@ export function validateLandingDocument(
 
     ids.add(section.id);
 
+    // --- Schema v2: the two shapes are mutually exclusive, in both directions ---
+    //
+    // A v2 document may not smuggle a legacy Section through (its regions would be
+    // an un-composed visual band, i.e. exactly the shape v2 replaces), and a v1
+    // document may not declare a composition it has no model for. Failing closed
+    // here is what stops a v2 document from being silently reinterpreted as v1.
+    //
+    // One exemption, by contract: a dedicated Header/Footer Section stays a
+    // dedicated Section in both versions. It is a protected single surface, and
+    // wrapping it in a composition would create a second, unprotected one.
+    //
+    // Migration produces `regions: []` for a composition area, so the allowed v2
+    // shape is: `composition` present with `regions` absent or empty, or the
+    // dedicated surface shape.
+    const hasComposition = Object.prototype.hasOwnProperty.call(section, "composition");
+    const hasLegacyRegions = Array.isArray(section.regions) && section.regions.length > 0;
+    const dedicatedSurface = isDedicatedSiteFooterSection(section) || isDedicatedSiteHeaderSection(section);
+    if (document.schema_version === LANDING_SCHEMA_VERSION_V2) {
+      if (!hasComposition && hasLegacyRegions && !dedicatedSurface) {
+        errors.push({ path: sectionPath, code: COMPOSITION_ERROR.LEGACY_REGIONS_IN_V2 });
+      }
+      if (!hasComposition && !hasLegacyRegions) {
+        // v2 has no meaning for a Section that describes neither an area nor a
+        // legacy structure; report it rather than inventing an empty composition.
+        errors.push({ path: `${sectionPath}.composition`, code: COMPOSITION_ERROR.COMPOSITION_REQUIRED });
+      }
+    } else {
+      if (hasComposition) {
+        errors.push({ path: sectionPath, code: COMPOSITION_ERROR.COMPOSITION_IN_V1 });
+      }
+      if (Array.isArray(section.regions) && section.regions.length === 0) {
+        errors.push({ path: `${sectionPath}.regions`, code: "INVALID_REGIONS" });
+      }
+    }
+
     if ((section.label !== undefined && !validText(section.label, 120, true)) || (section.anchor !== undefined && (typeof section.anchor !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(section.anchor)))) {
       errors.push({ path: sectionPath, code: "INVALID_SECTION_NAVIGATION" });
     }
@@ -2349,6 +2430,16 @@ export function validateLandingDocument(
       errors,
       `${sectionPath}.responsive`
     );
+
+    if (hasComposition) {
+      // A composition area owns its own composition and nothing else. `regions`
+      // must stay empty, so there is never a second, competing child list.
+      if (Array.isArray(section.regions) && section.regions.length > 0) {
+        errors.push({ path: `${sectionPath}.regions`, code: COMPOSITION_ERROR.LEGACY_REGIONS_IN_V2 });
+      }
+      validateLandingComposition(section, sectionPath, errors, ids, counters);
+      continue;
+    }
 
     if (
       !Array.isArray(
@@ -2544,6 +2635,16 @@ export function validateLandingDocument(
   }
 
   if (
+    counters.patterns >
+    LANDING_LIMITS.patterns
+  ) {
+    errors.push({
+      path: "$.sections",
+      code: COMPOSITION_ERROR.MAX_PATTERNS,
+    });
+  }
+
+  if (
     new TextEncoder().encode(
       JSON.stringify(document)
     ).length >
@@ -2562,6 +2663,33 @@ export function validateLandingDocument(
     errors,
   };
 }
+
+// --- Canonical validation rules, shared with the schema v2 composition model ---
+//
+// The composition validator lives in `landingComposition.js` so the v2 node
+// vocabulary and the pure v1 -> v2 migration stay in one reviewable module. It must
+// not re-implement Block/Region/Style rules, so the authoritative rules are handed
+// to it once, here: a single rule table for both schema versions instead of two that
+// can drift.
+export function validateLandingStyle(style, errors, path) {
+  return validateStyle(style, errors, path);
+}
+
+export function validateLandingResponsive(responsive, errors, path) {
+  return validateResponsive(responsive, errors, path);
+}
+
+// Wire the composition model to these canonical rules exactly once, at module
+// evaluation. `landingComposition.js` never imports this module's live bindings at
+// its own top level, so a single one-way dependency is preserved.
+configureLandingComposition({
+  blockKeys: BLOCK_KEYS,
+  regionKeys: REGION_KEYS,
+  blockRegistry: BLOCK_REGISTRY,
+  validateStyle,
+  validateResponsive,
+  limits: LANDING_LIMITS,
+});
 
 export function assertLandingDocument(
   document
