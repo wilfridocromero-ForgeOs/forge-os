@@ -274,3 +274,127 @@ conjunto prohibido, pero admite `, ; : ( )`. El adaptador debe citar/codificar
 el display name según RFC 5322/2047 (p. ej. `"Acme, Inc" <hola@acme.com>`);
 nunca concatenarlo crudo. El subject se codifica siempre como texto (RFC 2047),
 de modo que una secuencia `=?…?=` escrita por el usuario se muestre literal.
+
+## 9. Ensamblado del documento (Increment 3b, aditivo)
+
+Sección aditiva: no cambia nada de §1–§8. Los cuatro fallos por contacto de
+§7.1 (`RENDER_EMPTY_SUBJECT`, `RENDER_UNSAFE_HEADER`, `RENDER_FIELD_TOO_LONG`,
+`RENDER_EMPTY_BODY`) siguen siendo los únicos resultados de fallo de
+`renderTemplate`. Implementación: `supabase/functions/_shared/email/render_v1.ts`.
+Vectores: `supabase/tests/fixtures/email_render_v1_document_cases.json`
+(salidas esperadas escritas a mano).
+
+### 9.1 Resultado de `renderTemplate`
+
+Éxito: `{ ok: true, subject, preheader, preheader_html, blocks }`. `subject` y
+`preheader` son texto plano final (§7.1 paso 4; `preheader` es `null` si se
+omite). Cada bloque conserva su texto plano **y** su forma escapada, con la
+invariante `html = escape(text)` (en `paragraph`, cada LF → `<br>` tras
+escapar) y `*_attr = escape(valor)`:
+
+| Bloque | Campos |
+|---|---|
+| `heading` | `type`, `level`, `text`, `html` |
+| `paragraph` | `type`, `text`, `html` |
+| `button` | `type`, `text`, `url`, `html`, `href_attr` |
+| `image` | `type`, `src`, `alt`, `href` (o `null`), `width` (o `null`), `src_attr`, `alt_attr`, `href_attr` (solo si hay `href`) |
+| `divider` | `type` |
+| `spacer` | `type`, `height` |
+
+Fallo: `{ ok: false, error }` más `location` en `RENDER_UNSAFE_HEADER` y
+`RENDER_FIELD_TOO_LONG`; nunca contiene salida parcial.
+
+### 9.2 Documento HTML (bytes exactos, saltos LF, termina en LF)
+
+```
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{subject}</title>
+</head>
+<body>
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">{preheader}</div>
+{un bloque por línea}
+<div data-orvesen-footer="email-footer.v1">
+<hr>
+<p>{organization_name}</p>
+<p>{notice}</p>
+<p><a href="{unsubscribe_url}">{unsubscribe_label}</a></p>
+</div>
+</body>
+</html>
+```
+
+- `{subject}`: subject final con escape de texto HTML (§7.2). Nunca se
+  reutiliza la forma de encabezado sin escapar.
+- La línea del preheader oculto solo existe si hay preheader; si no, se omite
+  la línea entera. La línea de `notice` solo existe si `notice` no es `null`.
+- Bloques: `heading` → `<hN>{html}</hN>`; `paragraph` → `<p>{html}</p>`;
+  `button` → `<p><a href="{href_attr}">{html}</a></p>`; `image` →
+  `<img src="{src_attr}" alt="{alt_attr}">` (con ` width="{width}"` antes de
+  `>` si existe), envuelto en `<a href="{href_attr}">…</a>` si hay `href`;
+  `divider` → `<hr>`; `spacer` → `<div style="height:{height}px"></div>`.
+- El pie del sistema va **siempre** después del último bloque, fuera del
+  contenido de la plantilla; la plantilla no puede quitarlo, moverlo ni
+  sustituirlo (no existe ningún bloque que lo haga).
+- `assembleDocument` **no confía** en `html`/`*_attr` recibidos: vuelve a
+  escapar desde los campos de texto plano con las mismas funciones de §7.2, y
+  revalida subject/preheader con `isRenderedHeaderSafe` y las URLs con §6.
+
+### 9.3 Parte text/plain (saltos LF, termina en LF)
+
+- Bloques en orden, separados por una línea vacía: `heading` → texto;
+  `paragraph` → texto (LF conservados); `button` → texto, LF, URL literal;
+  `image` → `[alt]` si `alt` contiene algo distinto de U+0020, y/o el `href`
+  literal en la línea siguiente (sin ninguno de los dos no aporta nada);
+  `divider` → `---`; `spacer` → nada. El preheader no forma parte del texto.
+- Pie: tras el cuerpo, una línea vacía y después `-- ` (con espacio final),
+  `organization_name`, `notice` (si existe, LF conservados) y
+  `{unsubscribe_label}: {unsubscribe_url}`.
+- Sin escape HTML. Mismo texto plano que la parte HTML (paridad comprobada
+  por los vectores).
+
+### 9.4 Pie del sistema (`email-footer.v1`) y errores de ensamblado
+
+Lo proporciona el sistema (Increment 5/6), nunca la plantilla:
+
+```json
+{ "version": "email-footer.v1", "organization_name": "...", "unsubscribe_label": "...",
+  "unsubscribe_url": "https://...", "notice": "..." | null }
+```
+
+Validación, en este orden: objeto → claves (solo esas cinco; `notice` puede
+faltar = `null`) → `version` → `organization_name` (1..200 code points, algo
+distinto de U+0020, sin caracteres prohibidos de §3 ni LF) →
+`unsubscribe_label` (1..100, mismas reglas) → `unsubscribe_url` (URL `https:`
+de §6; `mailto:` no se admite) → `notice` (`null` o 1..1000, algo distinto de
+U+0020 y LF, sin caracteres prohibidos de §3 salvo LF). El pie no admite merge
+tags: `{{…}}` se muestra literal (escapado).
+
+Errores de `assembleDocument` (resultado `{ ok: false, ... }`; espacio de
+nombres propio, **no** son fallos por contacto de §7):
+
+| Código | Cuándo |
+|---|---|
+| `DOCUMENT_RENDER_INVALID` (`reason`) | `rendered` no es un resultado de éxito de `renderTemplate` bien formado (incluido un resultado de fallo). Se evalúa primero. |
+| `DOCUMENT_FOOTER_REQUIRED` | falta el pie (`null`/ausente). |
+| `DOCUMENT_FOOTER_INVALID` (`field`, `reason`) | primera regla del pie que no se cumple. |
+
+`renderTemplate` con una entrada estructuralmente imposible para una versión
+guardada (no es objeto, tipo de bloque desconocido, campos ausentes) lanza la
+excepción `RENDER_INPUT_INVALID`: es un error del llamador, nunca un
+resultado por contacto, y no revalida el contenido guardado (§1).
+
+### 9.5 Endurecimiento de entrada solo TS
+
+PostgreSQL no puede producir U+0000 ni surrogates UTF-16 sin pareja. Si un
+valor sustituido los contiene, se eliminan en §7.1 paso 2.3 (junto al
+conjunto prohibido); un valor que no es string cuenta como ausente; el pie los
+rechaza como caracteres prohibidos; `isRenderedHeaderSafe` devuelve `false`
+para ellos y para cualquier no-string (fuera del dominio de la función SQL, se
+falla cerrado). Para toda cadena representable en PostgreSQL,
+`isRenderedHeaderSafe` coincide exactamente con
+`private.email_rendered_header_is_safe` (prueba diferencial contra la función
+SQL real).

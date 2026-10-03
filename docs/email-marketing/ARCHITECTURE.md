@@ -2,8 +2,10 @@
 
 Estado: Increments 1 (Foundation & Safety Core) y 2 (Audiences, solo base de
 datos) aplicados y validados en Staging (acceptance runner Inc1–2: PASS 170/170).
-Increment 3a (senders, templates, validación `email-content.v1`) implementado
-localmente, pendiente de revisión y de Staging.
+Increment 3a (senders, templates, validación `email-content.v1`) revisado,
+confirmado (`2a85aa4`) y publicado en `origin/claude/v1`; aún no aplicado en
+Staging (3d). Increment 3b (renderer TS `email-content.v1`, sin migración)
+implementado localmente, pendiente de revisión.
 Rama: `claude/v1`. Dueño del dominio: Claude Code (desarrollo paralelo con Codex y DeepSeek).
 
 > Este dominio registra evidencia de consentimiento y aplica reglas de envío
@@ -528,6 +530,27 @@ sigue siendo rechazada.
   `email_template_versions_guard` (`heading`, `paragraph`, `button`), así que
   un tipo con texto añadido en un sitio y no en el otro falla.
 
+## Increment 3b — Renderer `email-content.v1` (implementado, sin base de datos)
+
+Módulo TS puro: `supabase/functions/_shared/email/render_v1.ts` (sin imports,
+sin I/O, sin red, sin base de datos, sin reloj, sin aleatoriedad, sin
+entorno; fuente ASCII). Lo importará el dispatcher (Increment 5, Deno). **Sin
+migración**: no cambia ningún objeto de Inc1–3a ni el runner de aceptación.
+Contrato: `EMAIL_CONTENT_V1_CONTRACT.md` §7 (render, congelado) y §9
+(ensamblado, aditivo).
+
+| Export | Qué hace |
+|---|---|
+| `renderTemplate(version, values)` | §7.1 exacto: normaliza valores → sustituye (una sola pasada, sin re-expansión) → normaliza/valida cada campo (vacío → encabezado inseguro → longitud) → escapa. Solo los cuatro fallos por contacto; nunca salida parcial. Revalida URLs (§7.2): un bloque con URL inválida no se renderiza. Entrada imposible para una versión guardada → excepción `RENDER_INPUT_INVALID`. |
+| `assembleDocument(rendered, footer)` | Documento HTML y text/plain de bytes fijos (§9.2/§9.3) con preheader oculto y pie del sistema obligatorio `email-footer.v1`. Re-escapa desde el texto plano (no confía en `html`/`*_attr` recibidos) y revalida encabezados y URLs. Errores propios: `DOCUMENT_RENDER_INVALID`, `DOCUMENT_FOOTER_REQUIRED`, `DOCUMENT_FOOTER_INVALID`. |
+| `isRenderedHeaderSafe(value)` | Espejo TS de `private.email_rendered_header_is_safe`; paridad probada contra la función SQL real (corpus diferencial). El dispatcher (5) vuelve a comprobarla en SQL antes de enviar. |
+
+Vectores: los 35 de `email_render_v1_cases.json` (congelados, sin cambios) y
+`email_render_v1_document_cases.json` (24 casos, salidas escritas a mano). Las
+mismas pruebas se ejecutan con Deno y con Node y deben dar el mismo digest de
+salida. Fuera de 3b: campañas, snapshots, envíos, proveedor, tokens de baja,
+tracking, UI.
+
 ## 4. State machines
 
 ### Contact (Increment 1)
@@ -558,8 +581,8 @@ Futuro: `confirmation_requested` / `confirmed` para doble opt-in.
 1. **Foundation & Safety Core** ✅ (aplicado y validado en Staging).
 2. **Audiences** ✅ base de datos (listas, tags, custom fields, segmentos `segment.v1`, preview, importación CRM sin consentimiento). UI diferida hasta coordinar archivos compartidos.
 3. Sender domains/identities (sin DNS real), templates y versiones inmutables, renderer TS con escaping, borradores de campaña. Dividido internamente en:
-   **3a** senders + templates/versiones + validación `email-content.v1` (implementado, pendiente de revisión/Staging);
-   **3b** renderer TS + vectores compartidos; **3c** borradores de campaña + readiness;
+   **3a** senders + templates/versiones + validación `email-content.v1` (confirmado y publicado, pendiente de Staging);
+   **3b** renderer TS + vectores compartidos (implementado, pendiente de revisión; sin migración); **3c** borradores de campaña + readiness;
    **3d** runner de aceptación Inc1–3 y Staging.
 4. Provider abstraction + adaptador `sandbox` + suite de contrato.
 5. Autorización de envío (hash de contenido + audiencia, aprobador humano), snapshot de audiencia, send jobs, dispatcher, rate limiting, reintentos. **Decisión pendiente: `pg_net` + Vault vs. cron externo.**
@@ -613,6 +636,12 @@ npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_sen
 # Mutation (sabotage) runner: cada defecto declara su clase de detección
 # (behavioral = debe fallar un test de integración relevante; static-only = con motivo)
 npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_senders_templates.mutation.mjs
+
+# Increment 3b (renderer): mismas pruebas en ambos runtimes, mismo INC3B_DIGEST
+node --test supabase/functions/_shared/email/render_v1.test.ts
+deno test --no-config --allow-read=. supabase/functions/_shared/email/render_v1.test.ts
+# Paridad TS ↔ SQL (encabezado final, URLs) y validez SQL de todos los vectores
+npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_render_v1.differential.mjs
 ```
 
 La integración de 3a carga Inc1+Inc2, toma snapshots de todos sus objetos,
