@@ -25,7 +25,7 @@ Each increment needs its own explicit authorization. This file records the appro
 
 | Inc | Scope | Status |
 |---|---|---|
-| 1 | Authorization decision point, append-only audit log, pipelines and stages | Implemented (not committed) |
+| 1 | Authorization decision point, append-only audit log, pipelines and stages | Committed (`8394c45`); applied to Staging; Staging acceptance PASS 60/60 (see section 7) |
 | 2 | Leads and attribution touches | Not started |
 | 3 | Opportunities, stage history, lead conversion | Not started; needs read-only introspection of Staging `public.clients` first |
 | 4 | Catalog, price versions, IVU rate sets, offers | Not started; IVU rules need validation by a PR tax professional |
@@ -115,6 +115,7 @@ None of these tools are project dependencies. They load through ephemeral `npx`.
 | PGlite | `npx -y -p @electric-sql/pglite node supabase/tests/sales_v1_foundation.integration.mjs` | Every non-concurrency test |
 | Real PostgreSQL | `SALES_PG_URL=postgres://postgres@localhost:55432/postgres npx -y -p pg@8 node supabase/tests/sales_v1_foundation.postgres.mjs` | Every test, including adversarial concurrency |
 | Sabotage | `SALES_PG_URL=… npx -y -p pg@8 node supabase/tests/sales_v1_foundation.sabotage.mjs` | Each protection is removed in an in-memory copy, and the suite must fail |
+| Staging acceptance | `supabase/tests/sales_v1_foundation.staging_acceptance.sql`, run manually in the Staging SQL Editor | Functional acceptance against the real Staging database (see section 7) |
 
 - **The expected schema is written by hand from this design** in `supabase/tests/sales_v1_foundation.expected.mjs`. It is never captured from a database.
 - **The real-PostgreSQL runner refuses** non-local hosts and the default port 5432. Use a throwaway cluster:
@@ -142,3 +143,27 @@ These follow the procedures learned during Email Marketing V1:
 - Copy files using UTF-8 explicitly. The SQL files are ASCII-only.
 - MD5 checks must strip `\r`.
 - Never apply to production without separate authorization.
+
+## 7. Staging acceptance record
+
+Increment 1 was applied to Orvesen Staging (`vkvaispeujpsvotojyvz`) and verified there.
+
+- **Apply:** the migration and its history row were recorded in a single SQL Editor transaction.
+  - History row `20261002120000` / `sales_v1_foundation`; its MD5 (with `\r` stripped) is `ef72b4f0727cfa6053d2eb8efafd3247`.
+  - The history count went from 77 to 78.
+- **Postflight:** PASS with no failures. The catalog outside Sales was unchanged by the apply: digest `397521f96e0ca6dd75758ed23671176f`, 3877 items, the same before and after.
+- **Functional acceptance:** `supabase/tests/sales_v1_foundation.staging_acceptance.sql`
+  - The committed file is byte-identical to the runner that passed. SHA256 `c597ae2927713d33c1f751660a5ed6df4976f87608bcdb0c0ae1dd1eeaa7e240`.
+  - Run ID `20261003t035401-418008`: **PASS, 60/60 checks.**
+  - Production contacted: **NO**.
+  - Synthetic writes committed: **NONE.**
+  - After the run, migration history is still 78 and the Sales function fingerprint is `f0caa24672351afd7788dbb756f56c78`.
+- **How the runner works:**
+  - An environment guard runs first. If the database is not the approved post-apply Staging state, the runner reports BLOCKED and writes nothing.
+  - Synthetic users, organizations and Sales rows run inside a savepoint that always ends by raising a sentinel, so they are always rolled back.
+  - Product calls run as an impersonated `authenticated` user through the public RPCs.
+  - Commit-time invariants are checked with `SET CONSTRAINTS ALL IMMEDIATE` checkpoints.
+- **Caveats:**
+  - **Identity sequence:** values of `sales_audit_log_id_seq` consumed during a run are not returned by the rollback. That is how PostgreSQL sequences behave. Audit IDs may therefore have gaps; no rows persist.
+  - **Constants:** the runner hard-codes the post-apply catalog digest and history count. Once Staging changes (another migration, or real Sales rows), it reports BLOCKED and must be updated in a later increment rather than edited in place.
+  - **Concurrency:** the SQL Editor uses a single connection, so concurrency is proven by the local real-PostgreSQL suite, not by this runner.
