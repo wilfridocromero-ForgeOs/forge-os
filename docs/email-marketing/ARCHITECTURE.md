@@ -1,8 +1,9 @@
 # ORVESEN Email Marketing — Arquitectura
 
-Estado: Increment 1 aplicado y validado en Staging (Email Domain Foundation &
-Safety Core). Increment 2 (Audiences) implementado, solo base de datos, pendiente
-de Staging.
+Estado: Increments 1 (Foundation & Safety Core) y 2 (Audiences, solo base de
+datos) aplicados y validados en Staging (acceptance runner Inc1–2: PASS 170/170).
+Increment 3a (senders, templates, validación `email-content.v1`) implementado
+localmente, pendiente de revisión y de Staging.
 Rama: `claude/v1`. Dueño del dominio: Claude Code (desarrollo paralelo con Codex y DeepSeek).
 
 > Este dominio registra evidencia de consentimiento y aplica reglas de envío
@@ -214,6 +215,319 @@ No crea snapshots ni envía nada.
 Diferida: requiere coordinar `src/App.jsx`, `Sidebar.jsx` y
 `src/config/capabilities.js` con el trabajo de Codex sobre autorización en frontend.
 
+## Increment 3a — Senders, templates y `email-content.v1` (implementado, solo base de datos)
+
+> Nota de numeración: las secciones "3" y "3b" de arriba corresponden a los
+> Increments 1 y 2. Esta sección es el **Increment 3a**; los sub-incrementos
+> 3b (renderer), 3c (borradores de campaña) y 3d (runner Inc1–3 + Staging) se
+> describen en el plan (§5).
+
+Migración: `supabase/migrations/20260929120000_email_marketing_v1_senders_templates.sql`
+(ASCII, aditiva). Sin renderer (3b), sin campañas (3c), sin proveedor, sin envío, sin DNS, sin UI.
+Contrato SQL ↔ TS (hash, canonicalización, límites, orden, enteros, Unicode,
+renderer): [`EMAIL_CONTENT_V1_CONTRACT.md`](./EMAIL_CONTENT_V1_CONTRACT.md).
+
+### Cambios sobre objetos anteriores (ambos aditivos)
+
+- `private.email_can` gana exactamente tres acciones: `manage_senders`,
+  `manage_content`, `manage_campaigns` (esta última se usará en 3c; se añade
+  ahora para que el fingerprint de `email_can` cambie una sola vez). Roles
+  (founder/admin), derivación de tenant y todas las acciones existentes quedan
+  idénticos; el test compara la matriz completa usuario × acción antes/después.
+  `CREATE OR REPLACE` conserva owner y ACL (se reafirman explícitamente).
+- `email_audit_log.entity_type` acepta `sender_domain`, `sender_identity`,
+  `template`, `template_version`.
+
+Ningún otro objeto de Inc1–2 cambia (fuente, definer, config, ACL, owner,
+políticas, grants, constraints, triggers e índices se comparan antes/después).
+
+### Impacto en el acceptance runner (cambio deliberado de fingerprint)
+
+El runner Inc1–2 permanece congelado; ejecutado sobre una base con Inc3a
+reportaría estas diferencias **esperadas**, que el runner Inc1–3 (3d) debe
+reflejar explícitamente:
+
+| Check | Inc1–2 | Tras Inc3a |
+|---|---|---|
+| ENV-06 fingerprint Inc1 | `bea78511eb8edb8959f98dd7e835cc3b` | `5615988a559e786c49aa88097238c72e` (solo cambia `email_can`) |
+| ENV-07 fingerprint Inc2 | `a5c722084c60b6e4fe82eb57d0130b0c` | sin cambio |
+| ENV-08 tablas `email_*` | 12 | 16 |
+| ENV-09 funciones `email_*` | 51 | 81 (21 privadas + 9 RPC) |
+| SEC-06 / SEC-07 RPCs públicas | 24 | 33 |
+| SEC-08 helpers privados ejecutables | solo `email_can` | sin cambio |
+
+Nota: el fingerprint usa `pg_get_function_identity_arguments`, que renderiza
+tipos compuestos según `search_path` (`email_contacts` vs
+`public.email_contacts`). Los valores de Staging corresponden a un
+`search_path` sin `public`; el runner Inc1–3 debe fijar `search_path` antes de
+calcularlo. Los tests locales ya lo hacen y reproducen los valores de Staging.
+
+### Tablas
+
+| Tabla | Propósito | Mutabilidad |
+|---|---|---|
+| `email_sender_domains` | Dominio desde el que la organización pretende enviar. Nombre DNS ASCII/punycode en minúsculas con el mismo patrón de dominio que Inc1 y ≤ 252 caracteres: el máximo utilizable (`a@` + 252 = 254, límite de dirección RFC 5321); un nombre DNS de 253 nunca podría enviar y se rechaza. | Ciclo de catálogo (guard de Inc2). `verification_status` solo admite `unverified` (CHECK + inmutable): los estados de verificación están reservados. Único por organización entre activos; dos organizaciones pueden registrar el mismo dominio sin verificar (la verificación futura decide propiedad). No archivable con identidades activas (`EMAIL_SENDER_DOMAIN_IN_USE`). |
+| `email_sender_identities` | Remitente `local_part@dominio`, `from_name`, `reply_to`. FK compuesta al dominio. | Dirección inmutable; `from_name`/`reply_to` editables con `version` optimista. `from_name` sin el conjunto prohibido del contrato, sin `<>"\@` y sin *encoded words* RFC 2047 (`=?`) (anti header injection y spoofing). |
+| `email_templates` | Contenedor con nombre único entre activos y `latest_version`. | Nombre/descripción inmutables; `latest_version` solo avanza +1 hacia una versión existente. |
+| `email_template_versions` | Versión `email-content.v1` + `subject` + `preheader` + `content_sha256` + `merge_tag_count`/`merge_tags_sha256`. | **Append-only para todo rol.** Numeración consecutiva bajo lock; hash y evidencia de merge tags siempre recalculados en servidor; contenido revalidado en el guard BEFORE INSERT (frontera autoritativa para toda vía); `created_by` = actor de sesión cuando existe. |
+
+### RPCs
+
+| RPC | Acción `email_can` | Idempotencia / concurrencia |
+|---|---|---|
+| `email_create_sender_domain(domain)` | `manage_senders` | Repetir devuelve el activo (`was_created=false`). Los tres *create* idempotentes reintentan como máximo 3 veces si la fila en conflicto se archiva entre el conflicto y la búsqueda; después, `40001 EMAIL_CONCURRENT_MODIFICATION` (reintentable). Nunca devuelven cero filas. |
+| `email_archive_sender_domain(id)` | `manage_senders` | Idempotente; `FOR UPDATE`. |
+| `email_create_sender_identity(domain_id, local_part, from_name, reply_to)` | `manage_senders` | Mismo payload → existente; distinto → `EMAIL_SENDER_IDENTITY_CONFLICT`. Dominio `FOR SHARE` (serializa con archivado). |
+| `email_update_sender_identity(id, changes, expected_version)` | `manage_senders` | `from_name`, `reply_to`; `EMAIL_SENDER_IDENTITY_VERSION_CONFLICT`; no-op no incrementa. |
+| `email_archive_sender_identity(id)` | `manage_senders` | Idempotente. |
+| `email_create_template(name, description)` | `manage_content` | Repetir devuelve el activo. |
+| `email_archive_template(id)` | `manage_content` | Idempotente. |
+| `email_create_template_version(template_id, subject, preheader, content, expected_latest_version)` | `manage_content` | `expected_latest_version` **obligatorio**. Contenido idéntico a la última versión → la devuelve (`was_created=false`), incluso con expected obsoleto (reintento) y aunque el estado referenciado haya cambiado (p. ej. campo archivado): la comprobación de reintento exacto va antes de la validación. Todo contenido nuevo se valida completo. Si no, expected obsoleto → `EMAIL_TEMPLATE_VERSION_CONFLICT` (40001). El trigger bloquea `FOR SHARE` los campos personalizados referenciados (serializa con `email_archive_custom_field`). |
+| `email_validate_content(subject, preheader, content)` | `read` | Solo lectura; devuelve `{valid, content_sha256, block_count, merge_tags}` o `{valid:false, error, detail}`. |
+
+### `email-content.v1`
+
+```json
+{ "version": "email-content.v1", "blocks": [ ... ] }      // 1..100 bloques, <= 65536 bytes
+{ "type": "heading",   "level": 1..3, "text": "..." }        // 1..300, una línea
+{ "type": "paragraph", "text": "..." }                        // 1..5000, admite \n
+{ "type": "button",    "text": "...", "url": "https://..." | "mailto:..." }
+{ "type": "image",     "src": "https://...", "alt": "...", "href"?: url, "width"?: 1..600 }
+{ "type": "divider" }
+{ "type": "spacer",    "height": 4..96 }
+```
+
+- Texto plano: nunca se interpreta como HTML; secuencias tipo etiqueta
+  (`<p`, `</`, `<!--`, `< script`) se rechazan, también con cada merge tag
+  sustituido por una letra (`<{{contact.first_name|script}}>` se rechaza).
+  `5 < 6` es válido. Los **valores** sustituidos no se validan aquí: son no
+  confiables; el renderer escapa por contexto **todo** texto, de plantilla y
+  sustituido (contrato §7).
+- URLs: `https://` con host ASCII (sin userinfo, sin IP, sin comillas,
+  espacios, `\`, `<>`, `{}`); `mailto:` con una sola dirección, sin query.
+  Imágenes: solo `https://`. Merge tags **nunca** en URLs ni en `alt`.
+- Merge tags `{{ ruta }}` / `{{ ruta | fallback }}` en subject, preheader y
+  texto de bloques. Rutas: `contact.first_name`, `contact.last_name`,
+  `contact.email`, `organization.name`, `custom.<key>` (campo activo de la
+  organización). `{{{`/`}}}` rechazados (no hay salida "raw").
+- Subject 1..200 y preheader 1..250 (code points): una línea, sin caracteres
+  del conjunto prohibido, sin HTML crudo y sin *encoded words* (`=?`). Los
+  campos de encabezado (`from_name`, subject, preheader) rechazan además los
+  selectores de variación ideográfica U+E0100–U+E01EF (regla V1 fail-closed);
+  el cuerpo los conserva para variantes CJK legítimas. Permitidos en todos los
+  campos (encabezados incluidos): ZWNJ/ZWJ (U+200C, U+200D) y U+FE00–U+FE0F
+  (emoji y variantes estándar). La regla de encabezado se aplica también al
+  **valor final renderizado** (tras sustituir merge tags): el renderer (3b)
+  debe comprobar subject y preheader finales con
+  `private.email_rendered_header_is_safe` (misma autoridad SQL) y fallar
+  cerrado con `RENDER_UNSAFE_HEADER`; nunca elimina caracteres en silencio
+  (contrato §7.1, paso 4). Nombres y descripciones de plantilla usan el mismo
+  conjunto explícito, validado en la propia RPC `email_create_template` (sin
+  los helpers `[[:cntrl:]]` de Inc2, cuyo resultado depende del locale). La
+  independencia del locale se limita a la **validación de caracteres**: la
+  unicidad de nombres usa `name_normalized = lower(name)`, que sigue
+  dependiendo del locale/collation de la base (mismo patrón que Inc2); qué
+  nombres no ASCII cuentan como duplicados puede variar entre PGlite (`C`) y
+  Staging. Rediseñar la normalización es **DEFER WITH REASON**: decisión
+  transversal a todos los nombres de Email (Inc1–3), fuera de V1. La
+  lista normativa de caracteres prohibidos vive **solo** en
+  [`EMAIL_CONTENT_V1_CONTRACT.md`](./EMAIL_CONTENT_V1_CONTRACT.md) §3; un test
+  estático exige que coincida exactamente con la expresión SQL y su comentario.
+  Anti header injection y spoofing.
+- Errores: `22023 EMAIL_INVALID_CONTENT`, detalle `"<ubicación>: <motivo>"`.
+- Vectores compartidos (válidos e inválidos, con detalle exacto):
+  `supabase/tests/fixtures/email_content_v1_cases.json`. El renderer TS (3b)
+  debe consumir los mismos vectores para que SQL y TS no diverjan.
+
+### Auditoría
+
+`email.sender_domain.created|archived`, `email.sender_identity.created|updated|archived`,
+`email.template.created|archived`, `email.template_version.created`
+(`template_id`, `version_number`, `content_sha256`, `block_count`,
+`merge_tag_count`, `merge_tags_sha256`: evidencia acotada, nunca la lista,
+guardada también como columnas inmutables de la versión; y `created_by`).
+- La creación de versiones se audita en el trigger `AFTER INSERT`
+  (`email_template_versions_advance`), fuente única y autoritativa: solo filas
+  realmente insertadas, cada una exactamente una vez, por cualquier vía
+  permitida. Una inserción omitida por `ON CONFLICT DO NOTHING` no deja
+  versión ni auditoría.
+- Actor autoritativo = actor de sesión (`auth.uid()`). Si existe, el guard
+  exige `created_by = auth.uid()` (`EMAIL_ACTOR_MISMATCH`), así que actor y
+  autor nunca discrepan. Sin actor de sesión (vía owner/mantenimiento) la
+  auditoría registra actor `system` y conserva `created_by` como evidencia.
+- Cambios de `reply_to`: `reply_to_hash` (hash de la nueva dirección) o
+  `reply_to_cleared`.
+- Direcciones solo como hash SHA-256; nunca subject, preheader ni contenido.
+  Los reintentos idempotentes no se auditan de nuevo.
+
+### Recuperación (solo Staging)
+
+`supabase/recovery/20260929120000_email_marketing_v1_senders_templates.down.sql`:
+una transacción que elimina todos los objetos de 3a, restaura `email_can`
+byte a byte (fingerprint `bea78511…`) y el CHECK de `entity_type` de Inc2, y
+borra la fila del historial de migraciones. Fija `lock_timeout = 10s` y toma
+los locks en este orden fijo: `supabase_migrations.schema_migrations`
+(`EXCLUSIVE`, si existe; evita el TOCTOU entre leer el historial y borrar la
+fila: ninguna migración puede registrarse mientras tanto), las tablas de 3a
+(`ACCESS EXCLUSIVE`) y `email_audit_log` (`EXCLUSIVE`). Si algún lock no se
+obtiene en 10 s, la transacción aborta sin cambios (`55P03`; si el cliente
+continúa, la sentencia destructiva detecta el lock ausente y rechaza) y el
+operador reintenta. Falla cerrado si el historial registra cualquier migración
+posterior a `20260929120000` (`EMAIL_RECOVERY_REFUSED_LATER_MIGRATION`) o
+cualquier versión fuera de la **línea base de recuperación revisada**
+(`EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION`, p. ej. una migración de versión
+menor aplicada después); si el estado no es exactamente el inventario de 3a
+(`EMAIL_RECOVERY_REFUSED_UNEXPECTED_STATE`): `email_can`, el CHECK de
+`entity_type`, el conjunto de relaciones y funciones `email_*`, y las columnas,
+triggers, políticas e índices de las tablas de 3a, además de ninguna función
+ajena a 3a que referencie sus tablas, llame a sus funciones o use las acciones
+`manage_senders|manage_content|manage_campaigns`, y ninguna política que use
+esas acciones (tras la recuperación negarían a todos en silencio); además,
+vía `pg_depend`: ningún objeto ajeno a 3a puede depender de sus tablas, tipos
+de fila o funciones (vistas, FKs, políticas, defaults, triggers, funciones
+`BEGIN ATOMIC`), y ninguna vista/materializada, regla, default de columna,
+CHECK, cláusula `WHEN` de trigger o función atómica que dependa de
+`email_can` o de `email_require` (helper de Inc1 que pasa la acción a
+`email_can`) puede usar esas acciones (se inspecciona su definición
+deparseada por PostgreSQL, las funciones atómicas vía `pg_get_functiondef`;
+solo se compara el literal de la acción, que el deparseo nunca cualifica, así
+que no depende de `search_path`; un tipo de dependiente desconocido también
+rechaza). Límites documentados: índices por expresión y columnas generadas
+no pueden llamar a `email_can` (no es inmutable); una acción calculada en
+tiempo de ejecución (`'manage_' || x`) no es detectable; o si existe cualquier dato de 3a
+(`EMAIL_RECOVERY_REFUSED_DATA_PRESENT`: la auditoría es inmutable y no se borra). Ensayado localmente (aplicar → recuperar
+→ snapshot idéntico a Inc1–2 → re-aplicar). **Production es forward-fix.**
+
+**Atomicidad independiente del cliente (HIGH-1, pass 10).** Toda modificación
+la hace UNA sentencia final (`do $recovery$`): funciones y tablas de 3a, CHECK
+de auditoría, `email_can` y la fila del historial; un fallo dentro de ella la
+deshace entera. Esa sentencia rechaza
+(`EMAIL_RECOVERY_REFUSED_INCOMPLETE_PRECONDITIONS`) salvo que en esta misma
+transacción hayan pasado, en orden, todos los chequeos (cada uno registra su
+éxito como última acción en `orvesen.email_inc3a_recovery`, local a la
+transacción y reiniciado al inicio del script; un chequeo rechazado se
+revierte junto con su registro) y que la sesión conserve todos los locks de
+recuperación (verificado en `pg_locks`). Así, un cliente que revierte solo la
+sentencia fallida y continúa (psql `ON_ERROR_ROLLBACK`, GUIs que vuelven a un
+savepoint por sentencia) no cambia nada tras un rechazo; la corrección no
+depende de que el cliente se detenga en el primer error. Defensa adicional:
+con psql usar `-v ON_ERROR_STOP=1`, nunca `ON_ERROR_ROLLBACK`. Probado en
+PGlite con un cliente que ejecuta cada sentencia en su propio savepoint y
+continúa tras cada error, y en PostgreSQL 17 con `psql -v ON_ERROR_ROLLBACK=on`.
+
+**Precondición operativa: EMAIL INC3A RECOVERY REQUIRES A MIGRATION/DDL
+FREEZE.** Durante toda la ventana de recuperación: ninguna migración en curso,
+ningún DDL que cambie el esquema, ningún cambio de esquema desde el SQL
+Editor, y la automatización de migraciones/despliegues (CI, `supabase db
+push`, despliegues de ramas) en pausa. El invariante de seguridad es
+**freeze operativo + pre-check técnico + locks de recuperación**, no SQL por
+sí solo. El pre-check (solo lectura de `pg_locks`, `pg_stat_activity` y
+`pg_prepared_xacts`; nunca termina sesiones) se ejecuta antes de cualquier
+lock y otra vez con todos los locks tomados (cada ejecución descarta antes
+la copia de `pg_stat_activity` que PostgreSQL conserva hasta el final de la
+transacción, con `pg_stat_clear_snapshot()`, así que la segunda lee la
+actividad actual, aunque solo en ese instante), y rechaza con
+`EMAIL_RECOVERY_REFUSED_CONCURRENT_ACTIVITY` si hay una transacción preparada;
+**primero**, si otra sesión de esta base no es completamente visible para el
+rol (`query = '<insufficient privilege>'` con `backend_type`/`state` NULL),
+antes de cualquier filtro por esas columnas: la recuperación debe ejecutarse
+con un rol que vea todas las sesiones (p. ej. miembro de
+`pg_read_all_stats`) o rechaza; si algún lock (leído solo de `pg_locks`,
+visible para cualquier rol) de otra sesión escribe o bloquea el historial de
+migraciones o es un lock de tabla de nivel esquema (`SHARE UPDATE EXCLUSIVE`
+o más fuerte), salvo que esa sesión sea visible como `autovacuum worker`; o
+si otra sesión visible en transacción ejecuta como sentencia actual o última
+SQL que cambia el esquema. El
+`lock_timeout` de 10 s se mantiene. **Limitación residual:** SQL no puede
+detectar ni serializar por completo DDL arbitrario no confirmado que ya se
+ejecuta en otra sesión (sus filas de catálogo son invisibles, `CREATE
+FUNCTION` no retiene locks de tabla, el DDL anterior de una transacción
+inactiva no es visible tras otra sentencia, y una sesión puede empezar DDL
+tras el último chequeo). El freeze es lo que cierra ese hueco. En PGlite
+(una sola conexión) la segunda sesión se simula tratando la propia sesión
+como ajena, sustituyendo solo su pid (el resto de filtros sigue activo): lock
+de DDL en curso, escritura del historial, re-chequeo con los locks tomados, y
+sesión no visible reproducida con `SET ROLE` a un rol sin privilegios (fila
+con `backend_type`/`state` NULL e `'<insufficient privilege>'`), incluido su
+lock; es comportamiento del motor PostgreSQL 18 en un único backend, no una
+prueba multi-sesión. El predicado de texto de sentencias que cambian el
+esquema se evalúa en PostgreSQL contra ejemplos positivos y negativos
+(el texto de la propia sesión es el lote enviado, truncado a
+`track_activity_query_size`, por lo que no sirve para simular otra sesión;
+la frescura del re-chequeo sí se prueba enviando el script en dos lotes de
+la misma transacción); las transacciones preparadas solo se verifican estáticamente
+(`max_prepared_transactions = 0` en PGlite).
+
+Línea base de recuperación revisada. La lista de versiones aceptadas (entre
+`-- BEGIN/END REVIEWED RECOVERY BASELINE`) se genera desde
+`supabase/tests/fixtures/email_marketing_v1_recovery_baseline.json`. Es un
+snapshot de **tiempo de build**: no garantiza ser el historial en el momento de
+aplicar. **Regla operativa:** inmediatamente antes de aplicar 3a a un entorno
+real, exportar su historial (`select version, name from
+supabase_migrations.schema_migrations order by version;`), revisarlo,
+guardar sus filas **anteriores a 3a** como ese fixture, regenerar la lista con
+`node supabase/tests/email_marketing_v1_recovery_baseline.mjs --write` y
+actualizar el digest fijado `RECOVERY_BASELINE_SHA256` que imprime.
+Ciclo de vida:
+- **Antes de registrar 3a:** la cobertura se exige solo para versiones
+  menores que 3a; una versión menor desconocida o retro-fechada falla cerrada
+  hasta refrescar y revisar la línea base.
+- **Después de registrar 3a:** la línea base queda **congelada** (`--write`
+  se niega). Las migraciones posteriores no requieren editarla: las gobiernan
+  `EMAIL_RECOVERY_REFUSED_LATER_MIGRATION` y las reglas de orden. Una versión
+  menor que 3a fuera de la línea base es una migración retro-fechada: falla y
+  debe revertirse, nunca añadirse. Una línea base con versiones ≥ 3a, filas
+  desordenadas, o que no coincide con el digest fijado (editada, truncada o
+  con una versión absorbida) falla; también falla si una fila revisada falta
+  en el historial o cambió de nombre.
+
+`--check` y el validador estático fallan si la lista difiere del fixture, si
+el digest no coincide o si el historial actual viola el ciclo de vida. El
+ensayo prueba ambos lados: con la línea base obsoleta una migración paralela
+legítima provoca rechazo; tras refrescarla se acepta; una versión desconocida
+sigue siendo rechazada.
+
+### Decisión diferida (L5)
+
+- `email_update_sender_identity` mantiene `p_expected_version` opcional, igual
+  que `email_update_contact` y `email_update_segment` (Inc1–2): un cliente que
+  lo omite puede sobrescribir en silencio. Hacerlo obligatorio en todo el
+  dominio es una decisión de API transversal, diferida.
+- Validación de una versión nueva: **dos** pasadas, ambas con propósito.
+  (1) `email_create_template_version` valida antes de la comprobación de
+  conflicto de versión: fija la precedencia de errores de la API (un contenido
+  inválido se informa como `EMAIL_INVALID_CONTENT` aunque `expected` esté
+  obsoleto). No es una frontera de seguridad. (2) `email_template_versions_guard`
+  (BEFORE INSERT) es la **frontera autoritativa** para toda vía de inserción y
+  además produce la lista de merge tags que se bloquea y re-comprueba. Hasta
+  Fix Pass 3 existía una tercera pasada en el trigger AFTER, usada solo para
+  contar y hashear merge tags para la auditoría: era redundante (la fila es
+  inmutable y el guard ya la validó con los campos bloqueados) y se eliminó; el
+  guard guarda ahora `merge_tag_count`/`merge_tags_sha256` en la fila y el
+  trigger AFTER los lee. Quitarla no cambia bloqueos ni garantías de carrera
+  (los `FOR SHARE` se toman en el guard). Comprobado por un mutante: sin la
+  validación del guard, las inserciones directas inválidas se aceptarían y la
+  suite de inmutabilidad lo detecta.
+- **Lows diferidos de la octava revisión (Pass 8, pendientes):** L1 no se
+  comprueban locks de objeto/namespace del DDL sin lock de tabla; L2 el regex
+  de texto DDL no ve `DO`/`EXECUTE`/`CALL` y el texto puede truncarse
+  (`track_activity_query_size`); L3 la comprobación de referencias en
+  `prosrc` distingue mayúsculas; L4 la congelación de `--write` depende del
+  fixture del repositorio, no del historial vivo; L5 la allowlist SQL compara
+  solo versiones; L6 subida no documentada `EXCLUSIVE` → `ACCESS EXCLUSIVE`
+  en `email_audit_log` tras los chequeos (sigue fallando cerrado); L7
+  etiquetas "build-time"/"authoritative" obsoletas en fixtures.
+- **DEFER V1 — lista de tipos de bloque duplicada / re-parseo.** Los tipos de
+  bloque (`heading`, `paragraph`, `button`, `image`, `divider`, `spacer`)
+  aparecen en más de una función SQL y el contenido se recorre más de una vez
+  al validar. Motivo: unificarlo exige reestructurar el validador autoritativo
+  (riesgo de regresión en la frontera de seguridad) sin beneficio funcional en
+  V1; el coste es acotado (≤ 100 bloques, ≤ 65536 bytes). Guard existente: un
+  test estático exige que los tipos de bloque con texto que valida
+  `email_content_validate` sean exactamente los que re-comprueba (y bloquea)
+  `email_template_versions_guard` (`heading`, `paragraph`, `button`), así que
+  un tipo con texto añadido en un sitio y no en el otro falla.
+
 ## 4. State machines
 
 ### Contact (Increment 1)
@@ -243,7 +557,10 @@ Futuro: `confirmation_requested` / `confirmed` para doble opt-in.
 
 1. **Foundation & Safety Core** ✅ (aplicado y validado en Staging).
 2. **Audiences** ✅ base de datos (listas, tags, custom fields, segmentos `segment.v1`, preview, importación CRM sin consentimiento). UI diferida hasta coordinar archivos compartidos.
-3. Sender domains/identities (sin DNS real), templates y versiones inmutables, renderer TS con escaping, borradores de campaña.
+3. Sender domains/identities (sin DNS real), templates y versiones inmutables, renderer TS con escaping, borradores de campaña. Dividido internamente en:
+   **3a** senders + templates/versiones + validación `email-content.v1` (implementado, pendiente de revisión/Staging);
+   **3b** renderer TS + vectores compartidos; **3c** borradores de campaña + readiness;
+   **3d** runner de aceptación Inc1–3 y Staging.
 4. Provider abstraction + adaptador `sandbox` + suite de contrato.
 5. Autorización de envío (hash de contenido + audiencia, aprobador humano), snapshot de audiencia, send jobs, dispatcher, rate limiting, reintentos. **Decisión pendiente: `pg_net` + Vault vs. cron externo.**
 6. Webhooks (firma + anti-replay), inbox deduplicado, unsubscribe público (token HMAC, RFC 8058), automatización de supresión; después, primer proveedor real detrás de un flag.
@@ -287,7 +604,70 @@ npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_foundation
 # Increment 2
 node supabase/tests/validate_email_marketing_v1_audiences.mjs
 npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_audiences.integration.mjs
+
+# Increment 3a
+node --test supabase/tests/validate_email_marketing_v1_senders_templates.mjs
+npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_senders_templates.integration.mjs
+# Ensayo de recuperación (aplicar -> recuperar -> contratos Inc1-2 idénticos)
+npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_senders_templates.recovery.mjs
+# Mutation (sabotage) runner: cada defecto declara su clase de detección
+# (behavioral = debe fallar un test de integración relevante; static-only = con motivo)
+npx -y -p @electric-sql/pglite node supabase/tests/email_marketing_v1_senders_templates.mutation.mjs
 ```
+
+La integración de 3a carga Inc1+Inc2, toma snapshots de todos sus objetos,
+aplica 3a y verifica que nada existente se debilitó, además de reproducir los
+fingerprints del runner de Staging.
+
+Orden de migraciones (`supabase/tests/email_marketing_v1_migration_order.mjs`).
+Fuentes y su autoridad:
+
+| Fuente | Autoritativa para |
+|---|---|
+| La cadena Email del repositorio (Inc1 → Inc2 → Inc3a) | Qué migraciones Email existen y en qué orden. |
+| `supabase/tests/fixtures/email_marketing_v1_staging_history.json` | Snapshot **actual** (refrescable) de lo **aplicado** en Staging (export de solo lectura de `supabase_migrations.schema_migrations`). Las invariantes deben cumplirse con cualquier refresco: sin conteos de filas ni supuestos sobre qué incrementos están aplicados. |
+| `supabase/tests/fixtures/email_marketing_v1_staging_history_2026-09-29.json` | Snapshot **histórico inmutable** (77 filas, Inc1+Inc2, Inc3a aún no aplicada) con el que se construyó 3a. Solo aserciones históricas y el conjunto de versiones que acepta la recuperación de 3a. |
+| Ramas paralelas (listadas en los fixtures como evidencia) | Migraciones legítimas: 8 de goal-engine de Codex (`20260921…`–`20260924…`, anteriores a Inc1, no aplicadas en Staging) y 5 de baseline aplicadas en Staging pero ausentes de este worktree. |
+
+Reglas (idénticas en los validadores de Inc1, Inc2 e Inc3a, cada uno para sus
+incrementos):
+1. cada incremento existe exactamente una vez y las versiones crecen en orden;
+2. prefijos de versión únicos en **todas** las migraciones;
+3. ninguna migración Email fuera de la cadena ordena antes del último
+   incremento (un único predicado: nombre que empieza por `email_marketing_`,
+   igual para archivos y filas del historial);
+4. **ventana protegida aplicada**: entre el primer incremento y el **último
+   incremento registrado en Staging**, toda migración debe estar ya aplicada;
+   una no aplicada ahí es retro-fechada (se aplicaría fuera de orden). Un
+   incremento pendiente no amplía la ventana: una migración paralela legítima
+   fechada antes de un incremento pendiente pasa. Las intercaladas ya
+   aplicadas son historia legítima;
+5. historial: las migraciones Email registradas son exactamente un prefijo de
+   la cadena, y todo incremento pendiente ordena después de la última versión
+   registrada.
+Las migraciones anteriores a Inc1 no quedan restringidas. Casos sintéticos
+(historiales hasta Inc2, Inc3a y un Inc4 futuro; migraciones paralelas reales)
+prueban que no hay falsos fallos y que se detectan predecesores ausentes o
+reordenados. Los validadores de Inc1 e Inc2 usan estas reglas (únicas
+modificaciones a tests existentes de Inc1–2, limitadas a su prueba de orden).
+
+Concurrencia: PGlite es de una sola conexión y usa collation `C`. Las carreras
+se simulan de forma determinista (triggers de sentencia solo de test que
+archivan la fila en conflicto justo entre el conflicto y la búsqueda, y que
+fuerzan el agotamiento de reintentos), además de versiones obsoletas y
+reintentos. Los locks (`FOR UPDATE`/`FOR SHARE`) y el orden por collation `C`
+se verifican estáticamente. **Nada de esto prueba concurrencia real**; el
+runner Inc1–3 en Staging (3d) es la siguiente capa de evidencia.
+
+Finales de línea: con `core.autocrlf=true` un checkout nuevo en Windows tiene
+CRLF. Todas las suites (Inc1, Inc2, Inc3a, recuperación, mutation runner) leen
+texto con `readText` (CRLF y CR sueltos → LF) y los hashes de fuente se
+calculan sobre el texto normalizado; el mutation runner incluye un control
+CRLF. No se añade `.gitattributes` para no reescribir finales de línea en todo
+el repositorio.
+
+Módulo compartido de harness para 3a en adelante:
+`supabase/tests/email_marketing_v1_harness.mjs` (las suites de Inc1–2 no se tocan).
 
 La prueba de integración simula el entorno de Supabase (roles, `auth.uid()`,
 privilegios por defecto amplios) y verifica aislamiento entre dos

@@ -6,11 +6,12 @@ import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { INC1, STAGING_HISTORY, emailOrderViolation, isEmailMarketingName, readText } from "./email_marketing_v1_migration_order.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../migrations");
 const MIGRATION = "20260926160000_email_marketing_v1_foundation.sql";
-const raw = readFileSync(resolve(migrationsDir, MIGRATION), "utf8");
+const raw = readText(resolve(migrationsDir, MIGRATION));
 const sql = raw.toLowerCase();
 // Comment-free SQL so documentation cannot satisfy or violate a contract.
 const code = sql.replace(/--[^\n]*/g, "");
@@ -31,12 +32,15 @@ function functionBlocks() {
   return [...code.matchAll(pattern)].map((m) => ({ name: m[1], args: m[2], header: m[3], body: m[4] }));
 }
 
-test("migration sorts after every non-email migration, including Codex's latest known one", () => {
+test("ordering: Increment 1 follows the shared Email Marketing ordering rules and Codex's latest known migration", () => {
   const version = MIGRATION.split("_")[0];
-  const others = readdirSync(migrationsDir)
-    .filter((f) => f.endsWith(".sql") && !f.includes("_email_marketing_"))
-    .map((f) => f.split("_")[0]);
-  assert.ok(others.every((v) => v < version), "must sort after every non-email migration");
+  // Shared Email Marketing ordering rules (email_marketing_v1_migration_order.mjs):
+  // Increment 1 exists once and no other Email migration precedes it. Earlier
+  // baseline/Builder/Codex migrations and any later migration are legitimate.
+  assert.equal(emailOrderViolation(readdirSync(migrationsDir), [INC1]), null);
+  const stagingBefore = STAGING_HISTORY.rows.filter((r) => r.version < version);
+  assert.ok(stagingBefore.length > 0 && stagingBefore.every((r) => !isEmailMarketingName(r.name)),
+    "on Staging, every migration recorded before Increment 1 is non-email");
   assert.ok(version > "20260924145451", "must sort after codex/orb-goal-engine migrations");
 });
 

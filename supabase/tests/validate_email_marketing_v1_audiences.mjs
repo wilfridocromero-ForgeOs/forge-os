@@ -7,13 +7,14 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { STAGING_HISTORY, emailOrderViolation, readText, stagingHistoryViolation } from "./email_marketing_v1_migration_order.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../migrations");
 const INC1 = "20260926160000_email_marketing_v1_foundation.sql";
 const INC2 = "20260927120000_email_marketing_v1_audiences.sql";
 const inc1Raw = readFileSync(resolve(migrationsDir, INC1));
-const raw = readFileSync(resolve(migrationsDir, INC2), "utf8");
+const raw = readText(resolve(migrationsDir, INC2));
 const code = raw.toLowerCase().replace(/--[^\n]*/g, "");
 
 const TABLES = [
@@ -41,13 +42,20 @@ function functionBlocks() {
 }
 
 test("Increment 1 migration is byte-identical to the version validated on Staging", () => {
-  assert.equal(createHash("md5").update(inc1Raw).digest("hex"), "dbc4208d3b3df5f35248042a7cfe1113");
+  assert.equal(createHash("md5").update(inc1Raw.toString("utf8").replace(/\r/g, "")).digest("hex"), "dbc4208d3b3df5f35248042a7cfe1113");
 });
 
 test("ordering: sorts after Increment 1 and every non-email migration", () => {
   const version = INC2.split("_")[0];
-  const all = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-  assert.ok(all.filter((f) => f !== INC2).every((f) => f.split("_")[0] < version));
+  // Shared Email Marketing ordering rules (email_marketing_v1_migration_order.mjs):
+  // Increment 1 then Increment 2, nothing else (of any kind) inside the
+  // protected window between them, no other Email migration before them.
+  // Baseline/Builder/Codex migrations before Increment 1 and any migration
+  // after Increment 2 are legitimate.
+  assert.equal(emailOrderViolation(readdirSync(migrationsDir), [INC1, INC2]), null);
+  // Staging (authoritative for what is applied, refreshed over time) records a
+  // prefix of the Email chain in order; later increments being applied is fine.
+  assert.equal(stagingHistoryViolation(STAGING_HISTORY.rows), null);
   assert.ok(version > "20260924145451", "after codex/orb-goal-engine's latest known migration");
 });
 

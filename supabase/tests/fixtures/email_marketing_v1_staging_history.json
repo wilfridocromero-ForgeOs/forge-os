@@ -1,0 +1,337 @@
+{
+  "description": "CURRENT snapshot of supabase_migrations.schema_migrations on Orvesen Staging (read-only export by the project owner). Refresh it by re-exporting `select version, name from supabase_migrations.schema_migrations order by version;` whenever Staging history changes; the ordering invariants must hold for any refreshed history. Not written by any test.",
+  "captured_on": "2026-09-29",
+  "rows": [
+    {
+      "version": "20260801000000",
+      "name": "orvesen_baseline_core"
+    },
+    {
+      "version": "20260804024641",
+      "name": "add_roles_work_areas_and_secure_permissions"
+    },
+    {
+      "version": "20260804024801",
+      "name": "index_area_score_creator"
+    },
+    {
+      "version": "20260804032506",
+      "name": "add_secure_user_invitations"
+    },
+    {
+      "version": "20260804034711",
+      "name": "add_client_workspaces_and_professional_roles_v2"
+    },
+    {
+      "version": "20260804040409",
+      "name": "add_business_management_and_pending_assignment"
+    },
+    {
+      "version": "20260804053330",
+      "name": "create_score_builder_definitions"
+    },
+    {
+      "version": "20260804053623",
+      "name": "refine_score_template_manager_policies"
+    },
+    {
+      "version": "20260804053742",
+      "name": "seed_score_divisions_and_optimize_policies"
+    },
+    {
+      "version": "20260804054000",
+      "name": "orvesen_baseline_chain_repairs"
+    },
+    {
+      "version": "20260805043427",
+      "name": "phase2_projects_foundation"
+    },
+    {
+      "version": "20260805214000",
+      "name": "fix_score_projects_brain"
+    },
+    {
+      "version": "20260805214901",
+      "name": "fix_orvesen_foundation_name"
+    },
+    {
+      "version": "20260805225901",
+      "name": "premium_platform_foundation"
+    },
+    {
+      "version": "20260805230703",
+      "name": "project_permissions_and_master_documents"
+    },
+    {
+      "version": "20260805231035",
+      "name": "premium_foundation_indexes"
+    },
+    {
+      "version": "20260806001003",
+      "name": "discovery_v1"
+    },
+    {
+      "version": "20260806001619",
+      "name": "discovery_v1_policy_refinement"
+    },
+    {
+      "version": "20260812152424",
+      "name": "score_builder_v1_scale_100"
+    },
+    {
+      "version": "20260812163716",
+      "name": "discovery_builder_v1_foundation"
+    },
+    {
+      "version": "20260812220748",
+      "name": "discovery_execution_v1_compatibility"
+    },
+    {
+      "version": "20260813163650",
+      "name": "score_engine_response_types_v1"
+    },
+    {
+      "version": "20260813171737",
+      "name": "company_master_score_v1"
+    },
+    {
+      "version": "20260813221029",
+      "name": "automate_company_score_chain_v1"
+    },
+    {
+      "version": "20260814024158",
+      "name": "repair_published_discovery_frequency_options"
+    },
+    {
+      "version": "20260815152136",
+      "name": "secure_member_access_rls"
+    },
+    {
+      "version": "20260816120000",
+      "name": "organization_membership_authorization_v1"
+    },
+    {
+      "version": "20260816163000",
+      "name": "projects_v1_foundation"
+    },
+    {
+      "version": "20260817041053",
+      "name": "projects_v1_reliable_core"
+    },
+    {
+      "version": "20260817043432",
+      "name": "project_members_v1"
+    },
+    {
+      "version": "20260817045223",
+      "name": "project_comments_activity_v1"
+    },
+    {
+      "version": "20260817051504",
+      "name": "project_files_storage_v1"
+    },
+    {
+      "version": "20260817052316",
+      "name": "enforce_project_file_delete_roles"
+    },
+    {
+      "version": "20260817054006",
+      "name": "project_task_evidence_v1"
+    },
+    {
+      "version": "20260817055247",
+      "name": "restrict_task_evidence_table_grants"
+    },
+    {
+      "version": "20260818035929",
+      "name": "project_task_scheduling_v1"
+    },
+    {
+      "version": "20260820215916",
+      "name": "fix_project_task_recurrence_identity_trigger"
+    },
+    {
+      "version": "20260820223846",
+      "name": "fix_project_task_activity_and_creation"
+    },
+    {
+      "version": "20260821001924",
+      "name": "repair_task_evidence_storage_path"
+    },
+    {
+      "version": "20260821041044",
+      "name": "central_notifications_v1"
+    },
+    {
+      "version": "20260821043453",
+      "name": "web_push_subscriptions_v1"
+    },
+    {
+      "version": "20260821140738",
+      "name": "repair_discovery_scale_score_question"
+    },
+    {
+      "version": "20260821144709",
+      "name": "repair_discovery_score_chain_configuration"
+    },
+    {
+      "version": "20260824040734",
+      "name": "temporal_scheduler_v1"
+    },
+    {
+      "version": "20260824061821",
+      "name": "clients_v2_safe_lifecycle"
+    },
+    {
+      "version": "20260825023927",
+      "name": "enforce_discovery_assessment_scope"
+    },
+    {
+      "version": "20260825034138",
+      "name": "project_task_reference_files_v1"
+    },
+    {
+      "version": "20260825143548",
+      "name": "project_task_assignment_notifications_v1"
+    },
+    {
+      "version": "20260825150527",
+      "name": "secure_brain_structure_v1"
+    },
+    {
+      "version": "20260825152706",
+      "name": "brain_knowledge_preparation_v1"
+    },
+    {
+      "version": "20260825211531",
+      "name": "brain_knowledge_chunking_v1"
+    },
+    {
+      "version": "20260825222738",
+      "name": "orb_v1_backend"
+    },
+    {
+      "version": "20260828025626",
+      "name": "configure_orvesen_media_division_score_model"
+    },
+    {
+      "version": "20260828032216",
+      "name": "orb_actions_v1"
+    },
+    {
+      "version": "20260829042134",
+      "name": "orb_actions_v2_task_actions_core"
+    },
+    {
+      "version": "20260830033635",
+      "name": "lock_discovery_template_division_scope"
+    },
+    {
+      "version": "20260831052721",
+      "name": "safe_delete_in_progress_discovery_assessment"
+    },
+    {
+      "version": "20260831053555",
+      "name": "harden_discovery_assessment_delete_rpc"
+    },
+    {
+      "version": "20260831142311",
+      "name": "builder_phase_1_foundation"
+    },
+    {
+      "version": "20260831145554",
+      "name": "refine_builder_phase_1_policies"
+    },
+    {
+      "version": "20260901020615",
+      "name": "builder_assets_foundation"
+    },
+    {
+      "version": "20260901023430",
+      "name": "tighten_builder_asset_grants"
+    },
+    {
+      "version": "20260901170000",
+      "name": "builder_landing_document_drafts_v1"
+    },
+    {
+      "version": "20260901180001",
+      "name": "builder_landing_professional_content_v1"
+    },
+    {
+      "version": "20260901222338",
+      "name": "builder_landing_publishing_v1"
+    },
+    {
+      "version": "20260902",
+      "name": "builder_landing_document_v1_validator_sync"
+    },
+    {
+      "version": "20260904110000",
+      "name": "builder_form_drafts_v1"
+    },
+    {
+      "version": "20260904111500",
+      "name": "builder_form_publication_constraint_fix"
+    },
+    {
+      "version": "20260905120000",
+      "name": "builder_header_socials_v1"
+    },
+    {
+      "version": "20260909214636",
+      "name": "builder_header_composer_nav_styles_v1"
+    },
+    {
+      "version": "20260913155327",
+      "name": "builder_footer_v1"
+    },
+    {
+      "version": "20260915184800",
+      "name": "builder_multipage_v1_pages_core"
+    },
+    {
+      "version": "20260916090000",
+      "name": "builder_landing_document_v2_persistence"
+    },
+    {
+      "version": "20260917000000",
+      "name": "orvesen_baseline_completion"
+    },
+    {
+      "version": "20260917000100",
+      "name": "orvesen_auth_bootstrap_triggers"
+    },
+    {
+      "version": "20260926160000",
+      "name": "email_marketing_v1_foundation"
+    },
+    {
+      "version": "20260927120000",
+      "name": "email_marketing_v1_audiences"
+    }
+  ],
+  "known_parallel_branch_migrations": {
+    "description": "Legitimate migrations that exist on parallel local branches (codex/orb-goal-engine, backup/codex-2026-09-25) but are neither applied on Staging nor present in this worktree; they sort before Email Increment 1. Source: local git refs on 2026-09-29.",
+    "files": [
+      "20260921055617_organization_scoped_member_module_access.sql",
+      "20260921055623_goal_engine_persistence_v1.sql",
+      "20260922042520_goal_engine_orb_integration_v1.sql",
+      "20260922154031_goal_engine_action_intent_lifecycle_v1.sql",
+      "20260923024825_goal_engine_execution_observations_v1.sql",
+      "20260923141204_goal_engine_evidence_learning_foundation_v1.sql",
+      "20260923172355_goal_engine_learning_proposal_lifecycle_v1.sql",
+      "20260924145451_goal_engine_strategy_adaptation_v1.sql"
+    ]
+  },
+  "staging_only_baseline_migrations": {
+    "description": "Applied on Staging but absent from this worktree (present on other branches). Their absence here is legitimate.",
+    "files": [
+      "20260801000000_orvesen_baseline_core.sql",
+      "20260804054000_orvesen_baseline_chain_repairs.sql",
+      "20260916090000_builder_landing_document_v2_persistence.sql",
+      "20260917000000_orvesen_baseline_completion.sql",
+      "20260917000100_orvesen_auth_bootstrap_triggers.sql"
+    ]
+  }
+}
