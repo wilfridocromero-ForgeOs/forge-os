@@ -5,7 +5,9 @@ datos) aplicados y validados en Staging (acceptance runner Inc1–2: PASS 170/17
 Increment 3a (senders, templates, validación `email-content.v1`) revisado,
 confirmado (`2a85aa4`) y publicado en `origin/claude/v1`; aún no aplicado en
 Staging (3d). Increment 3b (renderer TS `email-content.v1`, sin migración)
-implementado localmente, pendiente de revisión.
+confirmado (`bfb625f`) y publicado. Increment 3c (borradores de campaña,
+readiness, resolución de merge values, preview input) implementado
+localmente, pendiente de revisión.
 Rama: `claude/v1`. Dueño del dominio: Claude Code (desarrollo paralelo con Codex y DeepSeek).
 
 > Este dominio registra evidencia de consentimiento y aplica reglas de envío
@@ -551,6 +553,106 @@ mismas pruebas se ejecutan con Deno y con Node y deben dar el mismo digest de
 salida. Fuera de 3b: campañas, snapshots, envíos, proveedor, tokens de baja,
 tracking, UI.
 
+## Increment 3c — Borradores de campaña, readiness y preview input (implementado)
+
+Migración: `supabase/migrations/20261003120000_email_marketing_v1_campaigns.sql`
+(ASCII, aditiva). Recuperación (solo Staging):
+`supabase/recovery/20261003120000_email_marketing_v1_campaigns.down.sql`.
+Sin aprobación, programación, snapshot, jobs, proveedor, envío, Edge Function
+ni UI. **No hay renderer en SQL**: el único renderer es Inc3b (`render_v1.ts`).
+
+### Cambios sobre objetos anteriores
+
+Solo uno, aditivo: `email_audit_log.entity_type` acepta `campaign`. La
+migración **falla cerrada** (`EMAIL_MIGRATION_REFUSED_UNEXPECTED_STATE`) si el
+CHECK no es exactamente el de Inc3a. `private.email_can` **no cambia**
+(`manage_campaigns` existe desde 3a): fingerprint Inc1 sigue `5615988a…`,
+Inc2 `a5c72208…`. Para el runner 3d: 17 tablas `email_*`, 91 funciones
+`email_*`, 38 RPCs públicas.
+
+### `email_campaigns`
+
+| Campo | Regla |
+|---|---|
+| `name` | 1..100, sin caracteres prohibidos; **inmutable**; único entre borradores (`lower(name)`, mismo caveat de locale que el resto de nombres). |
+| `sender_identity_id` | Opcional; FK compuesta `(organization_id, id)`; activa al fijarla. |
+| `template_id` + `template_version` | Par opcional (ambos o ninguno); FK compuesta a `email_template_versions (organization_id, template_id, version_number)`: **fija una versión**, nunca sigue a la última; plantilla activa al fijarla. No se copia contenido (las versiones son append-only). |
+| `audience_definition` | `segment.v1` en línea (sin referencias a segmentos guardados: no tienen historial de versiones). Validada con `private.email_segment_validate`. |
+| `audience_sha256` | Solo PostgreSQL: `sha256(convert_to(audience_definition::text, 'UTF8'))` en el trigger guard; el llamador nunca lo aporta. Se compara por **texto canónico**, no por igualdad jsonb (`1.50` y `1.5` son iguales en jsonb pero tienen hash distinto): todo cambio del texto canónico de la audiencia cambia el hash y sube `version`; `version` también sube con otros cambios reales de la campaña (descripción, remitente, plantilla, archivado) sin cambiar el hash. |
+| `status` | `draft → archived` (terminal). |
+| `version` | Optimista; sube solo con cambios reales. |
+
+Guard (`private.email_campaigns_guard`, para todo rol): identidad y nombre
+inmutables, transiciones, referencias activas bloqueadas `FOR SHARE`,
+validación de la audiencia, hash y versión calculados en servidor; sin DELETE
+ni TRUNCATE. Roles de API: solo `SELECT` vía RLS.
+
+### RPCs
+
+| RPC | Acción | Notas |
+|---|---|---|
+| `email_create_campaign(name, description)` | `manage_campaigns` | Idempotente por nombre activo (`was_created=false`); reintento acotado. |
+| `email_update_campaign(campaign_id, changes, expected_version)` | `manage_campaigns` | `expected_version` **obligatorio** (sin default). Claves: `description`, `sender_identity_id`, `template` (`{template_id, version_number}`), `audience_definition`; `name` → `EMAIL_CAMPAIGN_NAME_IMMUTABLE`. Obsoleto → `40001 EMAIL_CAMPAIGN_VERSION_CONFLICT`. No-op → sin versión ni auditoría. |
+| `email_archive_campaign(campaign_id)` | `manage_campaigns` | Idempotente; archivado terminal. |
+| `email_campaign_readiness(campaign_id)` | `read` | STABLE, sin DML, sin auditoría, sin muestras ni PII, no renderiza. |
+| `email_campaign_preview_input(campaign_id, contact_id)` | `read` | STABLE, solo lectura: versión **fijada**, `values` resueltos, `{sendable, reason_code}` y el pie fijo de vista previa. |
+
+Ids de otra organización se comportan exactamente como ids inexistentes
+(`EMAIL_CAMPAIGN_NOT_FOUND`, `EMAIL_SENDER_IDENTITY_NOT_FOUND`,
+`EMAIL_TEMPLATE_VERSION_NOT_FOUND`, `EMAIL_CONTACT_NOT_FOUND`).
+
+### Readiness
+
+Bloqueantes: `CAMPAIGN_ARCHIVED`, `SENDER_MISSING`, `SENDER_ARCHIVED`,
+`TEMPLATE_MISSING`, `TEMPLATE_ARCHIVED`, `AUDIENCE_MISSING`, `AUDIENCE_INVALID`,
+`AUDIENCE_EMPTY`, `AUDIENCE_NO_SENDABLE`. Avisos: `SENDER_DOMAIN_UNVERIFIED`
+(siempre en V1: la verificación llega en Inc6), `TEMPLATE_VERSION_NOT_LATEST`,
+`TEMPLATE_USES_ARCHIVED_FIELD`, `AUDIENCE_REFERENCES_ARCHIVED_LIST`,
+`AUDIENCE_REFERENCES_ARCHIVED_TAG`. Arrays ordenados (collation `C`). Conteos
+con `private.email_preview(..., 0)` (sin muestra). Semántica de Inc2 sin
+cambios: un campo personalizado archivado después sigue existiendo, así que
+la definición guardada sigue siendo válida; `AUDIENCE_INVALID` solo aparece si
+la definición guardada deja de validar (defensa; ninguna vía de escritura lo
+produce hoy). Coste O(contactos activos) por llamada.
+
+### Merge values y preview
+
+- `private.email_template_merge_paths(subject, preheader, content)`: misma
+  gramática que el validador de 3a pero **no lanza** (un campo archivado tras
+  guardar la versión se resuelve como ausente, contrato §7.1). Paridad con
+  `private.email_merge_tag_paths` probada sobre todos los vectores.
+- `private.email_resolve_merge_values(org, contact, version_id)`: **único**
+  resolvedor (preview ahora, dispatcher en Inc5). Forma `MergeValues` de 3b;
+  solo las rutas usadas; valores guardados sin tocar (`null` ≠ `''`); campo
+  activo → `value #>> '{}'` o `null`; archivado/inexistente → `archived_custom`;
+  `null` si el contacto o la versión no son de la organización.
+- Pie de vista previa fijo (`private.email_preview_footer()`,
+  `email-footer.v1`): URL `https://unsubscribe.preview.invalid/orvesen-preview`
+  (TLD reservado, nunca resoluble), aviso explícito de vista previa; nunca se
+  guarda en la campaña ni representa consentimiento ni baja reales.
+- Superficie visible (UI / Edge Function): diferida al track coordinado.
+
+### Auditoría
+
+`email.campaign.created` (nombre), `email.campaign.updated` (`changed_fields`,
+`version`, ids de remitente/plantilla, `template_version`, `audience_sha256`),
+`email.campaign.archived` (`version`). Nunca descripción, definición de
+audiencia, contenido, direcciones ni valores. Sin filas para no-ops, fallos,
+readiness ni preview.
+
+### Recuperación (solo Staging)
+
+Mismo diseño endurecido que 3a: pre-check idéntico byte a byte (solo cambia el
+token), token de secuencia `orvesen.email_inc3c_recovery`, una única sentencia
+destructiva, independiente de `ON_ERROR_ROLLBACK`. Locks: historial
+`EXCLUSIVE`, `email_campaigns` y **`email_audit_log` `ACCESS EXCLUSIVE` desde
+el inicio** (no repite L-B de 3a). Rechaza con `LATER_MIGRATION`,
+`UNKNOWN_MIGRATION` (línea base 3a congelada + 3a + **ventana revisada 3c**,
+vacía al construir: refrescar antes de aplicar 3c, p. ej. migraciones de otros
+dominios entre 3a y 3c), `UNEXPECTED_STATE`, `DATA_PRESENT` (cualquier
+campaña o fila de auditoría `campaign`) e `INCOMPLETE_PRECONDITIONS`. Orden:
+recuperar 3c antes que 3a (la recuperación de 3a rechaza mientras 3c exista).
+
 ## 4. State machines
 
 ### Contact (Increment 1)
@@ -582,7 +684,7 @@ Futuro: `confirmation_requested` / `confirmed` para doble opt-in.
 2. **Audiences** ✅ base de datos (listas, tags, custom fields, segmentos `segment.v1`, preview, importación CRM sin consentimiento). UI diferida hasta coordinar archivos compartidos.
 3. Sender domains/identities (sin DNS real), templates y versiones inmutables, renderer TS con escaping, borradores de campaña. Dividido internamente en:
    **3a** senders + templates/versiones + validación `email-content.v1` (confirmado y publicado, pendiente de Staging);
-   **3b** renderer TS + vectores compartidos (implementado, pendiente de revisión; sin migración); **3c** borradores de campaña + readiness;
+   **3b** renderer TS + vectores compartidos (confirmado y publicado; sin migración); **3c** borradores de campaña + readiness + preview input (implementado, pendiente de revisión);
    **3d** runner de aceptación Inc1–3 y Staging.
 4. Provider abstraction + adaptador `sandbox` + suite de contrato.
 5. Autorización de envío (hash de contenido + audiencia, aprobador humano), snapshot de audiencia, send jobs, dispatcher, rate limiting, reintentos. **Decisión pendiente: `pg_net` + Vault vs. cron externo.**
@@ -642,6 +744,11 @@ node --test supabase/functions/_shared/email/render_v1.test.ts
 deno test --no-config --allow-read=. supabase/functions/_shared/email/render_v1.test.ts
 # Paridad TS ↔ SQL (encabezado final, URLs) y validez SQL de todos los vectores
 npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_render_v1.differential.mjs
+
+# Increment 3c (campañas, readiness, preview input + renderer 3b)
+node --test supabase/tests/validate_email_marketing_v1_campaigns.mjs
+npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_campaigns.integration.mjs
+npx -y -p @electric-sql/pglite node --test supabase/tests/email_marketing_v1_campaigns.recovery.mjs
 ```
 
 La integración de 3a carga Inc1+Inc2, toma snapshots de todos sus objetos,
