@@ -26,8 +26,8 @@ Each increment needs its own explicit authorization. This file records the appro
 | Inc | Scope | Status |
 |---|---|---|
 | 1 | Authorization decision point, append-only audit log, pipelines and stages | Committed (`8394c45`); applied to Staging; Staging acceptance PASS 60/60 (see section 7) |
-| 2 | Leads and attribution touches | Not started |
-| 3 | Opportunities, stage history, lead conversion | Not started; needs read-only introspection of Staging `public.clients` first |
+| 2 | Leads and attribution touches | Implemented (not committed); see section 8 |
+| 3 | Opportunities, stage history, lead conversion | Not started. The Staging `public.clients` inspection is done (customer/account identity; must not hold leads). The meaning of `clients.status = 'lead'` will be decided in Increment 3 conversion planning |
 | 4 | Catalog, price versions, IVU rate sets, offers | Not started; IVU rules need validation by a PR tax professional |
 | 5 | Orders, payments, receipts | Not started |
 | 6 | Subscriptions and the MRR/churn ledger | Not started |
@@ -167,3 +167,137 @@ Increment 1 was applied to Orvesen Staging (`vkvaispeujpsvotojyvz`) and verified
   - **Identity sequence:** values of `sales_audit_log_id_seq` consumed during a run are not returned by the rollback. That is how PostgreSQL sequences behave. Audit IDs may therefore have gaps; no rows persist.
   - **Constants:** the runner hard-codes the post-apply catalog digest and history count. Once Staging changes (another migration, or real Sales rows), it reports BLOCKED and must be updated in a later increment rather than edited in place.
   - **Concurrency:** the SQL Editor uses a single connection, so concurrency is proven by the local real-PostgreSQL suite, not by this runner.
+
+## 8. Increment 2 as built: Leads + Attribution
+
+The migration is `supabase/migrations/20261003120000_sales_v1_leads_attribution.sql`. Approved decisions:
+
+- **D1:** `private.sales_can` gains the action `manage_leads`. It stays founder/admin only, with no platform-owner bypass.
+- **D2:** the audit log's `action` and `entity_type` CHECKs are widened additively, and a new `sales_audit_log_lead_entity_check` binds lead actions to the `lead`/`lead_touch` entity types.
+- **D3:** the Increment 1 validator stays frozen. `supabase/tests/validate_sales_v1_leads.mjs` is the new cumulative validator.
+- **D4:** the Increment 1 Staging runner reports BLOCKED once Increment 2 is applied. The Increment 2 rollback is valid only before real use; after that, recovery is a forward fix.
+
+**Guard.** Before changing any Increment 1 object, the migration:
+
+1. locks `sales_audit_log` in ACCESS EXCLUSIVE mode;
+2. verifies that the `private.sales_can` body MD5 is `2f61c4f2f9c52c0ab2e7a19495652a33`, that it is SECURITY DEFINER with `search_path=""`, and that it is owned by `postgres`;
+3. verifies that the 4 audit CHECKs are exactly the Increment 1 definitions.
+
+Any difference raises `SALES_MIGRATION_DRIFT` and the whole migration rolls back.
+
+### Model
+
+| Object | Purpose |
+|---|---|
+| `sales_leads` | Organization-scoped intake record. Not the customer identity: `public.clients` is never written. A lead never implies marketing consent. |
+| `sales_lead_touches` | Append-only attribution evidence. UPDATE, DELETE and TRUNCATE are rejected for every role, including the owner. `received_at` is set by the server. Touches link to their lead through the composite FK `(organization_id, lead_id)`. |
+| `sales_lead_attribution` | Security-invoker view: first and last touch per lead, derived from the touches. Order: `occurred_at`, then `received_at`, then `id`. No first/last pointers are stored. |
+
+### Identity
+
+- **Minimum identity:** a normalized email, a normalized phone, or an `external_source` plus `external_id`. Name-only leads are rejected.
+- **Email normalization:** `private.sales_normalize_email` uses the same rules as Email Marketing's normalizer: trim, lower-case, no dot or `+tag` stripping. Parity is proven by tests.
+- **Phone normalization:** formatting only. A leading `+` is kept, 7-15 digits are required, and the country is never inferred.
+- **Uniqueness and matching:**
+  - At most one **active** lead (not archived) per normalized email, and per external key, within an organization. There's no deduplication across organizations.
+  - Match order: external key, then email, then phone. Phone is used only when no email was supplied.
+  - Archived leads are never matched, so a later inquiry creates a new lead.
+- **Not in Increment 2:** a matched lead is not enriched with the submission's other identity fields. Use `sales_update_lead` for that.
+
+### Lifecycle
+
+| From | Allowed transitions |
+|---|---|
+| `new` | `qualified`, `disqualified` |
+| `qualified` | `disqualified` |
+| `disqualified` | `qualified` |
+| `new`, `qualified`, `disqualified` | `archived` (terminal) |
+
+- `converted` arrives with Increment 3. "Contacted" is not a state.
+- Qualification and disqualification record a reason code, an optional note (up to 500 characters), the actor and a timestamp.
+- Optimistic locking uses `version`, and a guard trigger enforces the transitions for every role.
+- **Qualify reasons:** `fit`, `need`, `budget`, `timing`, `other`.
+- **Disqualify reasons:** `no_fit`, `no_budget`, `unresponsive`, `duplicate`, `spam`, `other`.
+- **Archive reasons:** `duplicate`, `spam`, `test`, `not_interested`, `other`.
+
+### Attribution evidence
+
+Each touch stores:
+
+- `occurred_at` (claimed by the caller; from 2000 to at most 5 minutes in the future) and `received_at` (server time)
+- `ingestion_channel`: `manual`, `import`, `api`. `landing_page` and `webhook` are reserved for a future trusted entry point.
+- `channel`: a closed list, defaulting to `unknown`
+- the five UTM fields, normalized (trimmed and lower-cased, up to 200 characters each)
+- `referrer_url` and `landing_url`: http/https only, no userinfo, up to 2048 characters
+- opaque `landing_asset_id`, `funnel_id` and `campaign_ref`, with no FK to Builder or Email
+- allow-listed `click_ids`: `gclid`, `fbclid`, `msclkid`, `ttclid`, `li_fat_id`
+- `event_source` plus `external_event_id`
+- bounded `raw` evidence: a flat object of strings, at most 50 keys, 1,024 characters per value and 8 KB in total
+
+**Cap:** at most 1,000 touches per lead. This is a CHECK on a counter maintained by a trigger, and the RPCs pre-check it to return `SALES_TOUCH_LIMIT`.
+
+### Idempotency and concurrency
+
+- **Idempotency:** an `idempotency_key` plus the SHA-256 of the canonical request, unique per organization. The same applies to `(event_source, external_event_id)`.
+  - An exact replay returns the original lead and touch, with `replayed = true` and no new audit row.
+  - The same key with a different payload raises `SALES_IDEMPOTENCY_CONFLICT`.
+- **Concurrency:** ingestion, add-touch and identity updates take a per-organization transaction advisory lock, which serializes match-then-insert. Partial unique indexes are the backstop.
+
+### RPCs
+
+All RPCs are executable by `authenticated` only, require `manage_leads`, and never take an organization ID. IDs from another organization behave exactly like missing IDs (`SALES_NOT_FOUND`).
+
+| RPC | Audit action |
+|---|---|
+| `sales_ingest_lead(p_lead, p_touch, p_idempotency_key)` | `sales.lead.created` for a new lead, or `sales.lead.touch_added` when it matches an existing one |
+| `sales_add_lead_touch(p_lead_id, p_touch, p_idempotency_key)` | `sales.lead.touch_added` |
+| `sales_update_lead(p_lead_id, p_changes, p_expected_version)`: email, phone, name and company only | `sales.lead.updated` (changed field **names** only) |
+| `sales_qualify_lead` / `sales_disqualify_lead(p_lead_id, p_reason, p_note, p_expected_version)` | `sales.lead.qualified` / `.disqualified` |
+| `sales_archive_lead(p_lead_id, p_reason, p_expected_version)` | `sales.lead.archived` (re-archiving is a no-op) |
+
+- **Audit details hold no personal data.** They contain `has_email`, `has_phone` and `has_note` flags, the channel, the UTM source and campaign, field names and versions. They never contain an email, phone, name, company or note.
+- Exactly one audit row per successful mutation. Failures and no-ops write none.
+
+### Errors added in Increment 2
+
+`SALES_MIGRATION_DRIFT`, `SALES_IDEMPOTENCY_CONFLICT`, `SALES_LEAD_ARCHIVED`, `SALES_INVALID_TRANSITION`, `SALES_TOUCH_LIMIT`, `SALES_LEAD_EMAIL_EXISTS`.
+
+`SALES_INVALID_INPUT` puts the offending field name in `detail`, for example `lead.email` or `touch.raw`.
+
+### Tests
+
+| Layer | Command |
+|---|---|
+| Cumulative static validator | `node supabase/tests/validate_sales_v1_leads.mjs` |
+| PGlite | `npx -y -p @electric-sql/pglite node supabase/tests/sales_v1_leads.integration.mjs` |
+| Real PostgreSQL, with the Increment 1 regression | `SALES_PG_URL=... npx -y -p pg@8 node supabase/tests/sales_v1_leads.postgres.mjs` |
+| Sabotage | `SALES_PG_URL=... npx -y -p pg@8 node supabase/tests/sales_v1_leads.sabotage.mjs` |
+
+The Increment 1 regression runs the frozen Increment 1 suite on Increment 1 + Increment 2. Exactly two Increment 1 tests fail by design, both at the exact-inventory assertion: its catalog test and its rollback test.
+
+### Rollback and recovery
+
+`supabase/tests/rollback/sales_v1_leads_attribution_rollback.sql`:
+
+- Takes ACCESS EXCLUSIVE locks first, on the audit log, leads and touches.
+- Verifies the exact Increment 1 + Increment 2 inventory and the Increment 2 definitions.
+- **Refuses, with no override,** if any lead, touch or lead audit row exists.
+- Drops the Increment 2 objects without CASCADE.
+- Restores `private.sales_can` and the audit CHECKs byte-exact to Increment 1, and deletes the `20261003120000` history row.
+- Its postflight requires the exact Increment 1 state.
+
+## 9. Forward fix M1: default-pipeline first-creation race
+
+The fix is migration `supabase/migrations/20261002130000_sales_v1_default_pipeline_lock.sql`. It's a separate forward fix (D4), applied after Increment 1 and before Increment 2.
+
+- **Defect (Increment 1):** concurrent first calls to `sales_ensure_default_pipeline` could make one caller collide on `sales_pipelines_active_name_idx`, because `ON CONFLICT` only arbitrates `sales_pipelines_one_default_idx`. That caller got a raw `23505` instead of the existing pipeline. Integrity was never affected: there was always exactly one default pipeline.
+- **Fix:**
+  - If no default pipeline is visible, take a per-organization transaction advisory lock (`orvesen.sales.pipelines:<org>`), re-check, and create only if it's still absent. Callers that find an existing pipeline take no lock.
+  - Everything else is unchanged: signature, authorization, canonical stages, audit event, errors and grants.
+  - The new body is the Increment 1 body plus this block, which the static validator proves.
+- **Guard:** the replacement happens only if the current body MD5 is `12c3ea7d7a2c4f27dc67baab17104058` with the Increment 1 attributes. Otherwise `SALES_MIGRATION_DRIFT` aborts it. The new body MD5 is `71eabecb4cade2f2dd3ff651e8b18199`.
+- **Tests:**
+  - `node supabase/tests/validate_sales_v1_default_pipeline_lock.mjs`
+  - `SALES_PG_URL=... npx -y -p pg@8 node supabase/tests/sales_v1_default_pipeline_lock.postgres.mjs [rounds]`. This covers the guard, the lock being used, at least 20 rounds of 8 simultaneous first calls, the frozen Increment 1 suite run 3 times, rollback/reapply, and the lock-removal sabotage.
+- **Rollback:** `supabase/tests/rollback/sales_v1_default_pipeline_lock_rollback.sql` restores the Increment 1 body byte-exact. It is guarded by the fix's fingerprint, and it reintroduces the race, so it's for recovery only.
+- **Staging:** the Increment 1 Staging runner reports BLOCKED once this fix is applied (history 79), as accepted under D4.
