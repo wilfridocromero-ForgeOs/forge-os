@@ -47,7 +47,7 @@ export const STAGING_HISTORY_AT_INC3A = fixture("email_marketing_v1_staging_hist
 
 export const INC1 = "20260926160000_email_marketing_v1_foundation.sql";
 export const INC2 = "20260927120000_email_marketing_v1_audiences.sql";
-export const INC3A = "20260929120000_email_marketing_v1_senders_templates.sql";
+export const INC3A = "20261004150000_email_marketing_v1_senders_templates.sql";
 export const EMAIL_CHAIN = [INC1, INC2, INC3A];
 
 export const versionOf = (file) => file.split("_")[0];

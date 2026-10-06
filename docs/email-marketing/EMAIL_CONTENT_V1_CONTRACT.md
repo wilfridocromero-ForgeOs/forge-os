@@ -7,7 +7,7 @@ los vectores compartidos a la vez.
 
 Vectores compartidos: `supabase/tests/fixtures/email_content_v1_cases.json`.
 Implementación de referencia: `private.email_content_validate` y funciones
-asociadas en `supabase/migrations/20260929120000_email_marketing_v1_senders_templates.sql`.
+asociadas en `supabase/migrations/20261004150000_email_marketing_v1_senders_templates.sql`.
 
 ## 1. Autoridad
 

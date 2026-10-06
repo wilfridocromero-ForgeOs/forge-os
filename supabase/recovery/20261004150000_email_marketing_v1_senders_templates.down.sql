@@ -1,6 +1,6 @@
 -- ORVESEN Email Marketing V1 - Increment 3a: controlled STAGING recovery.
 --
--- Reverses supabase/migrations/20260929120000_email_marketing_v1_senders_templates.sql
+-- Reverses supabase/migrations/20261004150000_email_marketing_v1_senders_templates.sql
 -- and restores the exact Increment 1-2 state: every Increment 3a table,
 -- function, trigger and policy is removed, private.email_can gets back its
 -- Increment 1 source byte for byte (runner fingerprint bea78511...), and the
@@ -48,7 +48,7 @@
 -- * EMAIL_RECOVERY_REFUSED_CONCURRENT_ACTIVITY: the pre-check above found
 --   concurrent schema activity (before locking, or again with every lock held);
 -- * EMAIL_RECOVERY_REFUSED_LATER_MIGRATION: the migration history records a
---   version after 20260929120000 (it may depend on Increment 3a objects);
+--   version after 20261004150000 (it may depend on Increment 3a objects);
 -- * EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION: the history records any version
 --   outside the REVIEWED RECOVERY BASELINE plus Increment 3a. The baseline
 --   shipped with the code is a BUILD-TIME snapshot (2026-09-29), not
@@ -258,9 +258,9 @@ begin
   -- ways PostgreSQL does not track (function bodies, added columns/triggers).
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     if exists (select 1 from supabase_migrations.schema_migrations as history
-               where history.version > '20260929120000') then
+               where history.version > '20261004150000') then
       raise exception using errcode = '55000', message = 'EMAIL_RECOVERY_REFUSED_LATER_MIGRATION',
-        detail = 'A migration after 20260929120000 is recorded; revert it first.';
+        detail = 'A migration after 20261004150000 is recorded; revert it first.';
     end if;
   end if;
   -- Every recorded version must be in the reviewed recovery baseline (a
@@ -286,7 +286,8 @@ begin
         '20260901020615', '20260901023430', '20260901170000', '20260901180001', '20260901222338',
         '20260902', '20260904110000', '20260904111500', '20260905120000', '20260909214636',
         '20260913155327', '20260915184800', '20260916090000', '20260917000000', '20260917000100',
-        '20260926160000', '20260927120000', '20260929120000'
+        '20260926160000', '20260927120000', '20261002120000', '20261002130000', '20261003120000',
+        '20261004150000'
         -- END REVIEWED RECOVERY BASELINE
         ]::text[])) then
       raise exception using errcode = '55000', message = 'EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION',
@@ -709,7 +710,7 @@ grant execute on function private.email_can(text) to authenticated;
 
   -- Forget the migration in the Supabase history (absent outside Supabase).
   if to_regclass('supabase_migrations.schema_migrations') is not null then
-    delete from supabase_migrations.schema_migrations where version = '20260929120000';
+    delete from supabase_migrations.schema_migrations where version = '20261004150000';
   end if;
 
   -- Consume the sequence: it cannot authorize anything else in this transaction.

@@ -94,7 +94,7 @@ test("ordering (synthetic, parallel branches): legitimate migrations never fail;
     "worktree + Staging-only baseline migrations": [...worktree, ...baseline],
     "full Staging history + Inc3a": [...staging, INC3A],
     "Staging history + Codex + Inc3a + later unrelated and later Email work": [...staging, ...codex, INC3A,
-      "20261001000000_builder_x.sql", "20261002000000_email_marketing_v1_campaigns.sql"],
+      "20261006000000_builder_x.sql", "20261007000000_email_marketing_v1_campaigns.sql"],
   };
   for (const [label, files] of Object.entries(legitimate)) {
     for (const prefix of [[INC1], [INC1, INC2], all]) assert.equal(emailOrderViolation(files, prefix, historyThroughInc2), null, `${label} (${prefix.length})`);
@@ -108,7 +108,7 @@ test("ordering (synthetic, parallel branches): legitimate migrations never fail;
     "missing Inc1 predecessor": [base.filter((f) => f !== INC1), [INC1, INC2]],
     "duplicate Inc2": [[...base, INC2], all],
     "version collision with Inc1": [[...base, "20260926160000_other.sql"], [INC1]],
-    "version collision after Inc3a (checked globally)": [[...base, "20261001000000_a.sql", "20261001000000_b.sql"], all],
+    "version collision after Inc3a (checked globally)": [[...base, "20261006000000_a.sql", "20261006000000_b.sql"], all],
   };
   for (const [label, [files, prefix]] of Object.entries(violations)) {
     assert.notEqual(emailOrderViolation(files, prefix, historyThroughInc2), null, label);
@@ -120,7 +120,7 @@ test("ordering (M3): the protected window follows the applied Email history, not
   const worktree = [...STAGING_HISTORY_AT_INC3A.rows.map(fileOf), INC3A];
   const parallel = "20260928090000_builder_parallel.sql";
   const throughInc2 = STAGING_HISTORY_AT_INC3A.rows;
-  const throughInc3a = [...throughInc2, { version: "20260929120000", name: "email_marketing_v1_senders_templates" }];
+  const throughInc3a = [...throughInc2, { version: "20261004150000", name: "email_marketing_v1_senders_templates" }];
   const all = [INC1, INC2, INC3A];
   // Inc3a pending: a legitimate parallel migration dated between Inc2 and Inc3a passes.
   assert.equal(emailOrderViolation([...worktree, parallel], all, throughInc2), null, "pending Inc3a does not extend the window");
@@ -132,16 +132,16 @@ test("ordering (M3): the protected window follows the applied Email history, not
   // Inside the already-applied window (Inc1..Inc2) a backdated file always fails.
   assert.notEqual(emailOrderViolation([...worktree, "20260926170000_backdated.sql"], all, throughInc2), null);
   // A recorded migration newer than a pending increment makes it apply out of order.
-  assert.notEqual(stagingHistoryViolation([...throughInc2, { version: "20260930000000", name: "later_builder" }]), null);
+  assert.notEqual(stagingHistoryViolation([...throughInc2, { version: "20261004200000", name: "later_builder" }]), null);
 });
 
 test("ordering (M2): refreshed Staging histories through Inc2, Inc3a and a future Inc4 all pass", () => {
   const INC4 = "20261015000000_email_marketing_v1_campaigns.sql";
   const chain4 = [INC1, INC2, INC3A, INC4];
   const throughInc2 = STAGING_HISTORY_AT_INC3A.rows;
-  const throughInc3a = [...throughInc2, { version: "20260929120000", name: "email_marketing_v1_senders_templates" }];
-  const throughInc4 = [...throughInc3a, { version: "20261001000000", name: "builder_later" }, { version: "20261015000000", name: "email_marketing_v1_campaigns" }];
-  const files4 = [...[...STAGING_HISTORY_AT_INC3A.rows.map(fileOf), INC3A], "20261001000000_builder_later.sql", INC4];
+  const throughInc3a = [...throughInc2, { version: "20261004150000", name: "email_marketing_v1_senders_templates" }];
+  const throughInc4 = [...throughInc3a, { version: "20261006000000", name: "builder_later" }, { version: "20261015000000", name: "email_marketing_v1_campaigns" }];
+  const files4 = [...[...STAGING_HISTORY_AT_INC3A.rows.map(fileOf), INC3A], "20261006000000_builder_later.sql", INC4];
   for (const [label, rows] of [["through Inc2", throughInc2], ["through Inc3a", throughInc3a], ["through Inc4", throughInc4]]) {
     assert.equal(stagingHistoryViolation(rows, chain4), null, label);
     for (const prefix of [[INC1], [INC1, INC2], [INC1, INC2, INC3A], chain4]) {
@@ -155,10 +155,10 @@ test("ordering (M2): refreshed Staging histories through Inc2, Inc3a and a futur
   assert.notEqual(stagingHistoryViolation(throughInc2.filter((r) => r.name !== "email_marketing_v1_foundation")), null, "Inc2 recorded without Inc1");
   assert.notEqual(stagingHistoryViolation([...throughInc2, { version: "20261015000000", name: "email_marketing_v1_campaigns" }], chain4), null,
     "Inc4 recorded before Inc3a");
-  assert.notEqual(stagingHistoryViolation([...throughInc2, { version: "20260929120000", name: "email_marketing_v1_other" }]), null, "unknown Email migration recorded");
+  assert.notEqual(stagingHistoryViolation([...throughInc2, { version: "20261004150000", name: "email_marketing_v1_other" }]), null, "unknown Email migration recorded");
   // Interleaved migrations that were APPLIED are legitimate history; the same
   // file UNAPPLIED inside the applied window is backdated and fails.
-  const interleaved = { version: "20261001000000", name: "builder_later" };
+  const interleaved = { version: "20261006000000", name: "builder_later" };
   assert.equal(emailOrderViolation(files4, chain4, throughInc4, chain4), null, "applied interleaved migration passes");
   assert.notEqual(emailOrderViolation(files4, chain4, throughInc4.filter((r) => r !== throughInc4.find((x) => x.version === interleaved.version)), chain4), null,
     "the same migration unapplied inside the applied window fails");
@@ -201,13 +201,13 @@ test("M3 (pass 6): the reviewed recovery baseline covers the current Staging his
   assert.deepEqual(recoveryBaselineInSql(readText(RECOVERY_FILE)), [...baselineVersions(RECOVERY_BASELINE), INC3A.split("_")[0]].sort());
   // Synthetic: a legitimate parallel migration appears between build and apply.
   const { baselineDigest } = await import("./email_marketing_v1_recovery_baseline.mjs");
-  const parallel = { version: "20260928090000", name: "builder_parallel" };
+  const parallel = { version: "20261004000000", name: "builder_parallel" };
   const liveWithParallel = [...RECOVERY_BASELINE.rows, parallel];
   assert.notEqual(recoveryBaselineViolation(liveWithParallel, RECOVERY_BASELINE), null, "stale baseline is detected");
   const refreshed = { stage: "apply-time", rows: liveWithParallel };
   assert.equal(recoveryBaselineViolation(liveWithParallel, refreshed, { pinnedSha256: baselineDigest(liveWithParallel) }), null,
     "refreshed reviewed baseline (with its new pinned digest) accepts it");
-  assert.equal(recoveryBaselineViolation([...RECOVERY_BASELINE.rows, { version: "20260929120000", name: "email_marketing_v1_senders_templates" }],
+  assert.equal(recoveryBaselineViolation([...RECOVERY_BASELINE.rows, { version: "20261004150000", name: "email_marketing_v1_senders_templates" }],
     RECOVERY_BASELINE), null, "Increment 3a itself never needs to be in the baseline");
 });
 
@@ -215,10 +215,10 @@ test("A (pass 7): recovery baseline lifecycle - pre-Inc3a coverage only, frozen 
   const { RECOVERY_BASELINE, RECOVERY_BASELINE_SHA256, baselineDigest, baselineIntegrityViolation, recoveryBaselineViolation } =
     await import("./email_marketing_v1_recovery_baseline.mjs");
   const base = RECOVERY_BASELINE.rows;
-  const inc3a = { version: "20260929120000", name: "email_marketing_v1_senders_templates" };
+  const inc3a = { version: "20261004150000", name: "email_marketing_v1_senders_templates" };
   const backdated = { version: "20260928150000", name: "codex_backdated" };
-  const later1 = { version: "20261001000000", name: "email_marketing_v1_campaigns" };
-  const later2 = { version: "20261002000000", name: "builder_parallel_later" };
+  const later1 = { version: "20261005160000", name: "email_marketing_v1_campaigns" };
+  const later2 = { version: "20261006000000", name: "builder_parallel_later" };
   const check = (live, baseline = RECOVERY_BASELINE, pinned = RECOVERY_BASELINE_SHA256) =>
     recoveryBaselineViolation(live, baseline, { pinnedSha256: pinned });
   assert.equal(baselineDigest(base), RECOVERY_BASELINE_SHA256, "the shipped baseline matches its pinned digest");

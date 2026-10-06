@@ -1,8 +1,8 @@
 {
-  "description": "REVIEWED RECOVERY BASELINE for the Increment 3a Staging recovery (see supabase/tests/email_marketing_v1_recovery_baseline.mjs). The recovery accepts only these versions plus Increment 3a. BUILD-TIME: this copy is the history captured when Increment 3a was built (2026-09-29); it is NOT guaranteed to be the history at apply time and MUST be refreshed from the target environment, reviewed, and the recovery regenerated (--write) immediately before Increment 3a is applied.",
+  "description": "REVIEWED RECOVERY BASELINE for the Increment 3a Staging recovery (see supabase/tests/email_marketing_v1_recovery_baseline.mjs). The recovery accepts only these versions plus Increment 3a (20261004150000). REFRESHED 2026-10-06 from the confirmed read-only Staging export (80 rows, latest 20261003120000, ordered digest 1c01d8b52e7dd4a8daa998217d48e6f2793e52e4c223cecaa726accc1b4caa50) after the M-1 renumber of Increment 3a; it adds exactly the three applied Sales migrations 20261002120000, 20261002130000 and 20261003120000 as reviewed predecessors. It must still be re-confirmed against the target immediately before Increment 3a is applied.",
   "stage": "build-time",
-  "reviewed_on": "2026-09-29",
-  "source": "email_marketing_v1_staging_history_2026-09-29.json",
+  "reviewed_on": "2026-10-06",
+  "source": "confirmed read-only Staging export 2026-10-06 (email_marketing_v1_staging_history.json)",
   "rows": [
     {
       "version": "20260801000000",
@@ -311,6 +311,18 @@
     {
       "version": "20260927120000",
       "name": "email_marketing_v1_audiences"
+    },
+    {
+      "version": "20261002120000",
+      "name": "sales_v1_foundation"
+    },
+    {
+      "version": "20261002130000",
+      "name": "sales_v1_default_pipeline_lock"
+    },
+    {
+      "version": "20261003120000",
+      "name": "sales_v1_leads_attribution"
     }
   ]
 }

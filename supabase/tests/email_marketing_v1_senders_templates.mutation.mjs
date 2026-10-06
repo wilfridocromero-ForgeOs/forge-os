@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { readText } from "./email_marketing_v1_migration_order.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const MIGRATION = resolve(here, "../migrations/20260929120000_email_marketing_v1_senders_templates.sql");
+const MIGRATION = resolve(here, "../migrations/20261004150000_email_marketing_v1_senders_templates.sql");
 const SUITES = {
   static: resolve(here, "validate_email_marketing_v1_senders_templates.mjs"),
   integration: resolve(here, "email_marketing_v1_senders_templates.integration.mjs"),

@@ -33,9 +33,9 @@ export const MIGRATIONS = {
   inc2: resolve(here, "../migrations/20260927120000_email_marketing_v1_audiences.sql"),
   // EMAIL_INC3A_MIGRATION_PATH exists only for the mutation runner.
   inc3a: process.env.EMAIL_INC3A_MIGRATION_PATH
-    || resolve(here, "../migrations/20260929120000_email_marketing_v1_senders_templates.sql"),
+    || resolve(here, "../migrations/20261004150000_email_marketing_v1_senders_templates.sql"),
 };
-export const RECOVERY_INC3A = resolve(here, "../recovery/20260929120000_email_marketing_v1_senders_templates.down.sql");
+export const RECOVERY_INC3A = resolve(here, "../recovery/20261004150000_email_marketing_v1_senders_templates.down.sql");
 // Line-ending independent (see readText in email_marketing_v1_migration_order.mjs).
 export const readSql = (path) => readText(path);
 

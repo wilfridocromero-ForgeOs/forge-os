@@ -1,6 +1,6 @@
 {
   "description": "CURRENT snapshot of supabase_migrations.schema_migrations on Orvesen Staging (read-only export by the project owner). Refresh it by re-exporting `select version, name from supabase_migrations.schema_migrations order by version;` whenever Staging history changes; the ordering invariants must hold for any refreshed history. Not written by any test.",
-  "captured_on": "2026-09-29",
+  "captured_on": "2026-10-06",
   "rows": [
     {
       "version": "20260801000000",
@@ -309,6 +309,18 @@
     {
       "version": "20260927120000",
       "name": "email_marketing_v1_audiences"
+    },
+    {
+      "version": "20261002120000",
+      "name": "sales_v1_foundation"
+    },
+    {
+      "version": "20261002130000",
+      "name": "sales_v1_default_pipeline_lock"
+    },
+    {
+      "version": "20261003120000",
+      "name": "sales_v1_leads_attribution"
     }
   ],
   "known_parallel_branch_migrations": {
@@ -331,7 +343,10 @@
       "20260804054000_orvesen_baseline_chain_repairs.sql",
       "20260916090000_builder_landing_document_v2_persistence.sql",
       "20260917000000_orvesen_baseline_completion.sql",
-      "20260917000100_orvesen_auth_bootstrap_triggers.sql"
+      "20260917000100_orvesen_auth_bootstrap_triggers.sql",
+      "20261002120000_sales_v1_foundation.sql",
+      "20261002130000_sales_v1_default_pipeline_lock.sql",
+      "20261003120000_sales_v1_leads_attribution.sql"
     ]
   }
 }

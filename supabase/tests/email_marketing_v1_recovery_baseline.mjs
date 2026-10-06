@@ -31,12 +31,12 @@ import { fileURLToPath } from "node:url";
 import { INC3A, STAGING_HISTORY, readText, versionOf } from "./email_marketing_v1_migration_order.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const RECOVERY_FILE = resolve(here, "../recovery/20260929120000_email_marketing_v1_senders_templates.down.sql");
+export const RECOVERY_FILE = resolve(here, "../recovery/20261004150000_email_marketing_v1_senders_templates.down.sql");
 export const RECOVERY_BASELINE = JSON.parse(readText(resolve(here, "fixtures/email_marketing_v1_recovery_baseline.json")));
 // Digest of the reviewed baseline rows (see baselineDigest). Pinned so the
 // baseline cannot be edited (e.g. to absorb a backdated migration) without a
 // visible change here.
-export const RECOVERY_BASELINE_SHA256 = "3e2c08784eb7ca6d5a36b8cca383b910387958c32a965a405f23cd3de68c0539";
+export const RECOVERY_BASELINE_SHA256 = "1c01d8b52e7dd4a8daa998217d48e6f2793e52e4c223cecaa726accc1b4caa50";
 const BEGIN = "-- BEGIN REVIEWED RECOVERY BASELINE";
 const END = "-- END REVIEWED RECOVERY BASELINE";
 const NL = String.fromCharCode(10);

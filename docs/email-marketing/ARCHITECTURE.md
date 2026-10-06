@@ -226,7 +226,7 @@ Diferida: requiere coordinar `src/App.jsx`, `Sidebar.jsx` y
 > 3b (renderer), 3c (borradores de campaña) y 3d (runner Inc1–3 + Staging) se
 > describen en el plan (§5).
 
-Migración: `supabase/migrations/20260929120000_email_marketing_v1_senders_templates.sql`
+Migración: `supabase/migrations/20261004150000_email_marketing_v1_senders_templates.sql`
 (ASCII, aditiva). Sin renderer (3b), sin campañas (3c), sin proveedor, sin envío, sin DNS, sin UI.
 Contrato SQL ↔ TS (hash, canonicalización, límites, orden, enteros, Unicode,
 renderer): [`EMAIL_CONTENT_V1_CONTRACT.md`](./EMAIL_CONTENT_V1_CONTRACT.md).
@@ -366,7 +366,7 @@ guardada también como columnas inmutables de la versión; y `created_by`).
 
 ### Recuperación (solo Staging)
 
-`supabase/recovery/20260929120000_email_marketing_v1_senders_templates.down.sql`:
+`supabase/recovery/20261004150000_email_marketing_v1_senders_templates.down.sql`:
 una transacción que elimina todos los objetos de 3a, restaura `email_can`
 byte a byte (fingerprint `bea78511…`) y el CHECK de `entity_type` de Inc2, y
 borra la fila del historial de migraciones. Fija `lock_timeout = 10s` y toma
@@ -377,7 +377,7 @@ fila: ninguna migración puede registrarse mientras tanto), las tablas de 3a
 obtiene en 10 s, la transacción aborta sin cambios (`55P03`; si el cliente
 continúa, la sentencia destructiva detecta el lock ausente y rechaza) y el
 operador reintenta. Falla cerrado si el historial registra cualquier migración
-posterior a `20260929120000` (`EMAIL_RECOVERY_REFUSED_LATER_MIGRATION`) o
+posterior a `20261004150000` (`EMAIL_RECOVERY_REFUSED_LATER_MIGRATION`) o
 cualquier versión fuera de la **línea base de recuperación revisada**
 (`EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION`, p. ej. una migración de versión
 menor aplicada después); si el estado no es exactamente el inventario de 3a
@@ -490,6 +490,21 @@ el digest no coincide o si el historial actual viola el ciclo de vida. El
 ensayo prueba ambos lados: con la línea base obsoleta una migración paralela
 legítima provoca rechazo; tras refrescarla se acepta; una versión desconocida
 sigue siendo rechazada.
+
+**Renumeración M-1 (2026-10-06).** 3a se construyó como `20260929120000`, pero
+antes de aplicarla Staging registró tres migraciones de Sales
+(`20261002120000` `sales_v1_foundation`, `20261002130000`
+`sales_v1_default_pipeline_lock`, `20261003120000` `sales_v1_leads_attribution`):
+3a habría quedado retro-fechada. Se renumeró a `20261004150000` (cuerpo de la
+migración idéntico byte a byte) y la línea base revisada se refrescó desde el
+export de solo lectura confirmado (80 filas, última `20261003120000`, digest
+ordenado `1c01d8b5…aa50`); las tres de Sales son predecesoras revisadas. 3c
+(`20261005160000`) no se renumeró; solo se regeneró su lista embebida. Ninguna
+de las dos está aplicada en Staging. **Secuencia obligatoria:** aplicar 3a y 3c
+en Staging antes de cualquier migración de otro dominio con versión mayor, y
+toda migración futura de otros dominios debe usar una versión mayor que
+`20261005160000`; si no, se repite el problema (re-exportar y re-revisar antes
+de aplicar).
 
 ### Decisión diferida (L5)
 
@@ -762,8 +777,8 @@ Fuentes y su autoridad:
 |---|---|
 | La cadena Email del repositorio (Inc1 → Inc2 → Inc3a) | Qué migraciones Email existen y en qué orden. |
 | `supabase/tests/fixtures/email_marketing_v1_staging_history.json` | Snapshot **actual** (refrescable) de lo **aplicado** en Staging (export de solo lectura de `supabase_migrations.schema_migrations`). Las invariantes deben cumplirse con cualquier refresco: sin conteos de filas ni supuestos sobre qué incrementos están aplicados. |
-| `supabase/tests/fixtures/email_marketing_v1_staging_history_2026-09-29.json` | Snapshot **histórico inmutable** (77 filas, Inc1+Inc2, Inc3a aún no aplicada) con el que se construyó 3a. Solo aserciones históricas y el conjunto de versiones que acepta la recuperación de 3a. |
-| Ramas paralelas (listadas en los fixtures como evidencia) | Migraciones legítimas: 8 de goal-engine de Codex (`20260921…`–`20260924…`, anteriores a Inc1, no aplicadas en Staging) y 5 de baseline aplicadas en Staging pero ausentes de este worktree. |
+| `supabase/tests/fixtures/email_marketing_v1_staging_history_2026-09-29.json` | Snapshot **histórico inmutable** (77 filas, Inc1+Inc2, Inc3a aún no aplicada) con el que se construyó 3a. Solo aserciones históricas. Tras la renumeración M-1, el conjunto de versiones que acepta la recuperación de 3a lo fija `email_marketing_v1_recovery_baseline.json` (80 filas). |
+| Ramas paralelas (listadas en los fixtures como evidencia) | Migraciones legítimas: 8 de goal-engine de Codex (`20260921…`–`20260924…`, anteriores a Inc1, no aplicadas en Staging) y 8 aplicadas en Staging pero ausentes de este worktree (5 de baseline y, desde 2026-10-06, 3 de Sales `20261002120000`–`20261003120000`). |
 
 Reglas (idénticas en los validadores de Inc1, Inc2 e Inc3a, cada uno para sus
 incrementos):

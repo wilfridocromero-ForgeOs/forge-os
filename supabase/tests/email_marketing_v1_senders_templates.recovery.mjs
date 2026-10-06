@@ -54,7 +54,7 @@ test("static: recovery drops exactly what the migration creates, in one transact
     .map((m) => signature(m[1])).filter((f) => f !== "private.email_can(text)").sort();
   const droppedFunctions = [...code.matchAll(/drop function ([a-z_.]+\([^)]*\));/g)].map((m) => signature(m[1])).sort();
   assert.deepEqual(droppedFunctions, createdFunctions, "every Increment 3a function is dropped, nothing else");
-  assert.ok(code.includes("delete from supabase_migrations.schema_migrations where version = '20260929120000'"));
+  assert.ok(code.includes("delete from supabase_migrations.schema_migrations where version = '20261004150000'"));
   // The "no foreign function references Increment 3a tables" allowlist is
   // exactly the set of functions the migration creates.
   const allowAnchor = "(n.nspname || '.' || p.proname) <> all (array[";
@@ -135,7 +135,7 @@ test("recovery refuses (and changes nothing) when any migration after Increment 
   const db = await createDatabase();
   for (const path of [MIGRATIONS.inc1, MIGRATIONS.inc2, MIGRATIONS.inc3a]) await db.exec(readSql(path));
   // A synthetic later migration (e.g. Inc3b) that may depend on Increment 3a objects.
-  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20260929120000", "20261001000000"]);
+  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20261004150000", "20261006000000"]);
   const beforeAttempt = await fullSnapshot(db);
   await assert.rejects(db.exec(recoverySql), (error) => {
     assert.equal(error.message, "EMAIL_RECOVERY_REFUSED_LATER_MIGRATION");
@@ -144,17 +144,47 @@ test("recovery refuses (and changes nothing) when any migration after Increment 
   await db.exec("rollback");
   assert.deepEqual(await fullSnapshot(db), beforeAttempt, "nothing was dropped or restored");
   const history = (await db.query("select version from supabase_migrations.schema_migrations order by 1")).rows.map((r) => r.version);
-  assert.deepEqual(history, ["20260926160000", "20260927120000", "20260929120000", "20261001000000"], "history untouched");
+  assert.deepEqual(history, ["20260926160000", "20260927120000", "20261004150000", "20261006000000"], "history untouched");
 });
 
 test("recovery with Supabase history: removes exactly the Increment 3a history row", async () => {
   const db = await createDatabase();
   for (const path of [MIGRATIONS.inc1, MIGRATIONS.inc2, MIGRATIONS.inc3a]) await db.exec(readSql(path));
-  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20260929120000"]);
+  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20261004150000"]);
   await db.exec(recoverySql);
   const history = (await db.query("select version from supabase_migrations.schema_migrations order by 1")).rows.map((r) => r.version);
   assert.deepEqual(history, ["20260926160000", "20260927120000"]);
   assert.equal((await fullSnapshot(db)).inc1Fp, STAGING_INC1_FP);
+});
+
+test("M-1: on the confirmed 80-row Staging history the shipped recovery removes only the Inc3a row; later and backdated versions refuse", async () => {
+  const staging = JSON.parse(readFileSync(new URL("./fixtures/email_marketing_v1_staging_history.json", import.meta.url), "utf8"))
+    .rows.map((row) => row.version);
+  assert.equal(staging.length, 80);
+  for (const sales of ["20261002120000", "20261002130000", "20261003120000"]) assert.ok(staging.includes(sales), `Sales predecessor ${sales}`);
+  const inc3aWithHistory = async (history) => {
+    const db = await createDatabase();
+    for (const path of [MIGRATIONS.inc1, MIGRATIONS.inc2, MIGRATIONS.inc3a]) await db.exec(readSql(path));
+    await withSupabaseHistory(db, history);
+    return db;
+  };
+  const versions = async (db) => (await db.query("select version from supabase_migrations.schema_migrations order by 1")).rows.map((r) => r.version);
+  let db = await inc3aWithHistory([...staging, "20261004150000"]);
+  await db.exec(recoverySql);
+  assert.deepEqual(await versions(db), staging, "only the Inc3a row is removed");
+  assert.equal((await fullSnapshot(db)).inc1Fp, STAGING_INC1_FP);
+  for (const [extra, message] of [["20261004150001", "EMAIL_RECOVERY_REFUSED_LATER_MIGRATION"],
+    ["20261003130000", "EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION"]]) {
+    db = await inc3aWithHistory([...staging, extra, "20261004150000"]);
+    const beforeAttempt = await fullSnapshot(db);
+    await assert.rejects(db.exec(recoverySql), (error) => {
+      assert.equal(error.message, message, extra);
+      return true;
+    });
+    await db.exec("rollback");
+    assert.deepEqual(await fullSnapshot(db), beforeAttempt, `${extra}: nothing changed`);
+    assert.deepEqual(await versions(db), [...staging, extra, "20261004150000"].sort(), `${extra}: history untouched`);
+  }
 });
 
 test("recovery refuses (and changes nothing) for every evolved or unexpected schema state", async () => {
@@ -191,7 +221,7 @@ test("recovery refuses (and changes nothing) when history holds a migration unkn
   // e.g. with --include-all: a plain "version > Inc3a" check would miss it.
   const db = await createDatabase();
   for (const path of [MIGRATIONS.inc1, MIGRATIONS.inc2, MIGRATIONS.inc3a]) await db.exec(readSql(path));
-  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20260929120000", "20260921055617"]);
+  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20261004150000", "20260921055617"]);
   const beforeAttempt = await fullSnapshot(db);
   await assert.rejects(db.exec(recoverySql), (error) => {
     assert.equal(error.message, "EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION");
@@ -221,14 +251,14 @@ test("recovery: lock_timeout first; accepted history = the reviewed recovery bas
   const code = recoverySql.toLowerCase().replace(/--[^\n]*/g, "");
   const timeout = code.indexOf("set local lock_timeout = '10s';");
   assert.ok(timeout > 0 && timeout < code.indexOf("lock table"), "lock_timeout is set before any lock is requested");
-  assert.deepEqual(recoveryBaselineInSql(recoverySql), [...baselineVersions(RECOVERY_BASELINE), "20260929120000"].sort(),
+  assert.deepEqual(recoveryBaselineInSql(recoverySql), [...baselineVersions(RECOVERY_BASELINE), "20261004150000"].sort(),
     "the recovery allowlist is exactly the reviewed baseline plus Inc3a (regenerate with the baseline tool)");
 });
 
 test("M3 (pass 6): stale build-time baseline refuses a legitimate parallel migration; a refreshed reviewed baseline accepts it", async () => {
   const { baselineVersions, recoverySqlWithBaseline, RECOVERY_BASELINE } = await import("./email_marketing_v1_recovery_baseline.mjs");
   const parallel = "20260928090000"; // legitimate: dated before Inc3a, applied on the target before Inc3a
-  const history = ["20260926160000", "20260927120000", parallel, "20260929120000"];
+  const history = ["20260926160000", "20260927120000", parallel, "20261004150000"];
   // Build-time baseline (as reviewed when Inc3a was built): the parallel migration is unknown.
   let db = await createDatabase();
   for (const path of [MIGRATIONS.inc1, MIGRATIONS.inc2, MIGRATIONS.inc3a]) await db.exec(readSql(path));
@@ -404,13 +434,13 @@ test("B (pass 7): concurrent schema activity makes recovery refuse and change no
   assert.deepEqual(await fullSnapshot(db), before, "in-flight DDL: nothing changed");
   // Another session is writing the migration history (a migration recording itself).
   db = await inc3aDatabase();
-  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20260929120000"]);
+  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20261004150000"]);
   before = await fullSnapshot(db);
   await db.exec("begin; insert into supabase_migrations.schema_migrations (version, name) values ('20260928000000', 'inflight');");
   await refusesConcurrent(db, selfAsForeign(recoverySql, "before locks"), /migration history/, "history write in progress");
   assert.deepEqual(await fullSnapshot(db), before, "history write: nothing changed");
   assert.deepEqual((await db.query("select version from supabase_migrations.schema_migrations order by 1")).rows.map((r) => r.version),
-    ["20260926160000", "20260927120000", "20260929120000"]);
+    ["20260926160000", "20260927120000", "20261004150000"]);
   // Another session in a transaction running schema-changing SQL without a
   // table lock (e.g. CREATE FUNCTION): this session's query text is the whole
   // submitted batch truncated to track_activity_query_size (1024 bytes, all
@@ -777,7 +807,7 @@ async function dataState(db) {
 }
 async function recoveryTarget({ data = false } = {}) {
   const db = await inc3aDatabase();
-  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20260929120000"]);
+  await withSupabaseHistory(db, ["20260926160000", "20260927120000", "20261004150000"]);
   if (data) {
     await asFounder(db, async () => {
       await db.query("select * from public.email_create_template('Con datos')");
@@ -796,7 +826,7 @@ test("HIGH-1 (pass 10): a client that rolls back only the failing statement and 
   const scenarios = [
     ["Increment 3a data present", { data: true }, async () => {}, recoverySql, /^EMAIL_RECOVERY_REFUSED_DATA_PRESENT$/],
     ["a later migration is recorded", {}, async (db) => {
-      await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261001000000', 'later')");
+      await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261006000000', 'later')");
     }, recoverySql, /^EMAIL_RECOVERY_REFUSED_LATER_MIGRATION$/],
     ["email_can was redefined", {}, async (db) => {
       const current = (await db.query("select pg_get_functiondef('private.email_can(text)'::regprocedure) as d")).rows[0].d;
