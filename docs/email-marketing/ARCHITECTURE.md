@@ -555,9 +555,9 @@ tracking, UI.
 
 ## Increment 3c — Borradores de campaña, readiness y preview input (implementado)
 
-Migración: `supabase/migrations/20261003120000_email_marketing_v1_campaigns.sql`
+Migración: `supabase/migrations/20261005160000_email_marketing_v1_campaigns.sql`
 (ASCII, aditiva). Recuperación (solo Staging):
-`supabase/recovery/20261003120000_email_marketing_v1_campaigns.down.sql`.
+`supabase/recovery/20261005160000_email_marketing_v1_campaigns.down.sql`.
 Sin aprobación, programación, snapshot, jobs, proveedor, envío, Edge Function
 ni UI. **No hay renderer en SQL**: el único renderer es Inc3b (`render_v1.ts`).
 

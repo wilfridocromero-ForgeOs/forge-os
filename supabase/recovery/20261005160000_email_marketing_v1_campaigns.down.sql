@@ -1,6 +1,6 @@
 -- ORVESEN Email Marketing V1 - Increment 3c: controlled STAGING recovery.
 --
--- Reverses supabase/migrations/20261003120000_email_marketing_v1_campaigns.sql
+-- Reverses supabase/migrations/20261005160000_email_marketing_v1_campaigns.sql
 -- and restores the exact Increment 3a state: email_campaigns and every
 -- Increment 3c function are removed, and the email_audit_log entity-type
 -- check gets back its Increment 3a definition. private.email_can is not
@@ -9,7 +9,7 @@
 --
 -- STAGING ONLY. Production is forward-fix only: never run this there.
 -- ORDER: recover Increment 3c before Increment 3a (the Increment 3a recovery
--- refuses while 20261003120000 is recorded or any Increment 3c object exists).
+-- refuses while 20261005160000 is recorded or any Increment 3c object exists).
 --
 -- OPERATIONAL PRECONDITION: EMAIL INC3C RECOVERY REQUIRES A MIGRATION/DDL FREEZE.
 -- For the whole recovery window: no migration may be running; no
@@ -39,7 +39,7 @@
 -- * EMAIL_RECOVERY_REFUSED_CONCURRENT_ACTIVITY: the pre-check found
 --   concurrent schema activity (before locking, or again with every lock held);
 -- * EMAIL_RECOVERY_REFUSED_LATER_MIGRATION: the migration history records a
---   version after 20261003120000;
+--   version after 20261005160000;
 -- * EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION: the history records any version
 --   outside the frozen Increment 3a REVIEWED RECOVERY BASELINE, Increment 3a,
 --   the REVIEWED INC3C WINDOW (versions between 3a and 3c reviewed before
@@ -236,9 +236,9 @@ begin
   -- ways PostgreSQL does not track.
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     if exists (select 1 from supabase_migrations.schema_migrations as history
-               where history.version > '20261003120000') then
+               where history.version > '20261005160000') then
       raise exception using errcode = '55000', message = 'EMAIL_RECOVERY_REFUSED_LATER_MIGRATION',
-        detail = 'A migration after 20261003120000 is recorded; revert it first.';
+        detail = 'A migration after 20261005160000 is recorded; revert it first.';
     end if;
   end if;
   -- Every recorded version must be reviewed: the frozen Increment 3a baseline,
@@ -264,7 +264,7 @@ begin
         '20260913155327', '20260915184800', '20260916090000', '20260917000000', '20260917000100',
         '20260926160000', '20260927120000', '20260929120000'
         -- END REVIEWED RECOVERY BASELINE
-        , '20261003120000'
+        , '20261005160000'
         ]::text[])
                  and history.version <> all (array[
         -- BEGIN REVIEWED INC3C WINDOW
@@ -515,7 +515,7 @@ begin
 
   -- Forget the migration in the Supabase history (absent outside Supabase).
   if to_regclass('supabase_migrations.schema_migrations') is not null then
-    delete from supabase_migrations.schema_migrations where version = '20261003120000';
+    delete from supabase_migrations.schema_migrations where version = '20261005160000';
   end if;
 
   -- Consume the sequence: it cannot authorize anything else in this transaction.

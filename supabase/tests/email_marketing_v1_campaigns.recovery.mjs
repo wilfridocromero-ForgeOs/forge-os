@@ -19,8 +19,8 @@ import {
 import { RECOVERY_BASELINE, baselineVersions } from "./email_marketing_v1_recovery_baseline.mjs";
 
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const migrationSql = readSql(path("../migrations/20261003120000_email_marketing_v1_campaigns.sql"));
-const recoverySql = readSql(path("../recovery/20261003120000_email_marketing_v1_campaigns.down.sql"));
+const migrationSql = readSql(path("../migrations/20261005160000_email_marketing_v1_campaigns.sql"));
+const recoverySql = readSql(path("../recovery/20261005160000_email_marketing_v1_campaigns.down.sql"));
 const recovery3aSql = readSql(RECOVERY_INC3A);
 const TOKEN = "orvesen.email_inc3c_recovery";
 const GUARD_REFUSAL = "EMAIL_RECOVERY_REFUSED_INCOMPLETE_PRECONDITIONS";
@@ -42,7 +42,7 @@ async function withSupabaseHistory(db, versions) {
     await db.query("insert into supabase_migrations.schema_migrations (version, name) values ($1, $2)", [version, `m${version}`]);
   }
 }
-const HISTORY = ["20260926160000", "20260927120000", "20260929120000", "20261003120000"];
+const HISTORY = ["20260926160000", "20260927120000", "20260929120000", "20261005160000"];
 async function fullSnapshot(db) {
   const s = snapshots(db);
   return {
@@ -165,7 +165,7 @@ test("static: one transaction, ASCII, no CASCADE, drops exactly what the migrati
   const dropped = [...code.matchAll(/drop function ([a-z_.]+\([^)]*\));/g)].map((m) => m[1].replace(/\s+/g, "")).sort();
   assert.deepEqual(dropped, created, "every Increment 3c function is dropped, nothing else");
   assert.deepEqual([...code.matchAll(/drop table (public\.[a-z_]+);/g)].map((m) => m[1]), ["public.email_campaigns"]);
-  assert.ok(code.includes("delete from supabase_migrations.schema_migrations where version = '20261003120000'"));
+  assert.ok(code.includes("delete from supabase_migrations.schema_migrations where version = '20261005160000'"));
   assert.ok(!code.includes("private.email_can(") || !/create or replace function private\.email_can/.test(code), "email_can is never redefined");
   const raised = [...new Set([...code.matchAll(/message = '(email_recovery_[a-z_]+)'/g)].map((m) => m[1]))].sort();
   const documented = [...new Set([...recoverySql.toLowerCase().matchAll(/^-- \* (email_recovery_[a-z_]+)/gm)].map((m) => m[1]))].sort();
@@ -218,14 +218,14 @@ test("static: the accepted history is the frozen Increment 3a baseline + 3a + th
   const versions = [...recoverySql.slice(start, end).matchAll(/'([0-9]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(versions, [...baselineVersions(RECOVERY_BASELINE), "20260929120000"].sort(), "Increment 3a baseline + 3a, verbatim");
   const allow = recoverySql.slice(start, recoverySql.indexOf("]::text[])", start));
-  assert.ok(allow.includes("'20261003120000'"), "Increment 3c itself");
+  assert.ok(allow.includes("'20261005160000'"), "Increment 3c itself");
   const window = recoverySql.slice(recoverySql.indexOf("-- BEGIN REVIEWED INC3C WINDOW"), recoverySql.indexOf("-- END REVIEWED INC3C WINDOW"));
   assert.deepEqual([...window.matchAll(/'([0-9]+)'/g)], [], "the window is empty at build time");
   // Adjacent literals separated only by whitespace/comments are CONCATENATED by
   // PostgreSQL ('a'\n'b' = 'ab'): every list element must be comma-separated.
   const listStart = recoverySql.indexOf("history.version <> all (array[");
   const lists = recoverySql.slice(listStart, recoverySql.indexOf("EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION", listStart));
-  assert.ok(listStart > 0 && lists.includes("'20260929120000'") && lists.includes("'20261003120000'"), "the accepted-history lists were found");
+  assert.ok(listStart > 0 && lists.includes("'20260929120000'") && lists.includes("'20261005160000'"), "the accepted-history lists were found");
   assert.ok(!/'\s*(--[^\n]*\n\s*)*'/.test(lists), "no implicit string-literal concatenation in the accepted history");
 });
 
@@ -236,7 +236,7 @@ test("rehearsal: apply 3c, recover, Increment 3a state restored exactly; re-appl
   await withSupabaseHistory(db, HISTORY.slice(0, 3));
   const baseline = await fullSnapshot(db);
   await db.exec(migrationSql);
-  await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261003120000', 'email_marketing_v1_campaigns')");
+  await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261005160000', 'email_marketing_v1_campaigns')");
   // The Increment 3a recovery refuses while Increment 3c is present.
   await refuses(db, recovery3aSql, "EMAIL_RECOVERY_REFUSED_LATER_MIGRATION", "3a recovery before 3c recovery");
   await db.exec(recoverySql);
@@ -280,18 +280,19 @@ test("DATA_PRESENT: a campaign row, or an audit row of entity type 'campaign', r
 
 test("LATER_MIGRATION / UNKNOWN_MIGRATION: later versions and unreviewed versions in the 3c window refuse; a reviewed window version is accepted", async () => {
   let db = await inc3cDatabase();
-  await withSupabaseHistory(db, [...HISTORY, "20261004000000"]);
+  await withSupabaseHistory(db, [...HISTORY, "20261006000000"]);
   let before = await dataState(db);
   await refuses(db, recoverySql, "EMAIL_RECOVERY_REFUSED_LATER_MIGRATION");
   assert.deepEqual(await dataState(db), before);
+  // The real case: the Sales migration 20261003120000 applied between 3a and 3c.
   db = await inc3cDatabase();
-  await withSupabaseHistory(db, [...HISTORY, "20261002120000"]);
+  await withSupabaseHistory(db, [...HISTORY, "20261003120000"]);
   before = await dataState(db);
   await refuses(db, recoverySql, "EMAIL_RECOVERY_REFUSED_UNKNOWN_MIGRATION", "unreviewed migration between 3a and 3c");
   assert.deepEqual(await dataState(db), before);
-  const reviewed = replaceOnce(recoverySql, "        -- BEGIN REVIEWED INC3C WINDOW\n", "        -- BEGIN REVIEWED INC3C WINDOW\n        '20261002120000'\n");
+  const reviewed = replaceOnce(recoverySql, "        -- BEGIN REVIEWED INC3C WINDOW\n", "        -- BEGIN REVIEWED INC3C WINDOW\n        '20261003120000'\n");
   await db.exec(reviewed);
-  assert.deepEqual((await dataState(db)).history, [...HISTORY.slice(0, 3), "20261002120000"], "accepted once reviewed");
+  assert.deepEqual((await dataState(db)).history, [...HISTORY.slice(0, 3), "20261003120000"], "accepted once reviewed");
 });
 
 test("UNEXPECTED_STATE: evolved schema, foreign references and dependents refuse and change nothing", async () => {
@@ -355,7 +356,7 @@ test("continue-after-error client (ON_ERROR_ROLLBACK semantics): every refusal s
       await db.exec("reset role");
     }, recoverySql, /^EMAIL_RECOVERY_REFUSED_DATA_PRESENT$/],
     ["later migration recorded", async (db) => {
-      await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261004000000', 'later')");
+      await db.query("insert into supabase_migrations.schema_migrations (version, name) values ('20261006000000', 'later')");
     }, recoverySql, /^EMAIL_RECOVERY_REFUSED_LATER_MIGRATION$/],
     ["concurrent activity in the post-lock re-check", async () => {}, selfAsForeign(recoverySql, "with locks held"), /^EMAIL_RECOVERY_REFUSED_CONCURRENT_ACTIVITY$/],
     ["campaigns lock not obtained", async () => {}, lockFailure("lock table public.email_campaigns in access exclusive mode;"), /zz_not_a_table/],

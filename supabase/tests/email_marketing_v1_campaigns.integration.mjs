@@ -14,7 +14,7 @@ import {
 } from "./email_marketing_v1_harness.mjs";
 import { assembleDocument, renderTemplate } from "../functions/_shared/email/render_v1.ts";
 
-export const INC3C_PATH = fileURLToPath(new URL("../migrations/20261003120000_email_marketing_v1_campaigns.sql", import.meta.url));
+export const INC3C_PATH = fileURLToPath(new URL("../migrations/20261005160000_email_marketing_v1_campaigns.sql", import.meta.url));
 const migration3c = readSql(INC3C_PATH);
 const fixture = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
 const PREVIEW = fixture("email_campaign_preview_cases.json");

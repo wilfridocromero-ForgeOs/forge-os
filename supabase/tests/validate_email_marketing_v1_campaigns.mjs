@@ -9,7 +9,7 @@ import {
   INC1, INC2, INC3A, STAGING_HISTORY, emailOrderViolation, readText, stagingHistoryViolation,
 } from "./email_marketing_v1_migration_order.mjs";
 
-const INC3C = "20261003120000_email_marketing_v1_campaigns.sql";
+const INC3C = "20261005160000_email_marketing_v1_campaigns.sql";
 const CHAIN = [INC1, INC2, INC3A, INC3C];
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const sql = readText(path(`../migrations/${INC3C}`));
@@ -30,7 +30,7 @@ test("ordering: Increment 3c is the fourth Email migration and sorts after every
   const files = readdirSync(path("../migrations"));
   assert.equal(emailOrderViolation(files, CHAIN, STAGING_HISTORY.rows, CHAIN), null);
   assert.equal(stagingHistoryViolation(STAGING_HISTORY.rows, CHAIN), null);
-  assert.ok(files.filter((f) => f.endsWith(".sql")).every((f) => f === INC3C || f.split("_")[0] < "20261003120000"),
+  assert.ok(files.filter((f) => f.endsWith(".sql")).every((f) => f === INC3C || f.split("_")[0] < "20261005160000"),
     "no migration in this tree sorts after Increment 3c");
 });
 
